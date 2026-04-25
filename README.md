@@ -8,8 +8,15 @@
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
 A typed compare-and-swap executor for Rust. `qubit-cas` packages the usual
-"load a shared snapshot, derive a new value, install it by compare-and-swap,
+"load a shared snapshot, derive a new value, apply it by compare-and-swap,
 retry on contention" loop into a reusable `CasExecutor`.
+
+CAS can be read as "compare, then swap": a new value is applied atomically
+only when the shared state still matches the snapshot you read. If another
+writer changes the state first, the attempt fails and can be retried by policy.
+Its strengths are low-latency lock-free paths and no lost updates under
+concurrency; the trade-off is extra retries under high contention, which can
+increase CPU cost and tail latency.
 
 The crate builds on [`qubit-atomic`](https://crates.io/crates/qubit-atomic),
 [`qubit-function`](https://crates.io/crates/qubit-function), and
@@ -19,9 +26,9 @@ expressed as an explicit, typed decision.
 
 ## Features
 
-- **Typed decisions**: user operations return `CasDecision::update`,
-  `finish`, `retry`, or `abort`, making write, no-write success, retryable
-  failure, and terminal failure explicit.
+- **Typed decisions**: after user operations return `CasDecision::update`,
+  `finish`, `retry`, or `abort`, `CasExecutor` automatically runs the matching
+  flow: write a new state, complete without writing, retry, or terminate.
 - **Retry-aware CAS loop**: compare-and-swap conflicts and business-level
   retry decisions are retried through `qubit-retry` with configurable attempts,
   elapsed-time budgets, delays, and jitter.
@@ -77,35 +84,62 @@ fn main() {
     let state = AtomicRef::from_value(Inventory { stock: 3 });
     let executor = CasExecutor::<Inventory, OrderError>::low_latency();
 
-    let success = executor
-        .execute(&state, |current: &Inventory| {
-            if current.stock == 0 {
-                return CasDecision::abort(OrderError::OutOfStock);
-            }
+    let result = executor.execute(&state, |current: &Inventory| {
+        if current.stock == 0 {
+            return CasDecision::abort(OrderError::OutOfStock);
+        }
 
-            CasDecision::update_value(
-                Inventory {
-                    stock: current.stock - 1,
-                },
-                current.stock - 1,
-            )
-        })
-        .expect("stock should be updated");
+        CasDecision::update(
+            Inventory {
+                stock: current.stock - 1,
+            },
+            current.stock - 1,
+        )
+    });
 
-    assert!(success.is_updated());
-    assert_eq!(*success.output(), 2);
-    assert_eq!(state.load().stock, 2);
+    match result {
+        Ok(success) => {
+            println!("stock updated successfully, remaining: {}", success.output());
+            assert!(success.is_updated());
+            assert_eq!(*success.output(), 2);
+            assert_eq!(state.load().stock, 2);
+        }
+        Err(error) => {
+            // Out-of-stock is a business outcome, not a panic condition.
+            eprintln!("order rejected: {error}");
+        }
+    }
 }
 ```
+
+This example demonstrates a CAS-based "place order and decrement stock"
+flow:
+
+- `AtomicRef::from_value(Inventory { stock: 3 })` creates the shared
+  inventory snapshot with initial stock `3`.
+- `execute` reads the current snapshot on each attempt:
+  - If stock is `0`, it returns
+    `CasDecision::abort(OrderError::OutOfStock)` and stops immediately.
+  - Otherwise, it returns `CasDecision::update(...)`, decrementing stock by
+    `1` and returning the new stock as business output.
+- The write is applied via CAS (compare-and-swap): if contention makes an
+  attempt lose the race, the executor retries from the latest snapshot to
+  avoid lost updates under concurrent writes.
+- The example uses `match` to handle outcomes explicitly: validate
+  write/output on success, and handle business failures (for example,
+  out-of-stock).
 
 ## Decision Model
 
 Every operation receives the current state snapshot and returns a
 `CasDecision<T, R, E>`:
 
-- `CasDecision::update(next, output)` or `update_value(next, output)` attempts
-  to install a replacement state. If another writer wins first, the executor
-  retries according to its retry configuration.
+- `CasDecision::update(next, output)` attempts to apply a replacement state
+  from an owned value.
+- `CasDecision::update_arc(next, output)` attempts to apply a replacement
+  state from `Arc<T>` when the shared pointer is already available.
+- If another writer wins first, the executor retries according to its retry
+  configuration.
 - `CasDecision::finish(output)` completes successfully without writing a new
   state. Use it when the current snapshot already satisfies the operation.
 - `CasDecision::retry(error)` marks the attempt as a retryable business failure.
@@ -116,6 +150,20 @@ Every operation receives the current state snapshot and returns a
 Successful executions return `CasSuccess<T, R>`. It can tell whether an update
 happened, expose the current state, expose the previous state for real updates,
 return the business output, and report the number of attempts.
+
+## Preset Executors
+
+`qubit-cas` ships with three common retry profiles you can choose directly:
+
+- `CasExecutor::high_concurrency()` uses exponential backoff and jitter for
+  contended writers.
+- `CasExecutor::low_latency()` retries immediately with a small attempt budget.
+- `CasExecutor::high_reliability()` uses a longer retry window for operations
+  where eventual success matters more than latency.
+
+In practice, start with `low_latency()`. If contention is frequent, switch to
+`high_concurrency()`. If your operation prioritizes "succeed eventually" over
+"return fast", use `high_reliability()`.
 
 ## Retry Configuration
 
@@ -134,14 +182,6 @@ let executor = CasExecutor::<usize, &'static str>::builder()
     .build()
     .expect("valid CAS retry settings");
 ```
-
-Common shortcuts:
-
-- `CasExecutor::high_concurrency()` uses exponential backoff and jitter for
-  contended writers.
-- `CasExecutor::low_latency()` retries immediately with a small attempt budget.
-- `CasExecutor::high_reliability()` uses a longer retry window for operations
-  where eventual success is more important than latency.
 
 ## Hooks
 
@@ -164,7 +204,7 @@ let hooks = CasHooks::new().on_retry(
 let success = executor
     .execute_with_hooks(
         &state,
-        |current: &usize| CasDecision::update_value(*current + 1, *current + 1),
+        |current: &usize| CasDecision::update(*current + 1, *current + 1),
         hooks,
     )
     .expect("CAS should succeed");
@@ -195,7 +235,7 @@ async fn main() {
 
     let success = executor
         .execute_async(&state, |current| async move {
-            CasDecision::update_value(*current + 1, *current + 1)
+            CasDecision::update(*current + 1, *current + 1)
         })
         .await
         .expect("async CAS should succeed");

@@ -43,19 +43,6 @@ pub enum CasDecision<T, R, E> {
 }
 
 impl<T, R, E> CasDecision<T, R, E> {
-    /// Creates an update decision from an `Arc<T>`.
-    ///
-    /// # Parameters
-    /// - `next`: Replacement state to install.
-    /// - `output`: Business output returned on success.
-    ///
-    /// # Returns
-    /// A [`CasDecision::Update`] value.
-    #[inline]
-    pub fn update(next: Arc<T>, output: R) -> Self {
-        Self::Update { next, output }
-    }
-
     /// Creates an update decision from an owned value.
     ///
     /// # Parameters
@@ -65,8 +52,24 @@ impl<T, R, E> CasDecision<T, R, E> {
     /// # Returns
     /// A [`CasDecision::Update`] value.
     #[inline]
-    pub fn update_value(next: T, output: R) -> Self {
-        Self::update(Arc::new(next), output)
+    pub fn update(next: T, output: R) -> Self {
+        Self::Update {
+            next: Arc::new(next),
+            output,
+        }
+    }
+
+    /// Creates an update decision from an `Arc<T>`.
+    ///
+    /// # Parameters
+    /// - `next`: Replacement state to install.
+    /// - `output`: Business output returned on success.
+    ///
+    /// # Returns
+    /// A [`CasDecision::Update`] value.
+    #[inline]
+    pub fn update_arc(next: Arc<T>, output: R) -> Self {
+        Self::Update { next, output }
     }
 
     /// Creates a finish decision.

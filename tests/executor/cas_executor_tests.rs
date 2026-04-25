@@ -56,7 +56,7 @@ fn test_execute_retries_conflict_and_calls_retry_hook() {
                 if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
                     state.store(Arc::new(*current + 1));
                 }
-                CasDecision::update_value(*current + 1, *current + 10)
+                CasDecision::update(*current + 1, *current + 10)
             },
             hooks,
         )
@@ -254,7 +254,7 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
                             tokio::time::sleep(Duration::from_millis(20)).await;
                             CasDecision::<usize, usize, TestError>::finish(999)
                         } else {
-                            CasDecision::update_value(*current + 1, *current + 100)
+                            CasDecision::update(*current + 1, *current + 100)
                         }
                     }
                 }
