@@ -1,0 +1,55 @@
+[package]
+name = "qubit-cas"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+authors = ["Haixing Hu <starfish.hu@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/qubit-ltd/rs-cas"
+description = "Typed compare-and-swap executor with retry-aware conflict handling"
+homepage = "https://github.com/qubit-ltd/rs-cas"
+documentation = "https://docs.rs/qubit-cas"
+readme = "README.md"
+keywords = ["cas", "compare-and-swap", "retry", "atomic", "qubit"]
+categories = ["concurrency", "asynchronous"]
+exclude = [
+    "coverage.sh",
+    "COVERAGE.md",
+    "COVERAGE.zh_CN.md",
+    ".circleci/*",
+    "ci-check.sh",
+    ".llvm-cov.toml",
+    ".cargo-audit.toml.example",
+]
+
+[lib]
+name = "qubit_cas"
+doctest = false
+
+[features]
+default = []
+tokio = ["dep:tokio", "qubit-retry/tokio"]
+
+[dependencies]
+tokio = { version = "1.52", features = ["time", "rt"], optional = true }
+
+qubit-atomic = "0.10"
+qubit-common = "0.6"
+qubit-function = "0.10"
+qubit-retry = "0.7"
+
+[dev-dependencies]
+tokio = { version = "1.52", features = ["full", "test-util"] }
+
+[patch.crates-io]
+qubit-atomic = { path = "../rs-atomic" }
+qubit-common = { path = "../rs-common" }
+qubit-function = { path = "../rs-function" }
+qubit-retry = { path = "../rs-retry" }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints.clippy]
+type_complexity = "allow"
