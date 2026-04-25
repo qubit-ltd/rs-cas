@@ -36,34 +36,14 @@ pub enum CasErrorKind {
 /// Terminal CAS error returned by [`crate::CasExecutor`].
 #[derive(Clone)]
 pub struct CasError<T, E> {
-    /// Underlying retry-layer error.
-    inner: Box<RetryError<CasAttemptFailure<T, E>>>,
-    /// Optional async attempt timeout configured by the executor.
-    attempt_timeout: Option<std::time::Duration>,
-}
-
-impl<T, E> fmt::Debug for CasError<T, E>
-where
-    E: fmt::Display,
-{
-    /// Formats the CAS error for debugging without requiring `T: Debug`.
-    ///
-    /// # Parameters
-    /// - `f`: Formatter provided by the standard formatting machinery.
-    ///
-    /// # Returns
-    /// `fmt::Result` from the formatter.
-    ///
-    /// # Errors
-    /// Returns a formatting error if the formatter fails.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CasError")
-            .field("kind", &self.kind())
-            .field("reason", &self.reason())
-            .field("context", &self.context())
-            .field("attempt_timeout", &self.attempt_timeout)
-            .finish()
-    }
+    /// Cached high-level CAS error kind.
+    kind: CasErrorKind,
+    /// Terminal reason selected by the retry layer.
+    reason: RetryErrorReason,
+    /// Copied CAS context captured when execution stopped.
+    context: CasContext,
+    /// Last attempt-level CAS failure, when one exists.
+    last_failure: Option<CasAttemptFailure<T, E>>,
 }
 
 impl<T, E> CasError<T, E> {
@@ -80,26 +60,41 @@ impl<T, E> CasError<T, E> {
         inner: RetryError<CasAttemptFailure<T, E>>,
         attempt_timeout: Option<std::time::Duration>,
     ) -> Self {
+        let (reason, raw_last_failure, retry_context) = inner.into_parts();
+        let context = CasContext::from_retry_context(&retry_context, attempt_timeout);
+        let last_failure = match raw_last_failure {
+            Some(AttemptFailure::Error(failure)) => Some(failure),
+            Some(AttemptFailure::Timeout) | None => None,
+        };
+        let kind = Self::classify_kind(reason, last_failure.as_ref());
         Self {
-            inner: Box::new(inner),
-            attempt_timeout,
+            kind,
+            reason,
+            context,
+            last_failure,
         }
     }
 
-    /// Returns the classified CAS error kind.
+    /// Classifies one terminal CAS error kind from retry reason and failure.
+    ///
+    /// # Parameters
+    /// - `reason`: Terminal reason selected by the retry layer.
+    /// - `last_failure`: Last CAS failure when one exists.
     ///
     /// # Returns
-    /// High-level CAS error kind derived from the retry-layer reason and last
-    /// attempt failure.
-    pub fn kind(&self) -> CasErrorKind {
-        match self.inner.reason() {
-            RetryErrorReason::Aborted => match self.last_failure() {
+    /// Derived high-level CAS error kind.
+    fn classify_kind(
+        reason: RetryErrorReason,
+        last_failure: Option<&CasAttemptFailure<T, E>>,
+    ) -> CasErrorKind {
+        match reason {
+            RetryErrorReason::Aborted => match last_failure {
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                 Some(CasAttemptFailure::Abort { .. }) | None => CasErrorKind::Abort,
                 Some(CasAttemptFailure::Conflict { .. })
                 | Some(CasAttemptFailure::Retry { .. }) => CasErrorKind::Abort,
             },
-            RetryErrorReason::AttemptsExceeded => match self.last_failure() {
+            RetryErrorReason::AttemptsExceeded => match last_failure {
                 Some(CasAttemptFailure::Conflict { .. }) => CasErrorKind::Conflict,
                 Some(CasAttemptFailure::Retry { .. }) | None => CasErrorKind::RetryExhausted,
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
@@ -109,13 +104,23 @@ impl<T, E> CasError<T, E> {
         }
     }
 
+    /// Returns the classified CAS error kind.
+    ///
+    /// # Returns
+    /// High-level CAS error kind derived from the retry-layer reason and last
+    /// attempt failure.
+    #[inline]
+    pub fn kind(&self) -> CasErrorKind {
+        self.kind
+    }
+
     /// Returns the retry-layer terminal reason.
     ///
     /// # Returns
     /// Underlying [`RetryErrorReason`].
     #[inline]
     pub fn reason(&self) -> RetryErrorReason {
-        self.inner.reason()
+        self.reason
     }
 
     /// Returns the terminal CAS context.
@@ -124,7 +129,7 @@ impl<T, E> CasError<T, E> {
     /// Copied CAS context captured when execution stopped.
     #[inline]
     pub fn context(&self) -> CasContext {
-        CasContext::from_retry_context(self.inner.context(), self.attempt_timeout)
+        self.context
     }
 
     /// Returns the number of attempts that were executed.
@@ -133,7 +138,7 @@ impl<T, E> CasError<T, E> {
     /// One-based attempt count.
     #[inline]
     pub fn attempts(&self) -> u32 {
-        self.inner.attempts()
+        self.context.attempt()
     }
 
     /// Returns the last CAS attempt failure when one exists.
@@ -142,10 +147,7 @@ impl<T, E> CasError<T, E> {
     /// `Some(&CasAttemptFailure<T, E>)` when at least one attempt failed.
     #[inline]
     pub fn last_failure(&self) -> Option<&CasAttemptFailure<T, E>> {
-        match self.inner.last_failure() {
-            Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout) | None => None,
-        }
+        self.last_failure.as_ref()
     }
 
     /// Returns the current state associated with the last failure.
@@ -165,14 +167,25 @@ impl<T, E> CasError<T, E> {
     pub fn error(&self) -> Option<&E> {
         self.last_failure().and_then(CasAttemptFailure::error)
     }
+}
 
-    /// Consumes the wrapper and returns the underlying retry error.
+impl<T, E> fmt::Debug for CasError<T, E> {
+    /// Formats the CAS error for debugging without requiring `T: Debug`.
+    ///
+    /// # Parameters
+    /// - `f`: Formatter provided by the standard formatting machinery.
     ///
     /// # Returns
-    /// Owned retry-layer error.
-    #[inline]
-    pub fn into_inner(self) -> RetryError<CasAttemptFailure<T, E>> {
-        *self.inner
+    /// `fmt::Result` from the formatter.
+    ///
+    /// # Errors
+    /// Returns a formatting error if the formatter fails.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CasError")
+            .field("kind", &self.kind())
+            .field("reason", &self.reason())
+            .field("context", &self.context())
+            .finish()
     }
 }
 
