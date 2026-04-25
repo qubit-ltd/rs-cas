@@ -303,30 +303,30 @@ impl<T, E> CasExecutor<T, E> {
                             unreachable!("CAS executor manages async timeouts explicitly")
                         }
                     };
-                    let cas_context = CasContext::from_retry_context(context, attempt_timeout);
+                    let cas_context = CasContext::new(context, attempt_timeout);
                     match failure {
                         CasAttemptFailure::Conflict { .. } | CasAttemptFailure::Retry { .. } => {
-                            if let Some(listener) = &retry_hook {
-                                listener.accept(&cas_context, failure);
+                            if let Some(hook) = &retry_hook {
+                                hook.accept(&cas_context, failure);
                             }
                             AttemptFailureDecision::Retry
                         }
                         CasAttemptFailure::Abort { .. } => {
-                            if let Some(listener) = &abort_hook {
-                                listener.accept(&cas_context, failure);
+                            if let Some(hook) = &abort_hook {
+                                hook.accept(&cas_context, failure);
                             }
                             AttemptFailureDecision::Abort
                         }
                         CasAttemptFailure::Timeout { .. } => match timeout_policy {
                             CasTimeoutPolicy::Retry => {
-                                if let Some(listener) = &retry_hook {
-                                    listener.accept(&cas_context, failure);
+                                if let Some(hook) = &retry_hook {
+                                    hook.accept(&cas_context, failure);
                                 }
                                 AttemptFailureDecision::Retry
                             }
                             CasTimeoutPolicy::Abort => {
-                                if let Some(listener) = &abort_hook {
-                                    listener.accept(&cas_context, failure);
+                                if let Some(hook) = &abort_hook {
+                                    hook.accept(&cas_context, failure);
                                 }
                                 AttemptFailureDecision::Abort
                             }
@@ -443,10 +443,10 @@ impl<T, E> CasExecutor<T, E> {
                     .lock()
                     .expect("CAS success context slot should be lockable")
                     .take()
-                    .expect("retry success listener must capture CAS success context");
+                    .expect("retry success hook must capture CAS success context");
                 let success = self.enrich_success(success, context);
-                if let Some(listener) = hooks.success_hook() {
-                    listener.accept(&success);
+                if let Some(hook) = hooks.success_hook() {
+                    hook.accept(&success);
                 }
                 Ok(success)
             }
@@ -467,7 +467,7 @@ impl<T, E> CasExecutor<T, E> {
         success: AttemptSuccess<T, R>,
         context: RetryContext,
     ) -> CasSuccess<T, R> {
-        let context = CasContext::from_retry_context(&context, self.attempt_timeout);
+        let context = CasContext::new(&context, self.attempt_timeout);
         match success {
             AttemptSuccess::Updated {
                 previous,

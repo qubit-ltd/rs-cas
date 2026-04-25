@@ -61,7 +61,7 @@ impl<T, E> CasError<T, E> {
         attempt_timeout: Option<std::time::Duration>,
     ) -> Self {
         let (reason, raw_last_failure, retry_context) = inner.into_parts();
-        let context = CasContext::from_retry_context(&retry_context, attempt_timeout);
+        let context = CasContext::new(&retry_context, attempt_timeout);
         let last_failure = match raw_last_failure {
             Some(AttemptFailure::Error(failure)) => Some(failure),
             Some(AttemptFailure::Timeout) | None => None,

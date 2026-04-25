@@ -15,15 +15,24 @@ use crate::success::CasSuccess;
 
 use super::CasContext;
 
+/// Shared hook invoked after a successful CAS flow completes.
+pub type CasSuccessHook<T, R> = ArcConsumer<CasSuccess<T, R>>;
+
+/// Shared hook invoked when an attempt failure will be retried.
+pub type CasRetryHook<T, E> = ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>;
+
+/// Shared hook invoked when an attempt failure aborts the CAS flow.
+pub type CasAbortHook<T, E> = ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>;
+
 /// Per-execution hooks for observing CAS lifecycle events.
 #[derive(Clone)]
 pub struct CasHooks<T, R, E> {
     /// Hook invoked after a successful CAS flow completes.
-    on_success: Option<ArcConsumer<CasSuccess<T, R>>>,
+    on_success: Option<CasSuccessHook<T, R>>,
     /// Hook invoked when an attempt failure will be retried.
-    on_retry: Option<ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>>,
+    on_retry: Option<CasRetryHook<T, E>>,
     /// Hook invoked when an attempt failure aborts the CAS flow.
-    on_abort: Option<ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>>,
+    on_abort: Option<CasAbortHook<T, E>>,
 }
 
 impl<T, R, E> Default for CasHooks<T, R, E> {
@@ -54,47 +63,47 @@ impl<T, R, E> CasHooks<T, R, E> {
     /// Registers a success hook.
     ///
     /// # Parameters
-    /// - `listener`: Hook receiving the final CAS success value.
+    /// - `hook`: Hook receiving the final CAS success value.
     ///
     /// # Returns
     /// The updated hook set.
-    pub fn on_success<C>(mut self, listener: C) -> Self
+    pub fn on_success<C>(mut self, hook: C) -> Self
     where
         C: Consumer<CasSuccess<T, R>> + Send + Sync + 'static,
     {
-        self.on_success = Some(listener.into_arc());
+        self.on_success = Some(hook.into_arc());
         self
     }
 
     /// Registers a retry hook.
     ///
     /// # Parameters
-    /// - `listener`: Hook receiving the retry context and attempt failure that
+    /// - `hook`: Hook receiving the retry context and attempt failure that
     ///   triggered another attempt.
     ///
     /// # Returns
     /// The updated hook set.
-    pub fn on_retry<C>(mut self, listener: C) -> Self
+    pub fn on_retry<C>(mut self, hook: C) -> Self
     where
         C: BiConsumer<CasContext, CasAttemptFailure<T, E>> + Send + Sync + 'static,
     {
-        self.on_retry = Some(listener.into_arc());
+        self.on_retry = Some(hook.into_arc());
         self
     }
 
     /// Registers an abort hook.
     ///
     /// # Parameters
-    /// - `listener`: Hook receiving the context and attempt failure that
+    /// - `hook`: Hook receiving the context and attempt failure that
     ///   aborted the CAS flow.
     ///
     /// # Returns
     /// The updated hook set.
-    pub fn on_abort<C>(mut self, listener: C) -> Self
+    pub fn on_abort<C>(mut self, hook: C) -> Self
     where
         C: BiConsumer<CasContext, CasAttemptFailure<T, E>> + Send + Sync + 'static,
     {
-        self.on_abort = Some(listener.into_arc());
+        self.on_abort = Some(hook.into_arc());
         self
     }
 
@@ -103,7 +112,7 @@ impl<T, R, E> CasHooks<T, R, E> {
     /// # Returns
     /// Optional shared success hook.
     #[inline]
-    pub(crate) fn success_hook(&self) -> Option<ArcConsumer<CasSuccess<T, R>>> {
+    pub(crate) fn success_hook(&self) -> Option<CasSuccessHook<T, R>> {
         self.on_success.clone()
     }
 
@@ -112,7 +121,7 @@ impl<T, R, E> CasHooks<T, R, E> {
     /// # Returns
     /// Optional shared retry hook.
     #[inline]
-    pub(crate) fn retry_hook(&self) -> Option<ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>> {
+    pub(crate) fn retry_hook(&self) -> Option<CasRetryHook<T, E>> {
         self.on_retry.clone()
     }
 
@@ -121,7 +130,7 @@ impl<T, R, E> CasHooks<T, R, E> {
     /// # Returns
     /// Optional shared abort hook.
     #[inline]
-    pub(crate) fn abort_hook(&self) -> Option<ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>> {
+    pub(crate) fn abort_hook(&self) -> Option<CasAbortHook<T, E>> {
         self.on_abort.clone()
     }
 }

@@ -12,4 +12,4 @@ mod cas_context;
 mod cas_hooks;
 
 pub use cas_context::CasContext;
-pub use cas_hooks::CasHooks;
+pub use cas_hooks::{CasAbortHook, CasHooks, CasRetryHook, CasSuccessHook};
