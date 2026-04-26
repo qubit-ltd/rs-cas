@@ -7,6 +7,7 @@
  *
  ******************************************************************************/
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use qubit_atomic::AtomicRef;
@@ -29,7 +30,7 @@ fn test_event_stream_emits_started_and_finished() {
         let name = match event {
             CasEvent::ExecutionStarted { .. } => "started",
             CasEvent::AttemptFailed { .. } => "attempt_failed",
-            CasEvent::RetryScheduled { .. } => "retry_scheduled",
+            CasEvent::RetryRequested { .. } => "retry_requested",
             CasEvent::ExecutionFinished { .. } => "finished",
         };
         seen_events
@@ -56,6 +57,55 @@ fn test_event_stream_emits_started_and_finished() {
     assert_eq!(*success.output(), 11usize);
 
     let events = seen.lock().expect("event vector should be lockable");
-    assert!(events.iter().any(|name| *name == "started"));
-    assert!(events.iter().any(|name| *name == "finished"));
+    assert!(events.contains(&"started"));
+    assert!(events.contains(&"finished"));
+}
+
+/// Verifies event stream emits retry-requested events for retryable CAS failures.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_event_stream_emits_retry_requested_for_conflict() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let seen_events = Arc::clone(&seen);
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+        if let CasEvent::RetryRequested { context } = event {
+            seen_events
+                .lock()
+                .expect("event vector should be lockable")
+                .push(context.attempt());
+        }
+    });
+
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(2)
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_with_hooks(
+            &state,
+            |current: &usize| {
+                if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    state.store(Arc::new(*current + 1));
+                }
+                CasDecision::update(*current + 1, ())
+            },
+            hooks,
+        )
+        .expect("second attempt should succeed");
+
+    assert_eq!(success.attempts(), 2);
+    assert_eq!(
+        *seen.lock().expect("event vector should be lockable"),
+        vec![1]
+    );
 }

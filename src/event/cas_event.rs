@@ -8,7 +8,7 @@
  ******************************************************************************/
 //! CAS lifecycle event payload.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::error::CasAttemptFailureKind;
 use crate::report::CasExecutionReport;
@@ -32,12 +32,10 @@ pub enum CasEvent {
         kind: CasAttemptFailureKind,
     },
 
-    /// A retry has been scheduled.
-    RetryScheduled {
+    /// A retry has been requested by the CAS layer.
+    RetryRequested {
         /// Context captured after the failed attempt.
         context: CasContext,
-        /// Delay selected before the next retry.
-        delay: Option<Duration>,
     },
 
     /// The execution finished and produced a report.

@@ -14,8 +14,6 @@ use super::{CasObservabilityMode, ContentionThresholds, ListenerPanicPolicy};
 pub struct CasObservabilityConfig {
     /// Selected observability mode.
     mode: CasObservabilityMode,
-    /// Whether the final report should be returned.
-    emit_report: bool,
     /// Panic policy for event and alert listeners.
     listener_panic_policy: ListenerPanicPolicy,
     /// Optional contention threshold used for alerting.
@@ -84,28 +82,6 @@ impl CasObservabilityConfig {
         self
     }
 
-    /// Returns whether final reports are emitted.
-    ///
-    /// # Returns
-    /// `true` if the execution report should be included in [`CasOutcome`].
-    #[inline]
-    pub fn emit_report(&self) -> bool {
-        self.emit_report
-    }
-
-    /// Sets whether final reports are emitted.
-    ///
-    /// # Parameters
-    /// - `emit_report`: Whether to include the report in outcomes.
-    ///
-    /// # Returns
-    /// Updated builder-style config (consumes self).
-    #[inline]
-    pub fn with_emit_report(mut self, emit_report: bool) -> Self {
-        self.emit_report = emit_report;
-        self
-    }
-
     /// Returns the listener panic policy.
     ///
     /// # Returns
@@ -156,13 +132,12 @@ impl Default for CasObservabilityConfig {
     /// Returns report-only observability (the default, lowest overhead mode).
     ///
     /// # Returns
-    /// Config with `ReportOnly` mode, reports enabled, propagate panics, and
-    /// no contention thresholds.
+    /// Config with `ReportOnly` mode, propagate panics, and no contention
+    /// thresholds.
     #[inline]
     fn default() -> Self {
         Self {
             mode: CasObservabilityMode::ReportOnly,
-            emit_report: true,
             listener_panic_policy: ListenerPanicPolicy::Propagate,
             contention_thresholds: None,
         }

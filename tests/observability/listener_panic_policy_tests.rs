@@ -18,5 +18,8 @@ use qubit_cas::ListenerPanicPolicy;
 /// This test returns nothing.
 #[test]
 fn test_listener_panic_policy_default_is_propagate() {
-    assert_eq!(ListenerPanicPolicy::default(), ListenerPanicPolicy::Propagate);
+    assert_eq!(
+        ListenerPanicPolicy::default(),
+        ListenerPanicPolicy::Propagate
+    );
 }

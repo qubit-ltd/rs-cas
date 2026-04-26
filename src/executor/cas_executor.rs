@@ -336,7 +336,7 @@ impl<T, E> CasExecutor<T, E> {
             .on_failure(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
                     let failure = match failure {
-                        AttemptFailure::Panic(_) => {
+                        AttemptFailure::Panic(_) | AttemptFailure::Executor(_) => {
                             return AttemptFailureDecision::UseDefault;
                         }
                         AttemptFailure::Error(failure) => failure,
@@ -372,9 +372,8 @@ impl<T, E> CasExecutor<T, E> {
                                 Self::dispatch_event(
                                     &observability,
                                     &event_hook,
-                                    CasEvent::RetryScheduled {
+                                    CasEvent::RetryRequested {
                                         context: cas_context,
-                                        delay: cas_context.next_delay(),
                                     },
                                 );
                             }
@@ -387,9 +386,8 @@ impl<T, E> CasExecutor<T, E> {
                                     Self::dispatch_event(
                                         &observability,
                                         &event_hook,
-                                        CasEvent::RetryScheduled {
+                                        CasEvent::RetryRequested {
                                             context: cas_context,
-                                            delay: cas_context.next_delay(),
                                         },
                                     );
                                 }
@@ -648,16 +646,15 @@ impl<T, E> CasExecutor<T, E> {
                 },
             );
         }
-        if self.observability.mode() == CasObservabilityMode::EventStreamWithAlert {
-            if let Some(thresholds) = self.observability.contention_thresholds() {
-                if report.is_contention_hot(&thresholds) {
-                    Self::dispatch_alert(
-                        &self.observability,
-                        &hooks.alert_hook(),
-                        CasAlert::contention(report.clone(), thresholds),
-                    );
-                }
-            }
+        if self.observability.mode() == CasObservabilityMode::EventStreamWithAlert
+            && let Some(thresholds) = self.observability.contention_thresholds()
+            && report.is_contention_hot(&thresholds)
+        {
+            Self::dispatch_alert(
+                &self.observability,
+                &hooks.alert_hook(),
+                CasAlert::contention(report.clone(), thresholds),
+            );
         }
         report
     }

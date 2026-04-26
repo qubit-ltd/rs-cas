@@ -146,7 +146,7 @@ fn run_executor_sample(
         let outcome = executor.execute_with_hooks(
             &state,
             |current: &usize| {
-                if force_conflict && forced.fetch_add(1, Ordering::Relaxed) % 2 == 0 {
+                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)

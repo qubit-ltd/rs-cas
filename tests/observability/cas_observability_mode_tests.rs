@@ -18,5 +18,8 @@ use qubit_cas::CasObservabilityMode;
 /// This test returns nothing.
 #[test]
 fn test_observability_mode_default_is_report_only() {
-    assert_eq!(CasObservabilityMode::default(), CasObservabilityMode::ReportOnly);
+    assert_eq!(
+        CasObservabilityMode::default(),
+        CasObservabilityMode::ReportOnly
+    );
 }

@@ -27,8 +27,9 @@ fn test_outcome_reports_success_updated() {
         .build()
         .expect("executor should build");
 
-    let outcome = executor
-        .execute(&state, |current: &usize| CasDecision::update(*current + 1, ()));
+    let outcome = executor.execute(&state, |current: &usize| {
+        CasDecision::update(*current + 1, ())
+    });
     let report = outcome.report().clone();
     let _success = outcome.expect("execution should succeed");
 
