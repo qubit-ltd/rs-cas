@@ -6,9 +6,11 @@
  *    All rights reserved.
  *
  ******************************************************************************/
+//! Shared hook type for CAS lifecycle events.
 
-mod cas_alert_hook_tests;
-mod cas_context_tests;
-mod cas_event_hook_tests;
-mod cas_event_tests;
-mod cas_hooks_tests;
+use qubit_function::ArcConsumer;
+
+use super::CasEvent;
+
+/// Shared hook invoked for CAS lifecycle events.
+pub type CasEventHook = ArcConsumer<CasEvent>;

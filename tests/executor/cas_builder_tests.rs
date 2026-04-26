@@ -10,9 +10,12 @@
 use std::time::Duration;
 
 use qubit_cas::constants::{
-    HIGH_CONCURRENCY_MAX_ATTEMPTS, HIGH_RELIABILITY_MAX_ATTEMPTS, LOW_LATENCY_MAX_ATTEMPTS,
+    CONTENTION_ADAPTIVE_MAX_ATTEMPTS, LATENCY_FIRST_MAX_ATTEMPTS, RELIABILITY_FIRST_MAX_ATTEMPTS,
 };
-use qubit_cas::{CasExecutor, CasTimeoutPolicy};
+use qubit_cas::{
+    CasExecutor, CasObservabilityConfig, CasObservabilityMode, CasStrategy, CasTimeoutPolicy,
+    ContentionThresholds, ListenerPanicPolicy,
+};
 use qubit_retry::{RetryDelay, RetryJitter};
 
 use crate::support::TestError;
@@ -45,7 +48,7 @@ fn test_builder_default_and_delay_helpers_work() {
     assert_eq!(executor.timeout_policy(), CasTimeoutPolicy::Abort);
 }
 
-/// Verifies built-in presets install the expected attempt budgets.
+/// Verifies built-in strategies install the expected attempt budgets.
 ///
 /// # Parameters
 /// This test has no parameters.
@@ -53,23 +56,57 @@ fn test_builder_default_and_delay_helpers_work() {
 /// # Returns
 /// This test returns nothing.
 #[test]
-fn test_builder_presets_work() {
-    let high_concurrency = CasExecutor::<usize, TestError>::high_concurrency();
+fn test_builder_strategies_work() {
+    let contention_adaptive = CasExecutor::<usize, TestError>::contention_adaptive();
     assert_eq!(
-        high_concurrency.options().max_attempts(),
-        HIGH_CONCURRENCY_MAX_ATTEMPTS
+        contention_adaptive.options().max_attempts(),
+        CONTENTION_ADAPTIVE_MAX_ATTEMPTS
     );
 
-    let low_latency = CasExecutor::<usize, TestError>::low_latency();
+    let latency_first = CasExecutor::<usize, TestError>::latency_first();
     assert_eq!(
-        low_latency.options().max_attempts(),
-        LOW_LATENCY_MAX_ATTEMPTS
+        latency_first.options().max_attempts(),
+        LATENCY_FIRST_MAX_ATTEMPTS
     );
 
-    let high_reliability = CasExecutor::<usize, TestError>::high_reliability();
+    let reliability_first =
+        CasExecutor::<usize, TestError>::with_strategy(CasStrategy::ReliabilityFirst);
     assert_eq!(
-        high_reliability.options().max_attempts(),
-        HIGH_RELIABILITY_MAX_ATTEMPTS
+        reliability_first.options().max_attempts(),
+        RELIABILITY_FIRST_MAX_ATTEMPTS
+    );
+}
+
+/// Verifies observability settings are installed by the builder.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_builder_observability_settings_work() {
+    let thresholds = ContentionThresholds::new(3, 1, 0.5);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .observability(
+            CasObservabilityConfig::event_stream()
+                .with_listener_panic_policy(ListenerPanicPolicy::Isolate),
+        )
+        .alert_on_contention(thresholds)
+        .build()
+        .expect("executor should build");
+
+    assert_eq!(
+        executor.observability().mode(),
+        CasObservabilityMode::EventStreamWithAlert
+    );
+    assert_eq!(
+        executor.observability().listener_panic_policy(),
+        ListenerPanicPolicy::Isolate
+    );
+    assert_eq!(
+        executor.observability().contention_thresholds(),
+        Some(thresholds)
     );
 }
 

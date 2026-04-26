@@ -20,12 +20,23 @@ mod decision;
 pub mod error;
 pub mod event;
 pub mod executor;
+pub mod observability;
 pub mod options;
+mod outcome;
+pub mod report;
+pub mod strategy;
 mod success;
 
 pub use decision::CasDecision;
-pub use error::{CasAttemptFailure, CasError, CasErrorKind};
-pub use event::{CasContext, CasHooks};
+pub use error::{CasAttemptFailure, CasAttemptFailureKind, CasError, CasErrorKind};
+pub use event::{CasContext, CasEvent, CasHooks};
 pub use executor::{CasBuilder, CasExecutor};
+pub use observability::{
+    CasAlert, CasObservabilityConfig, CasObservabilityMode, ContentionThresholds,
+    ListenerPanicPolicy,
+};
 pub use options::CasTimeoutPolicy;
+pub use outcome::CasOutcome;
+pub use report::{CasExecutionOutcome, CasExecutionReport};
+pub use strategy::{CasStrategy, CasStrategyProfile};
 pub use success::CasSuccess;

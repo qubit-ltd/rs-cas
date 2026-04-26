@@ -31,10 +31,13 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
 - **同步与异步 API**：`execute` 不依赖异步运行时；启用 `tokio` feature 后可使用
   `execute_async`。
 - **异步超时控制**：可为每次异步尝试设置超时时间，并选择超时后继续重试或立即中止。
-- **生命周期 Hooks**：`CasHooks` 可在单次执行中观察成功、重试和中止事件，不需要污染业务逻辑。
-- **预置执行器**：内置高并发、低延迟、高可靠三种常见重试配置。
+- **可观测执行报告**：每次执行都会返回 `CasOutcome`，其中的
+  `CasExecutionReport` 汇总尝试次数、冲突次数、冲突率、耗时和终止结果。
+- **生命周期事件流**：`CasHooks` 可在单次执行中观察统一的 `CasEvent`，不需要污染业务逻辑。
+- **策略化执行器**：内置 `LatencyFirst`、`ContentionAdaptive`、`ReliabilityFirst`
+  三种策略画像。
 - **结构化结果**：`CasSuccess`、`CasError` 与 `CasAttemptFailure` 暴露最终状态、旧状态、
-  业务输出、尝试次数、错误分类和最后一次失败原因。
+  业务输出、错误分类和最后一次失败原因。
 
 ## 安装
 
@@ -72,9 +75,9 @@ enum OrderError {
 
 fn main() {
     let state = AtomicRef::from_value(Inventory { stock: 3 });
-    let executor = CasExecutor::<Inventory, OrderError>::low_latency();
+    let executor = CasExecutor::<Inventory, OrderError>::latency_first();
 
-    let result = executor.execute(&state, |current: &Inventory| {
+    let outcome = executor.execute(&state, |current: &Inventory| {
         if current.stock == 0 {
             return CasDecision::abort(OrderError::OutOfStock);
         }
@@ -87,7 +90,14 @@ fn main() {
         )
     });
 
-    match result {
+    println!(
+        "CAS attempts={}, conflicts={}, conflict_ratio={:.2}",
+        outcome.report().attempts_total(),
+        outcome.report().conflicts(),
+        outcome.report().conflict_ratio(),
+    );
+
+    match outcome.into_result() {
         Ok(success) => {
             println!("stock updated successfully, remaining: {}", success.output());
             assert!(success.is_updated());
@@ -123,20 +133,21 @@ fn main() {
   `CasErrorKind::RetryExhausted`。
 - `CasDecision::abort(error)`：立即终止流程，并返回 `CasErrorKind::Abort`。
 
-成功时返回 `CasSuccess<T, R>`。它可以判断是否真的发生写入、读取当前状态、读取更新前的状态、
-取得业务输出，并查看实际尝试次数。
+`execute*` 返回 `CasOutcome<T, R, E>`。它包含业务层 `Result<CasSuccess<T, R>, CasError<T, E>>`
+以及本次执行的 `CasExecutionReport`，调用方可以在不注册 Hook 的情况下读取冲突次数和冲突率。
 
-## 预置执行器
+## 执行策略
 
-`qubit-cas` 提供三种常见重试配置，方便按场景直接选用：
+`qubit-cas` 提供三种常见策略，方便按场景直接选用：
 
-- `CasExecutor::high_concurrency()`：指数退避 + 抖动，适合写竞争较高的场景。
-- `CasExecutor::low_latency()`：立即重试 + 较小尝试次数，适合延迟敏感场景。
-- `CasExecutor::high_reliability()`：更长重试窗口，适合更看重最终成功率的操作。
+- `CasExecutor::latency_first()`：立即重试 + 较小尝试次数，适合延迟敏感场景。
+- `CasExecutor::contention_adaptive()`：指数退避 + 抖动，适合写竞争较高的场景。
+- `CasExecutor::reliability_first()`：更长重试窗口，适合更看重最终成功率的操作。
 
-通常可以先用 `low_latency()` 起步；如果冲突频繁再切到
-`high_concurrency()`；如果业务更看重“尽量成功”而非“尽快返回”，可选
-`high_reliability()`。
+通常可以先用 `latency_first()` 起步；如果报告中
+`conflict_ratio >= 0.30` 且 `attempts_total >= 3`，说明出现明显热点争用，
+可以切到 `contention_adaptive()`；如果业务更看重“尽量成功”而非“尽快返回”，
+可选 `reliability_first()`。
 
 ## 重试配置
 
@@ -156,24 +167,32 @@ let executor = CasExecutor::<usize, &'static str>::builder()
     .expect("valid CAS retry settings");
 ```
 
-## Hooks
+## 冲突观测与 Hooks
 
-Hook 绑定到单次执行，因此同一个 executor 可以在不同调用中使用不同的观测逻辑：
+Hook 绑定到单次执行，因此同一个 executor 可以在不同调用中使用不同的观测逻辑。
+默认情况下只返回 `CasExecutionReport`，如果需要实时事件流，可开启 `event_stream()`：
 
 ```rust
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasAttemptFailure, CasContext, CasDecision, CasExecutor, CasHooks};
+use qubit_cas::{
+    CasAttemptFailureKind, CasDecision, CasEvent, CasExecutor, CasHooks, CasObservabilityConfig,
+};
 
 let state = AtomicRef::from_value(1usize);
-let executor = CasExecutor::<usize, &'static str>::low_latency();
+let executor = CasExecutor::<usize, &'static str>::builder()
+    .observability(CasObservabilityConfig::event_stream())
+    .build_latency_first()
+    .expect("valid CAS settings");
 
-let hooks = CasHooks::new().on_retry(
-    |context: &CasContext, failure: &CasAttemptFailure<usize, &'static str>| {
-        eprintln!("retry attempt {} after {failure}", context.attempt());
-    },
-);
+let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+    if let CasEvent::AttemptFailed { context, kind } = event {
+        if *kind == CasAttemptFailureKind::Conflict {
+            eprintln!("CAS conflict at attempt {}", context.attempt());
+        }
+    }
+});
 
-let success = executor
+let outcome = executor
     .execute_with_hooks(
         &state,
         |current: &usize| CasDecision::update(*current + 1, *current + 1),
@@ -181,8 +200,21 @@ let success = executor
     )
     .expect("CAS should succeed");
 
-assert_eq!(*success.output(), 2);
+assert_eq!(*outcome.output(), 2);
 ```
+
+## 检测能力与性能权衡
+
+冲突检测本身也会增加热路径成本，因此 `qubit-cas` 将可观测能力分为三个层级：
+
+- `ReportOnly`（默认）：只聚合 `CasExecutionReport`，不构造 attempt 事件，适合大多数生产路径。
+- `EventStream`：向 listener 发送 `CasEvent`，适合需要实时日志、trace 或指标上报的路径。
+- `EventStreamWithAlert`：在事件流基础上做阈值判定，适合热点争用告警。
+
+建议默认使用 `ReportOnly`，通过 `outcome.report().conflict_ratio()` 做周期性指标上报。
+只有在需要定位热点或接入 trace 时再开启 `EventStream`。不要在 Hook 中同步写日志、
+同步请求远端 metrics 或执行复杂格式化；高冲突时这些操作会被按 attempt 次数放大。
+更稳妥的方式是把事件投递到无阻塞 channel，由后台任务批量消费。
 
 ## 异步用法
 
@@ -222,7 +254,11 @@ async fn main() {
 - `src/executor`：builder、同步 CAS 执行器与异步 CAS 执行器。
 - `src/event`：执行上下文与生命周期 hooks。
 - `src/error`：尝试级失败和终止级 CAS 错误。
+- `src/observability`：可观测模式、争用阈值和告警类型。
 - `src/options`：超时处理策略。
+- `src/outcome` 与 `src/report`：执行结果包装与可观测报告。
+- `src/strategy`：内置执行策略和策略画像。
+- `benches`：观测模式开销基准测试。
 - `tests`：executor、builder、hooks、错误与选项的行为测试。
 
 ## 质量检查

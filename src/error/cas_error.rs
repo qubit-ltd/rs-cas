@@ -64,7 +64,7 @@ impl<T, E> CasError<T, E> {
         let context = CasContext::new(&retry_context, attempt_timeout);
         let last_failure = match raw_last_failure {
             Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout) | None => None,
+            Some(AttemptFailure::Timeout) | Some(AttemptFailure::Panic(_)) | None => None,
         };
         let kind = Self::classify_kind(reason, last_failure.as_ref());
         Self {

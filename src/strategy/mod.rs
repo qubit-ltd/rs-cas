@@ -6,9 +6,10 @@
  *    All rights reserved.
  *
  ******************************************************************************/
+//! CAS retry strategy presets.
 
-mod cas_alert_hook_tests;
-mod cas_context_tests;
-mod cas_event_hook_tests;
-mod cas_event_tests;
-mod cas_hooks_tests;
+mod cas_strategy;
+mod cas_strategy_profile;
+
+pub use cas_strategy::CasStrategy;
+pub use cas_strategy_profile::CasStrategyProfile;

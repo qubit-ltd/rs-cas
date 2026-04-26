@@ -6,36 +6,24 @@
  *    All rights reserved.
  *
  ******************************************************************************/
-//! CAS hook registrations.
+//! CAS event and hook registrations.
 
-use qubit_function::{ArcBiConsumer, ArcConsumer, BiConsumer, Consumer};
+use qubit_function::Consumer;
 
-use crate::error::CasAttemptFailure;
-use crate::success::CasSuccess;
+use crate::observability::CasAlert;
 
-use super::CasContext;
-
-/// Shared hook invoked after a successful CAS flow completes.
-pub type CasSuccessHook<T, R> = ArcConsumer<CasSuccess<T, R>>;
-
-/// Shared hook invoked when an attempt failure will be retried.
-pub type CasRetryHook<T, E> = ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>;
-
-/// Shared hook invoked when an attempt failure aborts the CAS flow.
-pub type CasAbortHook<T, E> = ArcBiConsumer<CasContext, CasAttemptFailure<T, E>>;
+use super::{CasAlertHook, CasEvent, CasEventHook};
 
 /// Per-execution hooks for observing CAS lifecycle events.
 #[derive(Clone)]
-pub struct CasHooks<T, R, E> {
-    /// Hook invoked after a successful CAS flow completes.
-    on_success: Option<CasSuccessHook<T, R>>,
-    /// Hook invoked when an attempt failure will be retried.
-    on_retry: Option<CasRetryHook<T, E>>,
-    /// Hook invoked when an attempt failure aborts the CAS flow.
-    on_abort: Option<CasAbortHook<T, E>>,
+pub struct CasHooks {
+    /// Hook invoked for lifecycle events.
+    on_event: Option<CasEventHook>,
+    /// Hook invoked when configured alert thresholds are crossed.
+    on_alert: Option<CasAlertHook>,
 }
 
-impl<T, R, E> Default for CasHooks<T, R, E> {
+impl Default for CasHooks {
     /// Creates an empty hook set.
     ///
     /// # Returns
@@ -43,14 +31,13 @@ impl<T, R, E> Default for CasHooks<T, R, E> {
     #[inline]
     fn default() -> Self {
         Self {
-            on_success: None,
-            on_retry: None,
-            on_abort: None,
+            on_event: None,
+            on_alert: None,
         }
     }
 }
 
-impl<T, R, E> CasHooks<T, R, E> {
+impl CasHooks {
     /// Creates an empty hook set.
     ///
     /// # Returns
@@ -60,77 +47,51 @@ impl<T, R, E> CasHooks<T, R, E> {
         Self::default()
     }
 
-    /// Registers a success hook.
+    /// Registers a lifecycle event hook.
     ///
     /// # Parameters
-    /// - `hook`: Hook receiving the final CAS success value.
+    /// - `hook`: Hook receiving each emitted lifecycle event.
     ///
     /// # Returns
     /// The updated hook set.
-    pub fn on_success<C>(mut self, hook: C) -> Self
+    pub fn on_event<C>(mut self, hook: C) -> Self
     where
-        C: Consumer<CasSuccess<T, R>> + Send + Sync + 'static,
+        C: Consumer<CasEvent> + Send + Sync + 'static,
     {
-        self.on_success = Some(hook.into_arc());
+        self.on_event = Some(hook.into_arc());
         self
     }
 
-    /// Registers a retry hook.
+    /// Registers an alert hook.
     ///
     /// # Parameters
-    /// - `hook`: Hook receiving the retry context and attempt failure that
-    ///   triggered another attempt.
+    /// - `hook`: Hook receiving contention alerts.
     ///
     /// # Returns
     /// The updated hook set.
-    pub fn on_retry<C>(mut self, hook: C) -> Self
+    pub fn on_alert<C>(mut self, hook: C) -> Self
     where
-        C: BiConsumer<CasContext, CasAttemptFailure<T, E>> + Send + Sync + 'static,
+        C: Consumer<CasAlert> + Send + Sync + 'static,
     {
-        self.on_retry = Some(hook.into_arc());
+        self.on_alert = Some(hook.into_arc());
         self
     }
 
-    /// Registers an abort hook.
-    ///
-    /// # Parameters
-    /// - `hook`: Hook receiving the context and attempt failure that
-    ///   aborted the CAS flow.
+    /// Returns the registered lifecycle event hook.
     ///
     /// # Returns
-    /// The updated hook set.
-    pub fn on_abort<C>(mut self, hook: C) -> Self
-    where
-        C: BiConsumer<CasContext, CasAttemptFailure<T, E>> + Send + Sync + 'static,
-    {
-        self.on_abort = Some(hook.into_arc());
-        self
+    /// Optional shared event hook.
+    #[inline]
+    pub(crate) fn event_hook(&self) -> Option<CasEventHook> {
+        self.on_event.clone()
     }
 
-    /// Returns the registered success hook.
+    /// Returns the registered alert hook.
     ///
     /// # Returns
-    /// Optional shared success hook.
+    /// Optional shared alert hook.
     #[inline]
-    pub(crate) fn success_hook(&self) -> Option<CasSuccessHook<T, R>> {
-        self.on_success.clone()
-    }
-
-    /// Returns the registered retry hook.
-    ///
-    /// # Returns
-    /// Optional shared retry hook.
-    #[inline]
-    pub(crate) fn retry_hook(&self) -> Option<CasRetryHook<T, E>> {
-        self.on_retry.clone()
-    }
-
-    /// Returns the registered abort hook.
-    ///
-    /// # Returns
-    /// Optional shared abort hook.
-    #[inline]
-    pub(crate) fn abort_hook(&self) -> Option<CasAbortHook<T, E>> {
-        self.on_abort.clone()
+    pub(crate) fn alert_hook(&self) -> Option<CasAlertHook> {
+        self.on_alert.clone()
     }
 }

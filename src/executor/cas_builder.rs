@@ -14,13 +14,9 @@ use std::time::Duration;
 use qubit_common::BoxError;
 use qubit_retry::{RetryConfigError, RetryDelay, RetryJitter, RetryOptions};
 
-use crate::constants::{
-    HIGH_CONCURRENCY_INITIAL_DELAY, HIGH_CONCURRENCY_JITTER_FACTOR, HIGH_CONCURRENCY_MAX_ATTEMPTS,
-    HIGH_CONCURRENCY_MAX_DELAY, HIGH_CONCURRENCY_MAX_ELAPSED, HIGH_RELIABILITY_INITIAL_DELAY,
-    HIGH_RELIABILITY_JITTER_FACTOR, HIGH_RELIABILITY_MAX_ATTEMPTS, HIGH_RELIABILITY_MAX_DELAY,
-    HIGH_RELIABILITY_MAX_ELAPSED, LOW_LATENCY_MAX_ATTEMPTS, LOW_LATENCY_MAX_ELAPSED,
-};
+use crate::observability::{CasObservabilityConfig, ContentionThresholds, ListenerPanicPolicy};
 use crate::options::CasTimeoutPolicy;
+use crate::strategy::CasStrategy;
 
 use super::cas_executor::CasExecutor;
 
@@ -38,8 +34,8 @@ pub struct CasBuilder<T, E = BoxError> {
     attempt_timeout: Option<Duration>,
     /// Policy used when one attempt exceeds the timeout.
     timeout_policy: CasTimeoutPolicy,
-    /// Whether retry-layer listener panics should be isolated.
-    isolate_listener_panics: bool,
+    /// Observability settings.
+    observability: CasObservabilityConfig,
     /// Stored validation error for zero max attempts.
     max_attempts_error: Option<RetryConfigError>,
     /// Marker preserving the executor type parameters.
@@ -60,7 +56,7 @@ impl<T, E> CasBuilder<T, E> {
             jitter: options.jitter(),
             attempt_timeout: None,
             timeout_policy: CasTimeoutPolicy::Retry,
-            isolate_listener_panics: false,
+            observability: CasObservabilityConfig::default(),
             max_attempts_error: None,
             marker: PhantomData,
         }
@@ -264,13 +260,62 @@ impl<T, E> CasBuilder<T, E> {
         self
     }
 
+    /// Applies a built-in CAS strategy to this builder.
+    ///
+    /// # Parameters
+    /// - `strategy`: Strategy profile to install.
+    ///
+    /// # Returns
+    /// The updated builder.
+    pub fn strategy(self, strategy: CasStrategy) -> Self {
+        let profile = strategy.profile();
+        let builder = self
+            .max_attempts(profile.max_attempts())
+            .max_elapsed(Some(profile.max_elapsed()));
+        if let Some((initial, max, jitter)) = strategy.backoff() {
+            builder
+                .exponential_backoff(initial, max)
+                .jitter_factor(jitter)
+        } else {
+            builder.no_delay()
+        }
+    }
+
+    /// Installs observability configuration.
+    ///
+    /// # Parameters
+    /// - `observability`: Observability settings to use.
+    ///
+    /// # Returns
+    /// The updated builder.
+    #[inline]
+    pub fn observability(mut self, observability: CasObservabilityConfig) -> Self {
+        self.observability = observability;
+        self
+    }
+
+    /// Enables contention alerting with the supplied thresholds.
+    ///
+    /// # Parameters
+    /// - `thresholds`: Thresholds used to classify hot contention.
+    ///
+    /// # Returns
+    /// The updated builder.
+    #[inline]
+    pub fn alert_on_contention(mut self, thresholds: ContentionThresholds) -> Self {
+        self.observability = self.observability.with_contention_thresholds(thresholds);
+        self
+    }
+
     /// Enables retry-layer listener panic isolation.
     ///
     /// # Returns
     /// The updated builder.
     #[inline]
     pub fn isolate_listener_panics(mut self) -> Self {
-        self.isolate_listener_panics = true;
+        self.observability = self
+            .observability
+            .with_listener_panic_policy(ListenerPanicPolicy::Isolate);
         self
     }
 
@@ -292,43 +337,32 @@ impl<T, E> CasBuilder<T, E> {
             options,
             self.attempt_timeout,
             self.timeout_policy,
-            self.isolate_listener_panics,
+            self.observability,
         ))
     }
 
-    /// Builds one executor with the high-concurrency preset.
+    /// Builds one executor with the contention-adaptive strategy.
     ///
     /// # Returns
-    /// A configured [`CasExecutor`] suitable for high contention.
-    pub fn build_high_concurrency(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
-        self.max_attempts(HIGH_CONCURRENCY_MAX_ATTEMPTS)
-            .exponential_backoff(HIGH_CONCURRENCY_INITIAL_DELAY, HIGH_CONCURRENCY_MAX_DELAY)
-            .jitter_factor(HIGH_CONCURRENCY_JITTER_FACTOR)
-            .max_elapsed(Some(HIGH_CONCURRENCY_MAX_ELAPSED))
-            .build()
+    /// A configured [`CasExecutor`] suitable for contended writers.
+    pub fn build_contention_adaptive(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
+        self.strategy(CasStrategy::ContentionAdaptive).build()
     }
 
-    /// Builds one executor with the low-latency preset.
+    /// Builds one executor with the latency-first strategy.
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for low latency.
-    pub fn build_low_latency(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
-        self.max_attempts(LOW_LATENCY_MAX_ATTEMPTS)
-            .no_delay()
-            .max_elapsed(Some(LOW_LATENCY_MAX_ELAPSED))
-            .build()
+    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
+        self.strategy(CasStrategy::LatencyFirst).build()
     }
 
-    /// Builds one executor with the high-reliability preset.
+    /// Builds one executor with the reliability-first strategy.
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for long retry windows.
-    pub fn build_high_reliability(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
-        self.max_attempts(HIGH_RELIABILITY_MAX_ATTEMPTS)
-            .exponential_backoff(HIGH_RELIABILITY_INITIAL_DELAY, HIGH_RELIABILITY_MAX_DELAY)
-            .jitter_factor(HIGH_RELIABILITY_JITTER_FACTOR)
-            .max_elapsed(Some(HIGH_RELIABILITY_MAX_ELAPSED))
-            .build()
+    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
+        self.strategy(CasStrategy::ReliabilityFirst).build()
     }
 }
 

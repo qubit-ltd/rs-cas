@@ -12,7 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasAttemptFailure, CasContext, CasDecision, CasErrorKind, CasExecutor, CasHooks};
+use qubit_cas::{
+    CasAttemptFailureKind, CasDecision, CasErrorKind, CasEvent, CasExecutionOutcome, CasExecutor,
+    CasHooks, CasObservabilityConfig, ContentionThresholds,
+};
 
 use crate::support::{NonCloneValue, TestError};
 
@@ -30,22 +33,19 @@ fn test_execute_retries_conflict_and_calls_retry_hook() {
     let retries = Arc::new(Mutex::new(Vec::new()));
     let retry_events = Arc::clone(&retries);
 
-    let hooks = CasHooks::new().on_retry(
-        move |context: &CasContext, failure: &CasAttemptFailure<usize, TestError>| {
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+        if let CasEvent::AttemptFailed { context, kind } = event {
             retry_events
                 .lock()
                 .expect("retry events should be lockable")
-                .push((
-                    context.attempt(),
-                    failure.is_conflict(),
-                    **failure.current(),
-                ));
-        },
-    );
+                .push((context.attempt(), *kind));
+        }
+    });
 
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
         .build()
         .expect("executor should build");
 
@@ -73,7 +73,91 @@ fn test_execute_retries_conflict_and_calls_retry_hook() {
     assert_eq!(*state.load(), 2);
     assert_eq!(
         *retries.lock().expect("retry events should be lockable"),
-        vec![(1, true, 1)]
+        vec![(1, CasAttemptFailureKind::Conflict)]
+    );
+}
+
+/// Verifies execution reports expose conflict counts and ratios.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_returns_report_with_conflict_counts() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let outcome = executor.execute(&state, |current: &usize| {
+        if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+            state.store(Arc::new(*current + 1));
+        }
+        CasDecision::update(*current + 1, *current + 10)
+    });
+    let report = outcome.report().clone();
+    let success = outcome.expect("second attempt should succeed");
+
+    assert_eq!(success.attempts(), 2);
+    assert_eq!(report.attempts_total(), 2);
+    assert_eq!(report.conflicts(), 1);
+    assert_eq!(report.outcome(), CasExecutionOutcome::SuccessUpdated);
+    assert_eq!(report.conflict_ratio(), 0.5);
+}
+
+/// Verifies contention alerts are emitted when report thresholds are crossed.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_emits_contention_alert() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let alerts = Arc::new(Mutex::new(Vec::new()));
+    let alert_events = Arc::clone(&alerts);
+    let thresholds = ContentionThresholds::new(2, 1, 0.5);
+    let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
+        alert_events
+            .lock()
+            .expect("alert events should be lockable")
+            .push((
+                alert.report().attempts_total(),
+                alert.report().conflicts(),
+                alert.thresholds(),
+            ));
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_with_hooks(
+            &state,
+            |current: &usize| {
+                if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    state.store(Arc::new(*current + 1));
+                }
+                CasDecision::update(*current + 1, *current + 10)
+            },
+            hooks,
+        )
+        .expect("second attempt should succeed");
+
+    assert_eq!(success.attempts(), 2);
+    assert_eq!(
+        *alerts.lock().expect("alert events should be lockable"),
+        vec![(2, 1, thresholds)]
     );
 }
 
@@ -117,18 +201,19 @@ fn test_execute_abort_returns_error_and_calls_abort_hook() {
     let aborts = Arc::new(Mutex::new(Vec::new()));
     let abort_events = Arc::clone(&aborts);
 
-    let hooks = CasHooks::new().on_abort(
-        move |context: &CasContext, failure: &CasAttemptFailure<usize, TestError>| {
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+        if let CasEvent::AttemptFailed { context, kind } = event {
             abort_events
                 .lock()
                 .expect("abort events should be lockable")
-                .push((context.attempt(), failure.error().cloned()));
-        },
-    );
+                .push((context.attempt(), *kind));
+        }
+    });
 
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(4)
         .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
         .build()
         .expect("executor should build");
 
@@ -146,7 +231,7 @@ fn test_execute_abort_returns_error_and_calls_abort_hook() {
     assert_eq!(error.current().map(|current| **current), Some(7));
     assert_eq!(
         *aborts.lock().expect("abort events should be lockable"),
-        vec![(1, Some(TestError("forbidden")))]
+        vec![(1, CasAttemptFailureKind::Abort)]
     );
 }
 
@@ -225,20 +310,21 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
     let retries = Arc::new(Mutex::new(Vec::new()));
     let retry_events = Arc::clone(&retries);
 
-    let hooks = CasHooks::new().on_retry(
-        move |context: &CasContext, failure: &CasAttemptFailure<usize, TestError>| {
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+        if let CasEvent::AttemptFailed { context, kind } = event {
             retry_events
                 .lock()
                 .expect("retry events should be lockable")
-                .push((context.attempt(), failure.is_timeout()));
-        },
-    );
+                .push((context.attempt(), *kind));
+        }
+    });
 
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
         .attempt_timeout(Some(Duration::from_millis(10)))
         .retry_on_timeout()
+        .observability(CasObservabilityConfig::event_stream())
         .build()
         .expect("executor should build");
 
@@ -273,7 +359,7 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
     assert_eq!(*success.output(), 100);
     assert_eq!(
         *retries.lock().expect("retry events should be lockable"),
-        vec![(1, true)]
+        vec![(1, CasAttemptFailureKind::Timeout)]
     );
 }
 

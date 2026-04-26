@@ -36,13 +36,16 @@ expressed as an explicit, typed decision.
   runtime; `execute_async` is available with the `tokio` feature.
 - **Async timeout control**: per-attempt timeouts can be retried or converted
   into immediate aborts with `CasTimeoutPolicy`.
-- **Lifecycle hooks**: per-execution `CasHooks` can observe success, retry, and
-  abort events without changing the business operation.
-- **Preset executors**: built-in high-concurrency, low-latency, and
-  high-reliability presets cover common retry profiles.
+- **Observable execution reports**: every execution returns a `CasOutcome`
+  containing a `CasExecutionReport` with attempts, conflicts, conflict ratio,
+  elapsed time, and terminal outcome.
+- **Lifecycle event stream**: per-execution `CasHooks` can observe unified
+  `CasEvent` values without changing the business operation.
+- **Strategy-based executors**: built-in `LatencyFirst`,
+  `ContentionAdaptive`, and `ReliabilityFirst` profiles cover common retry
+  behavior.
 - **Structured results**: `CasSuccess`, `CasError`, and `CasAttemptFailure`
-  expose the final state, previous state, output, attempt count, error kind, and
-  last failure.
+  expose the final state, previous state, output, error kind, and last failure.
 
 ## Installation
 
@@ -82,9 +85,9 @@ enum OrderError {
 
 fn main() {
     let state = AtomicRef::from_value(Inventory { stock: 3 });
-    let executor = CasExecutor::<Inventory, OrderError>::low_latency();
+    let executor = CasExecutor::<Inventory, OrderError>::latency_first();
 
-    let result = executor.execute(&state, |current: &Inventory| {
+    let outcome = executor.execute(&state, |current: &Inventory| {
         if current.stock == 0 {
             return CasDecision::abort(OrderError::OutOfStock);
         }
@@ -97,7 +100,14 @@ fn main() {
         )
     });
 
-    match result {
+    println!(
+        "CAS attempts={}, conflicts={}, conflict_ratio={:.2}",
+        outcome.report().attempts_total(),
+        outcome.report().conflicts(),
+        outcome.report().conflict_ratio(),
+    );
+
+    match outcome.into_result() {
         Ok(success) => {
             println!("stock updated successfully, remaining: {}", success.output());
             assert!(success.is_updated());
@@ -147,23 +157,24 @@ Every operation receives the current state snapshot and returns a
 - `CasDecision::abort(error)` stops the flow immediately and returns
   `CasErrorKind::Abort`.
 
-Successful executions return `CasSuccess<T, R>`. It can tell whether an update
-happened, expose the current state, expose the previous state for real updates,
-return the business output, and report the number of attempts.
+`execute*` returns `CasOutcome<T, R, E>`. It contains the business
+`Result<CasSuccess<T, R>, CasError<T, E>>` plus the `CasExecutionReport`, so
+callers can read conflict counts and ratios without registering hooks.
 
-## Preset Executors
+## Execution Strategies
 
-`qubit-cas` ships with three common retry profiles you can choose directly:
+`qubit-cas` ships with three common strategies you can choose directly:
 
-- `CasExecutor::high_concurrency()` uses exponential backoff and jitter for
+- `CasExecutor::latency_first()` retries immediately with a small attempt budget.
+- `CasExecutor::contention_adaptive()` uses exponential backoff and jitter for
   contended writers.
-- `CasExecutor::low_latency()` retries immediately with a small attempt budget.
-- `CasExecutor::high_reliability()` uses a longer retry window for operations
+- `CasExecutor::reliability_first()` uses a longer retry window for operations
   where eventual success matters more than latency.
 
-In practice, start with `low_latency()`. If contention is frequent, switch to
-`high_concurrency()`. If your operation prioritizes "succeed eventually" over
-"return fast", use `high_reliability()`.
+In practice, start with `latency_first()`. If reports show
+`conflict_ratio >= 0.30` and `attempts_total >= 3`, the workload is visibly
+contended and should move to `contention_adaptive()`. If your operation
+prioritizes "succeed eventually" over "return fast", use `reliability_first()`.
 
 ## Retry Configuration
 
@@ -183,23 +194,31 @@ let executor = CasExecutor::<usize, &'static str>::builder()
     .expect("valid CAS retry settings");
 ```
 
-## Hooks
+## Contention Observation and Hooks
 
 Hooks are attached to a single execution, so the same executor can be reused
-with different observability behavior:
+with different observability behavior. By default the executor only returns a
+`CasExecutionReport`; enable `event_stream()` when real-time events are needed:
 
 ```rust
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasAttemptFailure, CasContext, CasDecision, CasExecutor, CasHooks};
+use qubit_cas::{
+    CasAttemptFailureKind, CasDecision, CasEvent, CasExecutor, CasHooks, CasObservabilityConfig,
+};
 
 let state = AtomicRef::from_value(1usize);
-let executor = CasExecutor::<usize, &'static str>::low_latency();
+let executor = CasExecutor::<usize, &'static str>::builder()
+    .observability(CasObservabilityConfig::event_stream())
+    .build_latency_first()
+    .expect("valid CAS settings");
 
-let hooks = CasHooks::new().on_retry(
-    |context: &CasContext, failure: &CasAttemptFailure<usize, &'static str>| {
-        eprintln!("retry attempt {} after {failure}", context.attempt());
-    },
-);
+let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+    if let CasEvent::AttemptFailed { context, kind } = event {
+        if *kind == CasAttemptFailureKind::Conflict {
+            eprintln!("CAS conflict at attempt {}", context.attempt());
+        }
+    }
+});
 
 let success = executor
     .execute_with_hooks(
@@ -211,6 +230,25 @@ let success = executor
 
 assert_eq!(*success.output(), 2);
 ```
+
+## Detection and Performance Trade-offs
+
+Contention detection also adds work to the hot path, so `qubit-cas` separates
+observability into three levels:
+
+- `ReportOnly` (default): aggregate only the final `CasExecutionReport` and do
+  not construct attempt events. Use this for most production paths.
+- `EventStream`: emit `CasEvent` values to listeners. Use this for real-time
+  logs, traces, or metrics.
+- `EventStreamWithAlert`: add threshold checks and contention alerts on top of
+  event streaming.
+
+Prefer `ReportOnly` by default and export `outcome.report().conflict_ratio()`
+periodically. Upgrade to `EventStream` only when investigating hot keys or
+feeding traces. Avoid synchronous logging, remote metrics calls, or expensive
+formatting inside hooks because high contention multiplies that work by the
+number of attempts. A non-blocking channel with a background batch consumer is
+the recommended pattern.
 
 ## Async Usage
 
@@ -250,7 +288,12 @@ async fn main() {
 - `src/executor`: builder and synchronous/asynchronous CAS executor.
 - `src/event`: execution context and lifecycle hooks.
 - `src/error`: attempt-level and terminal CAS errors.
+- `src/observability`: observability modes, contention thresholds, and alerts.
 - `src/options`: timeout policy options.
+- `src/outcome` and `src/report`: execution result wrapper and observability
+  reports.
+- `src/strategy`: built-in execution strategies and strategy profiles.
+- `benches`: observability overhead benchmarks.
 - `tests`: behavior tests for executor, builder, hooks, errors, and options.
 
 ## Quality Checks

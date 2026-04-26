@@ -11,6 +11,8 @@
 use std::fmt;
 use std::sync::Arc;
 
+use super::cas_attempt_failure_kind::CasAttemptFailureKind;
+
 /// Failure produced by one CAS attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CasAttemptFailure<T, E> {
@@ -106,6 +108,20 @@ impl<T, E> CasAttemptFailure<T, E> {
             | Self::Retry { current, .. }
             | Self::Abort { current, .. }
             | Self::Timeout { current } => current,
+        }
+    }
+
+    /// Returns the lightweight kind of this attempt failure.
+    ///
+    /// # Returns
+    /// The [`CasAttemptFailureKind`] matching this failure variant.
+    #[inline]
+    pub fn kind(&self) -> CasAttemptFailureKind {
+        match self {
+            Self::Conflict { .. } => CasAttemptFailureKind::Conflict,
+            Self::Retry { .. } => CasAttemptFailureKind::Retry,
+            Self::Abort { .. } => CasAttemptFailureKind::Abort,
+            Self::Timeout { .. } => CasAttemptFailureKind::Timeout,
         }
     }
 

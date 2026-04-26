@@ -26,6 +26,10 @@ exclude = [
 name = "qubit_cas"
 doctest = false
 
+[[bench]]
+name = "observability_overhead"
+harness = false
+
 [features]
 default = []
 tokio = ["dep:tokio", "qubit-retry/tokio"]

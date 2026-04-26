@@ -11,5 +11,7 @@
 mod error;
 mod event;
 mod executor;
+mod observability;
 mod options;
+mod report;
 mod support;

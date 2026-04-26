@@ -41,10 +41,7 @@ impl CasContext {
     /// # Returns
     /// A copied [`CasContext`] value.
     #[inline]
-    pub(crate) fn new(
-        context: &RetryContext,
-        attempt_timeout: Option<Duration>,
-    ) -> Self {
+    pub(crate) fn new(context: &RetryContext, attempt_timeout: Option<Duration>) -> Self {
         Self {
             attempt: context.attempt(),
             max_attempts: context.max_attempts(),

@@ -15,38 +15,38 @@ use qubit_retry::constants::DEFAULT_RETRY_MAX_ATTEMPTS;
 /// Default maximum attempts inherited from `qubit-retry`.
 pub const DEFAULT_CAS_MAX_ATTEMPTS: u32 = DEFAULT_RETRY_MAX_ATTEMPTS;
 
-/// Maximum attempts for the high-concurrency preset.
-pub const HIGH_CONCURRENCY_MAX_ATTEMPTS: u32 = 1000;
+/// Maximum attempts for the contention-adaptive strategy.
+pub const CONTENTION_ADAPTIVE_MAX_ATTEMPTS: u32 = 1000;
 
-/// Initial retry delay for the high-concurrency preset.
-pub const HIGH_CONCURRENCY_INITIAL_DELAY: Duration = Duration::from_millis(50);
+/// Initial retry delay for the contention-adaptive strategy.
+pub const CONTENTION_ADAPTIVE_INITIAL_DELAY: Duration = Duration::from_millis(50);
 
-/// Maximum retry delay for the high-concurrency preset.
-pub const HIGH_CONCURRENCY_MAX_DELAY: Duration = Duration::from_secs(30);
+/// Maximum retry delay for the contention-adaptive strategy.
+pub const CONTENTION_ADAPTIVE_MAX_DELAY: Duration = Duration::from_secs(30);
 
-/// Total elapsed-time budget for the high-concurrency preset.
-pub const HIGH_CONCURRENCY_MAX_ELAPSED: Duration = Duration::from_secs(60);
+/// Total elapsed-time budget for the contention-adaptive strategy.
+pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_secs(60);
 
-/// Jitter factor for the high-concurrency preset.
-pub const HIGH_CONCURRENCY_JITTER_FACTOR: f64 = 0.25;
+/// Jitter factor for the contention-adaptive strategy.
+pub const CONTENTION_ADAPTIVE_JITTER_FACTOR: f64 = 0.25;
 
-/// Maximum attempts for the low-latency preset.
-pub const LOW_LATENCY_MAX_ATTEMPTS: u32 = 100;
+/// Maximum attempts for the latency-first strategy.
+pub const LATENCY_FIRST_MAX_ATTEMPTS: u32 = 100;
 
-/// Total elapsed-time budget for the low-latency preset.
-pub const LOW_LATENCY_MAX_ELAPSED: Duration = Duration::from_secs(5);
+/// Total elapsed-time budget for the latency-first strategy.
+pub const LATENCY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(5);
 
-/// Maximum attempts for the high-reliability preset.
-pub const HIGH_RELIABILITY_MAX_ATTEMPTS: u32 = 5000;
+/// Maximum attempts for the reliability-first strategy.
+pub const RELIABILITY_FIRST_MAX_ATTEMPTS: u32 = 5000;
 
-/// Initial retry delay for the high-reliability preset.
-pub const HIGH_RELIABILITY_INITIAL_DELAY: Duration = Duration::from_secs(1);
+/// Initial retry delay for the reliability-first strategy.
+pub const RELIABILITY_FIRST_INITIAL_DELAY: Duration = Duration::from_secs(1);
 
-/// Maximum retry delay for the high-reliability preset.
-pub const HIGH_RELIABILITY_MAX_DELAY: Duration = Duration::from_secs(300);
+/// Maximum retry delay for the reliability-first strategy.
+pub const RELIABILITY_FIRST_MAX_DELAY: Duration = Duration::from_secs(300);
 
-/// Total elapsed-time budget for the high-reliability preset.
-pub const HIGH_RELIABILITY_MAX_ELAPSED: Duration = Duration::from_secs(600);
+/// Total elapsed-time budget for the reliability-first strategy.
+pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(600);
 
-/// Jitter factor for the high-reliability preset.
-pub const HIGH_RELIABILITY_JITTER_FACTOR: f64 = 0.1;
+/// Jitter factor for the reliability-first strategy.
+pub const RELIABILITY_FIRST_JITTER_FACTOR: f64 = 0.1;

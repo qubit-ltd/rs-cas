@@ -10,26 +10,28 @@
 use std::sync::{Arc, Mutex};
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasAttemptFailure, CasContext, CasDecision, CasHooks, CasSuccess};
+use qubit_cas::{CasDecision, CasEvent, CasHooks, CasObservabilityConfig};
 use qubit_function::Consumer;
 
 use crate::support::TestError;
 
-/// Consumer used to verify `CasHooks::on_success` accepts rs-function traits.
-struct SuccessRecorder {
+/// Consumer used to verify `CasHooks::on_event` accepts rs-function traits.
+struct EventRecorder {
     attempts: Arc<Mutex<Vec<u32>>>,
 }
 
-impl Consumer<CasSuccess<usize, usize>> for SuccessRecorder {
-    /// Records the attempt count of a successful CAS execution.
+impl Consumer<CasEvent> for EventRecorder {
+    /// Records the attempt count of a finished CAS execution.
     ///
     /// # Parameters
-    /// - `success`: Successful CAS value.
-    fn accept(&self, success: &CasSuccess<usize, usize>) {
-        self.attempts
-            .lock()
-            .expect("success recorder should be lockable")
-            .push(success.attempts());
+    /// - `event`: Lifecycle event.
+    fn accept(&self, event: &CasEvent) {
+        if let CasEvent::ExecutionFinished { report } = event {
+            self.attempts
+                .lock()
+                .expect("event recorder should be lockable")
+                .push(report.attempts_total());
+        }
     }
 }
 
@@ -45,25 +47,14 @@ fn test_hooks_accept_function_traits() {
     let state = AtomicRef::from_value(1usize);
     let attempts = Arc::new(Mutex::new(Vec::new()));
     let recorded_attempts = Arc::clone(&attempts);
-    let retry_attempts = Arc::new(Mutex::new(Vec::new()));
-    let retry_events = Arc::clone(&retry_attempts);
-
-    let hooks = CasHooks::new()
-        .on_success(SuccessRecorder {
-            attempts: Arc::clone(&recorded_attempts),
-        })
-        .on_retry(
-            move |context: &CasContext, failure: &CasAttemptFailure<usize, TestError>| {
-                retry_events
-                    .lock()
-                    .expect("retry events should be lockable")
-                    .push((context.attempt(), failure.is_conflict()));
-            },
-        );
+    let hooks = CasHooks::new().on_event(EventRecorder {
+        attempts: Arc::clone(&recorded_attempts),
+    });
 
     let executor = qubit_cas::CasExecutor::<usize, TestError>::builder()
         .max_attempts(2)
         .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
         .build()
         .expect("executor should build");
 
@@ -83,9 +74,10 @@ fn test_hooks_accept_function_traits() {
         vec![1]
     );
     assert!(
-        retry_attempts
+        attempts
             .lock()
-            .expect("retry attempts should be lockable")
-            .is_empty()
+            .expect("success attempts should be lockable")
+            .len()
+            == 1
     );
 }
