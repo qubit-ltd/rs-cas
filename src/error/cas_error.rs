@@ -95,7 +95,9 @@ impl<T, E> CasError<T, E> {
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                 _ => CasErrorKind::Abort,
             },
-            RetryErrorReason::AttemptsExceeded => match last_failure {
+            RetryErrorReason::AttemptsExceeded
+            | RetryErrorReason::UnsupportedOperation
+            | RetryErrorReason::WorkerStillRunning => match last_failure {
                 Some(CasAttemptFailure::Conflict { .. }) => CasErrorKind::Conflict,
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                 _ => CasErrorKind::RetryExhausted,
