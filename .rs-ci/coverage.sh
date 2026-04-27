@@ -21,6 +21,7 @@ COVERAGE_SOURCE_DIR="${COVERAGE_SOURCE_DIR:-src}"
 COVERAGE_EXTRA_EXCLUDE_REGEX="${COVERAGE_EXTRA_EXCLUDE_REGEX:-}"
 COVERAGE_OPEN_HTML="${COVERAGE_OPEN_HTML:-1}"
 COVERAGE_ENFORCE_THRESHOLDS="${COVERAGE_ENFORCE_THRESHOLDS:-1}"
+COVERAGE_ALL_FEATURES="${COVERAGE_ALL_FEATURES:-1}"
 
 print_usage() {
     echo "Usage: ./coverage.sh [format] [options]"
@@ -44,6 +45,7 @@ print_usage() {
     echo "  COVERAGE_SOURCE_DIR=${COVERAGE_SOURCE_DIR}"
     echo "  COVERAGE_OPEN_HTML=${COVERAGE_OPEN_HTML}"
     echo "  COVERAGE_ENFORCE_THRESHOLDS=${COVERAGE_ENFORCE_THRESHOLDS}"
+    echo "  COVERAGE_ALL_FEATURES=${COVERAGE_ALL_FEATURES}"
 }
 
 require_command() {
@@ -279,6 +281,12 @@ echo "Starting code coverage testing"
 echo "Package: $PACKAGE_NAME"
 echo "Coverage source prefix: $SOURCE_PREFIX"
 echo "Exclude pattern: $EXCLUDE_PATTERN"
+echo "Coverage all features: $COVERAGE_ALL_FEATURES"
+
+COVERAGE_FEATURE_ARGS=()
+if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
+    COVERAGE_FEATURE_ARGS=(--all-features)
+fi
 
 if [ "$CLEAN_FLAG" = "yes" ]; then
     echo "Cleaning old coverage data"
@@ -296,7 +304,8 @@ case "$FORMAT_ARG" in
         if [ "$COVERAGE_OPEN_HTML" = "1" ]; then
             html_open_args=(--open)
         fi
-        cargo llvm-cov --package "$PACKAGE_NAME" --html --output-dir target/llvm-cov \
+        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+            --html --output-dir target/llvm-cov \
             "${html_open_args[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "HTML report: target/llvm-cov/html/index.html"
@@ -304,7 +313,7 @@ case "$FORMAT_ARG" in
 
     text)
         echo "Generating text coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" \
+        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
             | tee target/llvm-cov/coverage.txt
         echo "Text report: target/llvm-cov/coverage.txt"
@@ -312,14 +321,16 @@ case "$FORMAT_ARG" in
 
     lcov)
         echo "Generating LCOV coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" --lcov --output-path target/llvm-cov/lcov.info \
+        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+            --lcov --output-path target/llvm-cov/lcov.info \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "LCOV report: target/llvm-cov/lcov.info"
         ;;
 
     json)
         echo "Generating JSON coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" --json --output-path target/llvm-cov/coverage.json \
+        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+            --json --output-path target/llvm-cov/coverage.json \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         maybe_check_json_coverage target/llvm-cov/coverage.json "$SOURCE_PREFIX"
         echo "JSON report: target/llvm-cov/coverage.json"
@@ -327,7 +338,8 @@ case "$FORMAT_ARG" in
 
     cobertura)
         echo "Generating Cobertura XML coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" --cobertura --output-path target/llvm-cov/cobertura.xml \
+        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+            --cobertura --output-path target/llvm-cov/cobertura.xml \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "Cobertura report: target/llvm-cov/cobertura.xml"
         ;;
@@ -336,7 +348,7 @@ case "$FORMAT_ARG" in
         echo "Generating all coverage reports from one test run"
 
         echo "  - collecting coverage data"
-        cargo llvm-cov --package "$PACKAGE_NAME" --no-report \
+        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" --no-report \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - HTML"
