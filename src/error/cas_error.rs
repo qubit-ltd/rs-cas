@@ -93,15 +93,12 @@ impl<T, E> CasError<T, E> {
         match reason {
             RetryErrorReason::Aborted => match last_failure {
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
-                Some(CasAttemptFailure::Abort { .. }) | None => CasErrorKind::Abort,
-                Some(CasAttemptFailure::Conflict { .. })
-                | Some(CasAttemptFailure::Retry { .. }) => CasErrorKind::Abort,
+                _ => CasErrorKind::Abort,
             },
             RetryErrorReason::AttemptsExceeded => match last_failure {
                 Some(CasAttemptFailure::Conflict { .. }) => CasErrorKind::Conflict,
-                Some(CasAttemptFailure::Retry { .. }) | None => CasErrorKind::RetryExhausted,
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
-                Some(CasAttemptFailure::Abort { .. }) => CasErrorKind::Abort,
+                _ => CasErrorKind::RetryExhausted,
             },
             RetryErrorReason::MaxElapsedExceeded => CasErrorKind::MaxElapsedExceeded,
         }
@@ -207,29 +204,14 @@ where
     /// # Errors
     /// Returns a formatting error if the formatter fails.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.kind() {
-            CasErrorKind::Abort => write!(f, "CAS aborted after {} attempt(s)", self.attempts())?,
-            CasErrorKind::Conflict => write!(
-                f,
-                "CAS conflicts exhausted after {} attempt(s)",
-                self.attempts()
-            )?,
-            CasErrorKind::RetryExhausted => write!(
-                f,
-                "CAS retryable failures exhausted after {} attempt(s)",
-                self.attempts()
-            )?,
-            CasErrorKind::AttemptTimeout => write!(
-                f,
-                "CAS attempt timed out after {} attempt(s)",
-                self.attempts()
-            )?,
-            CasErrorKind::MaxElapsedExceeded => write!(
-                f,
-                "CAS max elapsed exceeded after {} attempt(s)",
-                self.attempts()
-            )?,
-        }
+        let message = match self.kind() {
+            CasErrorKind::Abort => "CAS aborted",
+            CasErrorKind::Conflict => "CAS conflicts exhausted",
+            CasErrorKind::RetryExhausted => "CAS retryable failures exhausted",
+            CasErrorKind::AttemptTimeout => "CAS attempt timed out",
+            CasErrorKind::MaxElapsedExceeded => "CAS max elapsed exceeded",
+        };
+        write!(f, "{message} after {} attempt(s)", self.attempts())?;
         if let Some(failure) = self.last_failure() {
             write!(f, "; last failure: {failure}")?;
         }

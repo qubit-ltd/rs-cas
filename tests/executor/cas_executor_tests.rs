@@ -14,7 +14,7 @@ use std::time::Duration;
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
     CasAttemptFailureKind, CasDecision, CasErrorKind, CasEvent, CasExecutionOutcome, CasExecutor,
-    CasHooks, CasObservabilityConfig, ContentionThresholds,
+    CasHooks, CasObservabilityConfig, ContentionThresholds, ListenerPanicPolicy,
 };
 
 use crate::support::{NonCloneValue, TestError};
@@ -159,6 +159,109 @@ fn test_execute_emits_contention_alert() {
         *alerts.lock().expect("alert events should be lockable"),
         vec![(2, 1, thresholds)]
     );
+}
+
+/// Verifies event listener panics can be isolated.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_isolates_event_listener_panics() {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|_event: &CasEvent| {
+        panic!("event listener panic should be isolated");
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .isolate_listener_panics()
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_with_hooks(
+            &state,
+            |_current: &usize| CasDecision::<usize, &'static str, TestError>::finish("ok"),
+            hooks,
+        )
+        .expect("listener panic should be isolated");
+
+    assert_eq!(*success.output(), "ok");
+}
+
+/// Verifies alert listener panics can be isolated.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_isolates_alert_listener_panics() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let thresholds = ContentionThresholds::new(2, 1, 0.5);
+    let hooks = CasHooks::new().on_alert(|_alert: &qubit_cas::CasAlert| {
+        panic!("alert listener panic should be isolated");
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .observability(
+            CasObservabilityConfig::event_stream_with_alert(thresholds)
+                .with_listener_panic_policy(ListenerPanicPolicy::Isolate),
+        )
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_with_hooks(
+            &state,
+            |current: &usize| {
+                if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    state.store(Arc::new(*current + 1));
+                }
+                CasDecision::update(*current + 1, ())
+            },
+            hooks,
+        )
+        .expect("alert listener panic should be isolated");
+
+    assert_eq!(success.attempts(), 2);
+}
+
+/// Verifies alert mode does not require an alert listener.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_alert_mode_without_alert_hook_succeeds() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let thresholds = ContentionThresholds::new(2, 1, 0.5);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute(&state, |current: &usize| {
+            if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                state.store(Arc::new(*current + 1));
+            }
+            CasDecision::update(*current + 1, ())
+        })
+        .expect("alert mode should not require an alert hook");
+
+    assert_eq!(success.attempts(), 2);
 }
 
 /// Verifies `finish` returns success without writing a new state.
@@ -393,4 +496,58 @@ async fn test_execute_async_timeout_abort_returns_attempt_timeout() {
     assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
     assert_eq!(error.attempts(), 1);
     assert_eq!(error.current().map(|current| **current), Some(5));
+}
+
+/// Verifies async execution covers all CAS decision variants.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test]
+async fn test_execute_async_covers_decision_variants() {
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(2)
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let finish_state = AtomicRef::from_value(1usize);
+    let finish = executor
+        .execute_async(&finish_state, |_current: Arc<usize>| async move {
+            CasDecision::<usize, &'static str, TestError>::finish("done")
+        })
+        .await
+        .expect("async finish should succeed");
+    assert_eq!(*finish.output(), "done");
+
+    let retry_state = AtomicRef::from_value(2usize);
+    let retry = executor
+        .execute_async(&retry_state, |_current: Arc<usize>| async move {
+            CasDecision::<usize, (), TestError>::retry(TestError("retry"))
+        })
+        .await
+        .expect_err("async retry should exhaust attempts");
+    assert_eq!(retry.kind(), CasErrorKind::RetryExhausted);
+
+    let abort_state = AtomicRef::from_value(3usize);
+    let abort = executor
+        .execute_async(&abort_state, |_current: Arc<usize>| async move {
+            CasDecision::<usize, (), TestError>::abort(TestError("abort"))
+        })
+        .await
+        .expect_err("async abort should fail");
+    assert_eq!(abort.kind(), CasErrorKind::Abort);
+
+    let conflict_state = AtomicRef::from_value(4usize);
+    let conflict = executor
+        .execute_async(&conflict_state, |current: Arc<usize>| {
+            conflict_state.store(Arc::new(*current + 1));
+            async move { CasDecision::<usize, (), TestError>::update(*current + 2, ()) }
+        })
+        .await
+        .expect_err("async conflict should exhaust attempts");
+    assert_eq!(conflict.kind(), CasErrorKind::Conflict);
 }

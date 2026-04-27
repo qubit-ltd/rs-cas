@@ -41,5 +41,9 @@ fn test_success_context_accessors_work() {
     assert_eq!(success.output().value, "ready");
     assert_eq!(success.context().attempt(), 1);
     assert_eq!(success.context().max_attempts(), 3);
+    assert_eq!(success.context().max_retries(), 2);
+    assert_eq!(success.context().max_elapsed(), None);
+    assert!(success.context().total_elapsed() >= success.context().attempt_elapsed());
     assert_eq!(success.context().attempt_timeout(), None);
+    assert_eq!(success.context().next_delay(), None);
 }

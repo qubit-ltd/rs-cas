@@ -359,7 +359,9 @@ impl<T, E> CasExecutor<T, E> {
                     if Self::should_emit_events(&observability, &event_hook) {
                         Self::dispatch_event(
                             &observability,
-                            &event_hook,
+                            event_hook
+                                .as_ref()
+                                .expect("event hook should exist when events are emitted"),
                             CasEvent::AttemptFailed {
                                 context: cas_context,
                                 kind: Self::failure_kind(failure),
@@ -371,7 +373,9 @@ impl<T, E> CasExecutor<T, E> {
                             if Self::should_emit_events(&observability, &event_hook) {
                                 Self::dispatch_event(
                                     &observability,
-                                    &event_hook,
+                                    event_hook
+                                        .as_ref()
+                                        .expect("event hook should exist when events are emitted"),
                                     CasEvent::RetryRequested {
                                         context: cas_context,
                                     },
@@ -385,7 +389,9 @@ impl<T, E> CasExecutor<T, E> {
                                 if Self::should_emit_events(&observability, &event_hook) {
                                     Self::dispatch_event(
                                         &observability,
-                                        &event_hook,
+                                        event_hook.as_ref().expect(
+                                            "event hook should exist when events are emitted",
+                                        ),
                                         CasEvent::RetryRequested {
                                             context: cas_context,
                                         },
@@ -594,13 +600,13 @@ impl<T, E> CasExecutor<T, E> {
             .expect("CAS report builder should be lockable")
             .started_at();
         let event_hook = hooks.event_hook();
-        if Self::should_emit_events(&self.observability, &event_hook) {
-            Self::dispatch_event(
-                &self.observability,
-                &event_hook,
-                CasEvent::ExecutionStarted { started_at },
-            );
-        }
+        Self::dispatch_event(
+            &self.observability,
+            event_hook
+                .as_ref()
+                .expect("event hook should exist when events are emitted"),
+            CasEvent::ExecutionStarted { started_at },
+        );
     }
 
     /// Finishes and emits one execution report (and optional alert).
@@ -640,7 +646,9 @@ impl<T, E> CasExecutor<T, E> {
         if Self::should_emit_events(&self.observability, &event_hook) {
             Self::dispatch_event(
                 &self.observability,
-                &event_hook,
+                event_hook
+                    .as_ref()
+                    .expect("event hook should exist when events are emitted"),
                 CasEvent::ExecutionFinished {
                     report: report.clone(),
                 },
@@ -692,21 +700,16 @@ impl<T, E> CasExecutor<T, E> {
     /// Dispatches one lifecycle event if event streaming is enabled.
     fn dispatch_event(
         observability: &CasObservabilityConfig,
-        hook: &Option<crate::event::CasEventHook>,
+        hook: &crate::event::CasEventHook,
         event: CasEvent,
     ) where
         T: 'static,
         E: 'static,
     {
-        if observability.mode() == CasObservabilityMode::ReportOnly {
-            return;
-        }
-        if let Some(hook) = hook {
-            match observability.listener_panic_policy() {
-                ListenerPanicPolicy::Propagate => hook.accept(&event),
-                ListenerPanicPolicy::Isolate => {
-                    let _ = catch_unwind(AssertUnwindSafe(|| hook.accept(&event)));
-                }
+        match observability.listener_panic_policy() {
+            ListenerPanicPolicy::Propagate => hook.accept(&event),
+            ListenerPanicPolicy::Isolate => {
+                let _ = catch_unwind(AssertUnwindSafe(|| hook.accept(&event)));
             }
         }
     }

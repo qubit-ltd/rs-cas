@@ -69,17 +69,53 @@ impl CasObservabilityConfig {
         self.mode
     }
 
-    /// Sets the selected observability mode.
+    /// Switches to report-only observability.
     ///
-    /// # Parameters
-    /// - `mode`: New observability mode to use.
+    /// This disables lifecycle event streaming and clears contention thresholds.
     ///
     /// # Returns
     /// Updated builder-style config (consumes self).
     #[inline]
-    pub fn with_mode(mut self, mode: CasObservabilityMode) -> Self {
-        self.mode = mode;
+    pub fn with_report_only(mut self) -> Self {
+        self.mode = CasObservabilityMode::ReportOnly;
+        self.contention_thresholds = None;
         self
+    }
+
+    /// Switches to event-stream observability without alerts.
+    ///
+    /// This enables lifecycle events and clears contention thresholds.
+    ///
+    /// # Returns
+    /// Updated builder-style config (consumes self).
+    #[inline]
+    pub fn with_event_stream(mut self) -> Self {
+        self.mode = CasObservabilityMode::EventStream;
+        self.contention_thresholds = None;
+        self
+    }
+
+    /// Switches to event-stream observability with contention alerts.
+    ///
+    /// # Parameters
+    /// - `thresholds`: Thresholds used to detect hot contention for alerts.
+    ///
+    /// # Returns
+    /// Updated builder-style config with alert mode enabled (consumes self).
+    #[inline]
+    pub fn with_event_stream_with_alert(mut self, thresholds: ContentionThresholds) -> Self {
+        self.mode = CasObservabilityMode::EventStreamWithAlert;
+        self.contention_thresholds = Some(thresholds);
+        self
+    }
+
+    /// Disables contention alerts while keeping lifecycle event streaming.
+    ///
+    /// # Returns
+    /// Updated builder-style config with event streaming and no alert thresholds.
+    #[inline]
+    pub fn without_contention_alerts(self) -> Self {
+        self.with_event_stream()
     }
 
     /// Returns the listener panic policy.
@@ -121,10 +157,8 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config with alert mode enabled (consumes self).
     #[inline]
-    pub fn with_contention_thresholds(mut self, thresholds: ContentionThresholds) -> Self {
-        self.mode = CasObservabilityMode::EventStreamWithAlert;
-        self.contention_thresholds = Some(thresholds);
-        self
+    pub fn with_contention_thresholds(self, thresholds: ContentionThresholds) -> Self {
+        self.with_event_stream_with_alert(thresholds)
     }
 }
 
