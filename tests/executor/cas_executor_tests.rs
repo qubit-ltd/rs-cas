@@ -275,14 +275,14 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
     let state = AtomicRef::from_value(11usize);
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(10)
-        .fixed_delay(Duration::from_millis(5))
-        .jitter_factor(0.0)
+        .no_delay()
         .max_elapsed(Some(Duration::from_millis(1)))
         .build()
         .expect("executor should build");
 
     let error = executor
         .execute(&state, |_current: &usize| {
+            std::thread::sleep(Duration::from_millis(2));
             CasDecision::<usize, (), TestError>::retry(TestError("again"))
         })
         .expect_err("max elapsed should fail");

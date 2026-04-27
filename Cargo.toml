@@ -49,7 +49,6 @@ tokio = { version = "1.52", features = ["full", "test-util"] }
 qubit-atomic = { path = "../rs-atomic" }
 qubit-common = { path = "../rs-common" }
 qubit-function = { path = "../rs-function" }
-qubit-retry = { path = "../rs-retry" }
 
 [package.metadata.docs.rs]
 all-features = true
