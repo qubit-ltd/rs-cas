@@ -23,6 +23,11 @@ COVERAGE_OPEN_HTML="${COVERAGE_OPEN_HTML:-1}"
 COVERAGE_ENFORCE_THRESHOLDS="${COVERAGE_ENFORCE_THRESHOLDS:-1}"
 COVERAGE_ALL_FEATURES="${COVERAGE_ALL_FEATURES:-1}"
 
+COVERAGE_FEATURE_ARGS=()
+if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
+    COVERAGE_FEATURE_ARGS=(--all-features)
+fi
+
 print_usage() {
     echo "Usage: ./coverage.sh [format] [options]"
     echo ""
@@ -59,22 +64,28 @@ detect_package_name() {
     awk -F'"' '/^[[:space:]]*name[[:space:]]*=/ { print $2; exit }' Cargo.toml
 }
 
+escape_regex_literal() {
+    printf '%s' "$1" | sed 's/[][(){}.*+?^$|\\]/\\&/g'
+}
+
 build_exclude_pattern() {
     local current_crate_name="$1"
     local workspace_root="$2"
     local other_crates=""
     local crate_dir
     local crate_name
+    local escaped_crate_name
 
     for crate_dir in "$workspace_root"/*/; do
         [ -d "$crate_dir" ] || continue
         [ -f "$crate_dir/Cargo.toml" ] || continue
         crate_name=$(basename "$crate_dir")
         if [ "$crate_name" != "$current_crate_name" ]; then
+            escaped_crate_name=$(escape_regex_literal "$crate_name")
             if [ -z "$other_crates" ]; then
-                other_crates="$crate_name"
+                other_crates="$escaped_crate_name"
             else
-                other_crates="$other_crates|$crate_name"
+                other_crates="$other_crates|$escaped_crate_name"
             fi
         fi
     done
@@ -281,11 +292,10 @@ echo "Starting code coverage testing"
 echo "Package: $PACKAGE_NAME"
 echo "Coverage source prefix: $SOURCE_PREFIX"
 echo "Exclude pattern: $EXCLUDE_PATTERN"
-echo "Coverage all features: $COVERAGE_ALL_FEATURES"
-
-COVERAGE_FEATURE_ARGS=()
 if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
-    COVERAGE_FEATURE_ARGS=(--all-features)
+    echo "Cargo features: --all-features"
+else
+    echo "Cargo features: default feature selection"
 fi
 
 if [ "$CLEAN_FLAG" = "yes" ]; then
