@@ -110,7 +110,8 @@ impl CasExecutionReport {
     /// Returns the number of retryable business failures.
     ///
     /// # Returns
-    /// Count of times the business operation returned [`CasDecision::Retry`].
+    /// Count of times the business operation returned
+    /// [`CasDecision::Retry`](crate::CasDecision::Retry).
     #[inline]
     pub fn retry_errors(&self) -> u32 {
         self.retry_errors
@@ -119,7 +120,8 @@ impl CasExecutionReport {
     /// Returns the number of aborting business failures.
     ///
     /// # Returns
-    /// Count of times the business operation returned [`CasDecision::Abort`].
+    /// Count of times the business operation returned
+    /// [`CasDecision::Abort`](crate::CasDecision::Abort).
     #[inline]
     pub fn aborts(&self) -> u32 {
         self.aborts
