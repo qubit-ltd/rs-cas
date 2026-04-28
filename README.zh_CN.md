@@ -7,6 +7,8 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Doc](https://img.shields.io/badge/docs-English-blue.svg)](README.md)
 
+## 概览
+
 面向 Rust 的强类型 compare-and-swap（CAS）执行器。`qubit-cas` 将常见的
 「读取共享快照、根据快照生成新值、通过 compare-and-swap 原子写入新值、遇到竞争后重试」
 流程封装为可复用的 `CasExecutor`。
@@ -43,7 +45,7 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
 
 ```toml
 [dependencies]
-qubit-cas = "0.1.0"
+qubit-cas = "0.3.0"
 qubit-atomic = "0.10"
 ```
 
@@ -53,9 +55,28 @@ qubit-atomic = "0.10"
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.1.0", features = ["tokio"] }
+qubit-cas = { version = "0.3.0", features = ["tokio"] }
 qubit-atomic = "0.10"
 ```
+
+可选 feature：
+
+- `tokio`：启用 `CasExecutor::execute_async`，并通过 Tokio 支持异步单次 attempt 超时处理。
+
+默认 feature 为空，因此同步 CAS 执行不会引入异步运行时。
+
+## 适用场景
+
+当一次更新可以表达为“从当前不可变快照推导出一个类型化决策”时，适合使用
+`qubit-cas`：
+
+- 小型共享状态保存在 `AtomicRef<T>` 中，并以整体替换方式更新。
+- 存在并发写入，但不允许出现写丢失。
+- 基于最新快照重试的成本低于在整个操作期间持有锁。
+- 调用方需要结构化观测 attempt、冲突、可重试业务失败、abort、timeout 和 elapsed 预算。
+
+如果临界区耗时较长、更新逻辑包含无法安全重放的副作用，或状态无法表示为不可变替换值，
+应优先考虑 mutex、数据库事务或领域内专用锁。
 
 ## 快速开始
 
@@ -106,7 +127,7 @@ fn main() {
         }
         Err(error) => {
             // 缺货是业务结果，不应直接 panic。
-            eprintln!("order rejected: {error}");
+            eprintln!("order rejected: {error:?}");
         }
     }
 }
@@ -135,6 +156,29 @@ fn main() {
 
 `execute*` 返回 `CasOutcome<T, R, E>`。它包含业务层 `Result<CasSuccess<T, R>, CasError<T, E>>`
 以及本次执行的 `CasExecutionReport`，调用方可以在不注册 Hook 的情况下读取冲突次数和冲突率。
+
+## 状态与操作建议
+
+CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让流程基于新快照重新尝试。
+尽量保持 operation closure 确定且无副作用。如果必须执行副作用，建议在 `execute*`
+成功返回后再执行，或让副作用具备幂等性并绑定外部 operation id。
+
+共享值应当足够轻量，便于克隆为新的 `Arc<T>` 替换值。对于较大的状态，可以考虑持久化数据结构、
+内部 `Arc` 字段，或只把指向大型不可变数据的小型状态对象放入 CAS。
+
+## 错误处理
+
+终止失败会以 `CasError<T, E>` 返回，并通过 `CasErrorKind` 分类：
+
+- `Abort`：operation 返回了 `CasDecision::abort`。
+- `Conflict`：compare-and-swap 冲突耗尽了重试策略。
+- `RetryExhausted`：可重试业务失败耗尽了重试策略。
+- `AttemptTimeout`：异步 attempt 超时并按超时策略终止，或超时重试已耗尽。
+- `MaxOperationElapsedExceeded`：累计用户 operation 执行时间超过预算。
+- `MaxTotalElapsedExceeded`：整个 retry flow（包含延迟与 hook）超过总耗时预算。
+
+控制分支建议使用 `error.kind()`；需要读取保留下来的业务错误时使用 `error.error()`；
+如果最后一次失败保留了当时观察到的状态快照，可通过 `error.current()` 读取。
 
 ## 执行策略
 
@@ -248,6 +292,18 @@ async fn main() {
 }
 ```
 
+## 公共 API 速览
+
+- `CasExecutor<T, E>`：可复用的 CAS 执行器，绑定状态类型 `T` 和业务错误类型 `E`。
+- `CasBuilder<T, E>`：配置重试次数、elapsed 预算、延迟、抖动、异步超时、超时策略、可观测能力和策略预设。
+- `CasDecision<T, R, E>`：用户逻辑在每次 attempt 中返回的决策。
+- `CasOutcome<T, R, E>`：终态结果与 `CasExecutionReport` 的组合。
+- `CasSuccess<T, R>`：成功更新或无写入完成，包含当前状态、可选旧状态、业务输出和 attempt 上下文。
+- `CasError<T, E>`：带 `CasErrorKind` 分类的终止失败。
+- `CasHooks`：单次执行的生命周期事件 hook 和告警 hook。
+- `CasObservabilityConfig`：选择仅报告、事件流或带争用告警的事件流。
+- `ContentionThresholds`：基于 attempt 数、冲突数和冲突率识别热点争用。
+
 ## 项目结构
 
 - `src/decision`：强类型 CAS 决策值。
@@ -261,7 +317,16 @@ async fn main() {
 - `benches`：观测模式开销基准测试。
 - `tests`：executor、builder、hooks、错误与选项的行为测试。
 
-## 质量检查
+## 测试与 CI
+
+在 crate 根目录快速执行本地检查：
+
+```bash
+cargo test
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+若要与仓库 CI 环境保持一致，请运行：
 
 ```bash
 ./align-ci.sh
@@ -269,6 +334,30 @@ async fn main() {
 ./coverage.sh json
 ```
 
-## 许可证
+`./align-ci.sh` 会先对齐本地工具链和 CI 相关配置；`./ci-check.sh` 复现流水线检查。
+修改运行期行为并需要关注覆盖率时，可配合使用 `./coverage.sh`。
 
-Apache-2.0
+## 参与贡献
+
+欢迎通过 Issue 与 Pull Request 参与本仓库。建议单次变更聚焦一个主题；修改行为时补充或更新测试；
+影响公开 API 或用户可见行为时，同步更新本文档或 rustdoc。
+
+向本仓库贡献内容即表示您同意以 [Apache License, Version 2.0](LICENSE)（与本项目相同）
+授权您的贡献。
+
+## 许可证与版权
+
+版权所有 © 2026 Haixing Hu，Qubit Co. Ltd.。
+
+本软件依据 [Apache License, Version 2.0](LICENSE) 授权；完整许可文本见仓库根目录的
+`LICENSE` 文件。
+
+## 作者与维护
+
+**Haixing Hu** — Qubit Co. Ltd.
+
+| | |
+| --- | --- |
+| **源码仓库** | [github.com/qubit-ltd/rs-cas](https://github.com/qubit-ltd/rs-cas) |
+| **API 文档** | [docs.rs/qubit-cas](https://docs.rs/qubit-cas) |
+| **Crate 发布** | [crates.io/crates/qubit-cas](https://crates.io/crates/qubit-cas) |
