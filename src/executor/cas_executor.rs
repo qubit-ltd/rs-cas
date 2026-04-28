@@ -20,17 +20,17 @@ use qubit_retry::{
     AttemptFailure, AttemptFailureDecision, Retry, RetryContext, RetryError, RetryOptions,
 };
 
-use crate::decision::CasDecision;
+use crate::cas_decision::CasDecision;
+use crate::cas_outcome::CasOutcome;
+use crate::cas_success::CasSuccess;
 use crate::error::{CasAttemptFailure, CasError, CasErrorKind};
 use crate::event::{CasContext, CasEvent, CasHooks};
 use crate::observability::{
     CasAlert, CasObservabilityConfig, CasObservabilityMode, ListenerPanicPolicy,
 };
 use crate::options::CasTimeoutPolicy;
-use crate::outcome::CasOutcome;
 use crate::report::{CasExecutionOutcome, CasExecutionReport, CasReportBuilder};
 use crate::strategy::CasStrategy;
-use crate::success::CasSuccess;
 
 use super::cas_builder::CasBuilder;
 

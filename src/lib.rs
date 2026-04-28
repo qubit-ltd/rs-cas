@@ -15,19 +15,21 @@
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+mod cas_decision;
+mod cas_outcome;
+mod cas_success;
 pub mod constants;
-mod decision;
 pub mod error;
 pub mod event;
 pub mod executor;
 pub mod observability;
 pub mod options;
-mod outcome;
 pub mod report;
 pub mod strategy;
-mod success;
 
-pub use decision::CasDecision;
+pub use cas_decision::CasDecision;
+pub use cas_outcome::CasOutcome;
+pub use cas_success::CasSuccess;
 pub use error::{CasAttemptFailure, CasAttemptFailureKind, CasError, CasErrorKind};
 pub use event::{CasContext, CasEvent, CasHooks};
 pub use executor::{CasBuilder, CasExecutor};
@@ -36,7 +38,5 @@ pub use observability::{
     ListenerPanicPolicy,
 };
 pub use options::CasTimeoutPolicy;
-pub use outcome::CasOutcome;
 pub use report::{CasExecutionOutcome, CasExecutionReport};
 pub use strategy::{CasStrategy, CasStrategyProfile};
-pub use success::CasSuccess;
