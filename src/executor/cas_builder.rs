@@ -24,8 +24,10 @@ use super::cas_executor::CasExecutor;
 pub struct CasBuilder<T, E = BoxError> {
     /// Maximum attempts, including the initial attempt.
     max_attempts: u32,
-    /// Maximum total elapsed time.
-    max_elapsed: Option<Duration>,
+    /// Maximum cumulative user operation time for the retry flow.
+    max_operation_elapsed: Option<Duration>,
+    /// Maximum monotonic elapsed time for the whole retry flow.
+    max_total_elapsed: Option<Duration>,
     /// Base retry delay strategy.
     delay: RetryDelay,
     /// Jitter strategy applied to the base delay.
@@ -51,7 +53,8 @@ impl<T, E> CasBuilder<T, E> {
         let options = RetryOptions::default();
         Self {
             max_attempts: options.max_attempts(),
-            max_elapsed: options.max_elapsed(),
+            max_operation_elapsed: options.max_operation_elapsed(),
+            max_total_elapsed: options.max_total_elapsed(),
             delay: options.delay().clone(),
             jitter: options.jitter(),
             attempt_timeout: None,
@@ -71,7 +74,8 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     pub fn options(mut self, options: RetryOptions) -> Self {
         self.max_attempts = options.max_attempts();
-        self.max_elapsed = options.max_elapsed();
+        self.max_operation_elapsed = options.max_operation_elapsed();
+        self.max_total_elapsed = options.max_total_elapsed();
         self.delay = options.delay().clone();
         self.jitter = options.jitter();
         self.max_attempts_error = None;
@@ -110,16 +114,29 @@ impl<T, E> CasBuilder<T, E> {
         self.max_attempts(max_retries.saturating_add(1))
     }
 
-    /// Sets the maximum elapsed-time budget.
+    /// Sets the maximum cumulative user operation elapsed-time budget.
     ///
     /// # Parameters
-    /// - `max_elapsed`: Optional total elapsed-time budget.
+    /// - `max_operation_elapsed`: Optional cumulative user operation time budget.
     ///
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn max_elapsed(mut self, max_elapsed: Option<Duration>) -> Self {
-        self.max_elapsed = max_elapsed;
+    pub fn max_operation_elapsed(mut self, max_operation_elapsed: Option<Duration>) -> Self {
+        self.max_operation_elapsed = max_operation_elapsed;
+        self
+    }
+
+    /// Sets the maximum monotonic elapsed-time budget for the whole retry flow.
+    ///
+    /// # Parameters
+    /// - `max_total_elapsed`: Optional total retry-flow time budget.
+    ///
+    /// # Returns
+    /// The updated builder.
+    #[inline]
+    pub fn max_total_elapsed(mut self, max_total_elapsed: Option<Duration>) -> Self {
+        self.max_total_elapsed = max_total_elapsed;
         self
     }
 
@@ -271,7 +288,8 @@ impl<T, E> CasBuilder<T, E> {
         let profile = strategy.profile();
         let builder = self
             .max_attempts(profile.max_attempts())
-            .max_elapsed(Some(profile.max_elapsed()));
+            .max_operation_elapsed(Some(profile.max_operation_elapsed()))
+            .max_total_elapsed(profile.max_total_elapsed());
         if let Some((initial, max, jitter)) = strategy.backoff() {
             builder
                 .exponential_backoff(initial, max)
@@ -331,8 +349,13 @@ impl<T, E> CasBuilder<T, E> {
         if let Some(error) = self.max_attempts_error {
             return Err(error);
         }
-        let options =
-            RetryOptions::new(self.max_attempts, self.max_elapsed, self.delay, self.jitter)?;
+        let options = RetryOptions::new(
+            self.max_attempts,
+            self.max_operation_elapsed,
+            self.max_total_elapsed,
+            self.delay,
+            self.jitter,
+        )?;
         Ok(CasExecutor::new(
             options,
             self.attempt_timeout,

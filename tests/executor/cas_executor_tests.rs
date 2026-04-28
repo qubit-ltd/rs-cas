@@ -379,7 +379,7 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(10)
         .no_delay()
-        .max_elapsed(Some(Duration::from_millis(1)))
+        .max_operation_elapsed(Some(Duration::from_millis(1)))
         .build()
         .expect("executor should build");
 
@@ -390,7 +390,7 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
         })
         .expect_err("max elapsed should fail");
 
-    assert_eq!(error.kind(), CasErrorKind::MaxElapsedExceeded);
+    assert_eq!(error.kind(), CasErrorKind::MaxOperationElapsedExceeded);
     assert_eq!(
         error.last_failure().map(|failure| failure.is_retry()),
         Some(true)

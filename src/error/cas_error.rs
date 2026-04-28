@@ -29,8 +29,10 @@ pub enum CasErrorKind {
     RetryExhausted,
     /// A timeout aborted the flow or exhausted retry limits.
     AttemptTimeout,
-    /// The total elapsed-time budget expired.
-    MaxElapsedExceeded,
+    /// The cumulative user operation elapsed-time budget expired.
+    MaxOperationElapsedExceeded,
+    /// The monotonic total retry-flow elapsed-time budget expired.
+    MaxTotalElapsedExceeded,
 }
 
 /// Terminal CAS error returned by [`crate::CasExecutor`].
@@ -102,7 +104,10 @@ impl<T, E> CasError<T, E> {
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                 _ => CasErrorKind::RetryExhausted,
             },
-            RetryErrorReason::MaxElapsedExceeded => CasErrorKind::MaxElapsedExceeded,
+            RetryErrorReason::MaxOperationElapsedExceeded => {
+                CasErrorKind::MaxOperationElapsedExceeded
+            }
+            RetryErrorReason::MaxTotalElapsedExceeded => CasErrorKind::MaxTotalElapsedExceeded,
         }
     }
 
@@ -211,7 +216,8 @@ where
             CasErrorKind::Conflict => "CAS conflicts exhausted",
             CasErrorKind::RetryExhausted => "CAS retryable failures exhausted",
             CasErrorKind::AttemptTimeout => "CAS attempt timed out",
-            CasErrorKind::MaxElapsedExceeded => "CAS max elapsed exceeded",
+            CasErrorKind::MaxOperationElapsedExceeded => "CAS max operation elapsed exceeded",
+            CasErrorKind::MaxTotalElapsedExceeded => "CAS max total elapsed exceeded",
         };
         write!(f, "{message} after {} attempt(s)", self.attempts())?;
         if let Some(failure) = self.last_failure() {

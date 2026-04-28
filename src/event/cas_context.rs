@@ -19,8 +19,10 @@ pub struct CasContext {
     attempt: u32,
     /// Configured maximum attempts.
     max_attempts: u32,
-    /// Configured maximum total elapsed time.
-    max_elapsed: Option<Duration>,
+    /// Configured maximum cumulative user operation time.
+    max_operation_elapsed: Option<Duration>,
+    /// Configured maximum total retry-flow elapsed time.
+    max_total_elapsed: Option<Duration>,
     /// Elapsed time since the CAS flow started.
     total_elapsed: Duration,
     /// Time spent in the current attempt.
@@ -45,7 +47,8 @@ impl CasContext {
         Self {
             attempt: context.attempt(),
             max_attempts: context.max_attempts(),
-            max_elapsed: context.max_elapsed(),
+            max_operation_elapsed: context.max_operation_elapsed(),
+            max_total_elapsed: context.max_total_elapsed(),
             total_elapsed: context.total_elapsed(),
             attempt_elapsed: context.attempt_elapsed(),
             attempt_timeout: attempt_timeout.or(context.attempt_timeout()),
@@ -80,13 +83,22 @@ impl CasContext {
         self.max_attempts.saturating_sub(1)
     }
 
-    /// Returns the maximum elapsed-time budget.
+    /// Returns the configured maximum cumulative user operation time budget.
     ///
     /// # Returns
     /// `Some(Duration)` for bounded executions, or `None` for unlimited.
     #[inline]
-    pub fn max_elapsed(&self) -> Option<Duration> {
-        self.max_elapsed
+    pub fn max_operation_elapsed(&self) -> Option<Duration> {
+        self.max_operation_elapsed
+    }
+
+    /// Returns the configured maximum total retry-flow elapsed-time budget.
+    ///
+    /// # Returns
+    /// `Some(Duration)` for bounded executions, or `None` for unlimited.
+    #[inline]
+    pub fn max_total_elapsed(&self) -> Option<Duration> {
+        self.max_total_elapsed
     }
 
     /// Returns elapsed time since the CAS flow started.

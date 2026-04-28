@@ -189,7 +189,7 @@ let executor = CasExecutor::<usize, &'static str>::builder()
     .max_retries(4)
     .exponential_backoff(Duration::from_millis(2), Duration::from_millis(50))
     .jitter_factor(0.25)
-    .max_elapsed(Some(Duration::from_millis(250)))
+    .max_operation_elapsed(Some(Duration::from_millis(250)))
     .build()
     .expect("valid CAS retry settings");
 ```

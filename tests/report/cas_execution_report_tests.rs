@@ -27,10 +27,10 @@ use crate::support::TestError;
 fn test_report_exposes_counts_ratios_and_limits() {
     let state = AtomicRef::from_value(0usize);
     let attempts = AtomicUsize::new(0);
-    let max_elapsed = Duration::from_secs(2);
+    let max_operation_elapsed = Duration::from_secs(2);
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
-        .max_elapsed(Some(max_elapsed))
+        .max_operation_elapsed(Some(max_operation_elapsed))
         .no_delay()
         .build()
         .expect("executor should build");
@@ -50,7 +50,8 @@ fn test_report_exposes_counts_ratios_and_limits() {
     assert_eq!(report.aborts(), 0);
     assert_eq!(report.timeouts(), 0);
     assert_eq!(report.max_attempts(), 3);
-    assert_eq!(report.max_elapsed(), Some(max_elapsed));
+    assert_eq!(report.max_operation_elapsed(), Some(max_operation_elapsed));
+    assert_eq!(report.max_total_elapsed(), None);
     assert_eq!(report.outcome(), CasExecutionOutcome::SuccessUpdated);
     assert_eq!(report.conflict_ratio(), 0.5);
     assert_eq!(report.retryable_failure_ratio(), 0.0);

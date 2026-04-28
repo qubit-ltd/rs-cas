@@ -32,8 +32,10 @@ pub struct CasExecutionReport {
     finished_at: Instant,
     /// Configured maximum attempts.
     max_attempts: u32,
-    /// Configured maximum total elapsed time.
-    max_elapsed: Option<Duration>,
+    /// Configured maximum cumulative user operation time.
+    max_operation_elapsed: Option<Duration>,
+    /// Configured maximum total retry-flow elapsed time.
+    max_total_elapsed: Option<Duration>,
     /// Terminal outcome.
     outcome: CasExecutionOutcome,
 }
@@ -55,7 +57,10 @@ impl CasExecutionReport {
     /// - `started_at`: Instant captured before the first attempt.
     /// - `finished_at`: Instant captured when the flow completed.
     /// - `max_attempts`: Configured maximum number of attempts.
-    /// - `max_elapsed`: Configured maximum total elapsed-time budget, if any.
+    /// - `max_operation_elapsed`: Configured maximum cumulative user operation
+    ///   time, if any.
+    /// - `max_total_elapsed`: Configured maximum total retry-flow elapsed time,
+    ///   if any.
     /// - `outcome`: The terminal [`CasExecutionOutcome`] of the execution.
     ///
     /// # Returns
@@ -70,7 +75,8 @@ impl CasExecutionReport {
         started_at: Instant,
         finished_at: Instant,
         max_attempts: u32,
-        max_elapsed: Option<Duration>,
+        max_operation_elapsed: Option<Duration>,
+        max_total_elapsed: Option<Duration>,
         outcome: CasExecutionOutcome,
     ) -> Self {
         Self {
@@ -82,7 +88,8 @@ impl CasExecutionReport {
             started_at,
             finished_at,
             max_attempts,
-            max_elapsed,
+            max_operation_elapsed,
+            max_total_elapsed,
             outcome,
         }
     }
@@ -172,13 +179,22 @@ impl CasExecutionReport {
         self.max_attempts
     }
 
-    /// Returns the configured maximum elapsed-time budget.
+    /// Returns the configured maximum cumulative user operation time budget.
     ///
     /// # Returns
-    /// `Some(Duration)` if a total time budget was set, otherwise `None`.
+    /// `Some(Duration)` if a budget was set, otherwise `None`.
     #[inline]
-    pub fn max_elapsed(&self) -> Option<Duration> {
-        self.max_elapsed
+    pub fn max_operation_elapsed(&self) -> Option<Duration> {
+        self.max_operation_elapsed
+    }
+
+    /// Returns the configured maximum total retry-flow elapsed-time budget.
+    ///
+    /// # Returns
+    /// `Some(Duration)` if a budget was set, otherwise `None`.
+    #[inline]
+    pub fn max_total_elapsed(&self) -> Option<Duration> {
+        self.max_total_elapsed
     }
 
     /// Returns the terminal outcome captured in this report.

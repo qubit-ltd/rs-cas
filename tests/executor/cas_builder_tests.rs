@@ -61,6 +61,7 @@ fn test_builder_options_and_random_delay_work() {
     let options = RetryOptions::new(
         4,
         Some(Duration::from_millis(200)),
+        None,
         RetryDelay::fixed(Duration::from_millis(3)),
         RetryJitter::factor(0.25),
     )

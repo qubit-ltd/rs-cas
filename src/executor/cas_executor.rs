@@ -61,6 +61,34 @@ enum AttemptSuccess<T, R> {
     Finished { current: Arc<T>, output: R },
 }
 
+/// Snapshot of retry-layer limits plus terminal outcome for finalizing [`CasReportBuilder`].
+struct CasReportFinishContext {
+    attempts_total: u32,
+    max_attempts: u32,
+    max_operation_elapsed: Option<Duration>,
+    max_total_elapsed: Option<Duration>,
+    outcome: CasExecutionOutcome,
+}
+
+impl CasReportFinishContext {
+    #[inline]
+    fn new(
+        attempts_total: u32,
+        max_attempts: u32,
+        max_operation_elapsed: Option<Duration>,
+        max_total_elapsed: Option<Duration>,
+        outcome: CasExecutionOutcome,
+    ) -> Self {
+        Self {
+            attempts_total,
+            max_attempts,
+            max_operation_elapsed,
+            max_total_elapsed,
+            outcome,
+        }
+    }
+}
+
 impl<T, E> CasExecutor<T, E> {
     /// Creates a CAS builder.
     ///
@@ -521,7 +549,8 @@ impl<T, E> CasExecutor<T, E> {
                     .expect("retry success hook must capture CAS success context");
                 let attempts_total = context.attempt();
                 let max_attempts = context.max_attempts();
-                let max_elapsed = context.max_elapsed();
+                let max_operation_elapsed = context.max_operation_elapsed();
+                let max_total_elapsed = context.max_total_elapsed();
                 let outcome = match success {
                     AttemptSuccess::Updated { .. } => CasExecutionOutcome::SuccessUpdated,
                     AttemptSuccess::Finished { .. } => CasExecutionOutcome::SuccessFinished,
@@ -530,10 +559,13 @@ impl<T, E> CasExecutor<T, E> {
                 let report = self.finish_report(
                     &hooks,
                     report_builder,
-                    attempts_total,
-                    max_attempts,
-                    max_elapsed,
-                    outcome,
+                    CasReportFinishContext::new(
+                        attempts_total,
+                        max_attempts,
+                        max_operation_elapsed,
+                        max_total_elapsed,
+                        outcome,
+                    ),
                 );
                 CasOutcome::new(Ok(success), report)
             }
@@ -544,10 +576,13 @@ impl<T, E> CasExecutor<T, E> {
                 let report = self.finish_report(
                     &hooks,
                     report_builder,
-                    context.attempt(),
-                    context.max_attempts(),
-                    context.max_elapsed(),
-                    outcome,
+                    CasReportFinishContext::new(
+                        context.attempt(),
+                        context.max_attempts(),
+                        context.max_operation_elapsed(),
+                        context.max_total_elapsed(),
+                        outcome,
+                    ),
                 );
                 CasOutcome::new(Err(error), report)
             }
@@ -618,10 +653,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Parameters
     /// - `hooks`: Used for event and alert dispatching.
     /// - `report_builder`: Accumulator to finalize.
-    /// - `attempts_total`: Total attempts from retry context.
-    /// - `max_attempts`: Configured max attempts.
-    /// - `max_elapsed`: Configured max elapsed time.
-    /// - `outcome`: Terminal outcome for the report.
+    /// - `ctx`: Retry limits and terminal outcome for the report.
     ///
     /// # Returns
     /// The finalized [`CasExecutionReport`].
@@ -629,10 +661,7 @@ impl<T, E> CasExecutor<T, E> {
         &self,
         hooks: &CasHooks,
         report_builder: Arc<Mutex<CasReportBuilder>>,
-        attempts_total: u32,
-        max_attempts: u32,
-        max_elapsed: Option<Duration>,
-        outcome: CasExecutionOutcome,
+        ctx: CasReportFinishContext,
     ) -> CasExecutionReport
     where
         T: 'static,
@@ -641,7 +670,13 @@ impl<T, E> CasExecutor<T, E> {
         let report = report_builder
             .lock()
             .expect("CAS report builder should be lockable")
-            .finish(attempts_total, max_attempts, max_elapsed, outcome);
+            .finish(
+                ctx.attempts_total,
+                ctx.max_attempts,
+                ctx.max_operation_elapsed,
+                ctx.max_total_elapsed,
+                ctx.outcome,
+            );
         let event_hook = hooks.event_hook();
         if Self::should_emit_events(&self.observability, &event_hook) {
             Self::dispatch_event(
@@ -681,7 +716,12 @@ impl<T, E> CasExecutor<T, E> {
             CasErrorKind::Conflict => CasExecutionOutcome::ErrorConflictExhausted,
             CasErrorKind::RetryExhausted => CasExecutionOutcome::ErrorRetryExhausted,
             CasErrorKind::AttemptTimeout => CasExecutionOutcome::ErrorAttemptTimeout,
-            CasErrorKind::MaxElapsedExceeded => CasExecutionOutcome::ErrorMaxElapsedExceeded,
+            CasErrorKind::MaxOperationElapsedExceeded => {
+                CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
+            }
+            CasErrorKind::MaxTotalElapsedExceeded => {
+                CasExecutionOutcome::ErrorMaxTotalElapsedExceeded
+            }
         }
     }
 

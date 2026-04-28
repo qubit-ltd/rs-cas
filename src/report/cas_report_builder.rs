@@ -86,7 +86,9 @@ impl CasReportBuilder {
     /// - `attempts_total`: The total number of attempts performed (provided by
     ///   the retry layer).
     /// - `max_attempts`: Configured maximum attempts.
-    /// - `max_elapsed`: Configured max elapsed time budget.
+    /// - `max_operation_elapsed`: Configured cumulative user operation time
+    ///   budget.
+    /// - `max_total_elapsed`: Configured total retry-flow time budget.
     /// - `outcome`: The terminal outcome determined for this execution.
     ///
     /// # Returns
@@ -97,7 +99,8 @@ impl CasReportBuilder {
         &self,
         attempts_total: u32,
         max_attempts: u32,
-        max_elapsed: Option<Duration>,
+        max_operation_elapsed: Option<Duration>,
+        max_total_elapsed: Option<Duration>,
         outcome: CasExecutionOutcome,
     ) -> CasExecutionReport {
         CasExecutionReport::new(
@@ -109,7 +112,8 @@ impl CasReportBuilder {
             self.started_at,
             Instant::now(),
             max_attempts,
-            max_elapsed,
+            max_operation_elapsed,
+            max_total_elapsed,
             outcome,
         )
     }

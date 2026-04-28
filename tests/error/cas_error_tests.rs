@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasErrorKind, CasExecutor};
+use qubit_cas::{CasDecision, CasErrorKind, CasExecutionOutcome, CasExecutor};
 use qubit_retry::RetryErrorReason;
 
 use crate::support::TestError;
@@ -102,18 +102,52 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
     let elapsed_executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .max_elapsed(Some(Duration::from_millis(1)))
+        .max_operation_elapsed(Some(Duration::from_millis(1)))
         .build()
         .expect("executor should build");
-    let elapsed = elapsed_executor
-        .execute(&elapsed_state, |_current: &usize| {
-            std::thread::sleep(Duration::from_millis(2));
-            CasDecision::<usize, (), TestError>::retry(TestError("slow"))
-        })
-        .expect_err("elapsed budget should fail");
-    assert_eq!(elapsed.kind(), CasErrorKind::MaxElapsedExceeded);
-    assert_eq!(elapsed.reason(), RetryErrorReason::MaxElapsedExceeded);
-    assert!(elapsed.to_string().contains("max elapsed exceeded"));
+    let op_outcome = elapsed_executor.execute(&elapsed_state, |_current: &usize| {
+        std::thread::sleep(Duration::from_millis(2));
+        CasDecision::<usize, (), TestError>::retry(TestError("slow"))
+    });
+    assert_eq!(
+        op_outcome.report().outcome(),
+        CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
+    );
+    let elapsed = op_outcome
+        .into_result()
+        .expect_err("operation elapsed budget should fail");
+    assert_eq!(elapsed.kind(), CasErrorKind::MaxOperationElapsedExceeded);
+    assert_eq!(
+        elapsed.reason(),
+        RetryErrorReason::MaxOperationElapsedExceeded
+    );
+    assert!(
+        elapsed
+            .to_string()
+            .contains("max operation elapsed exceeded")
+    );
+
+    let total_state = AtomicRef::from_value(13usize);
+    let total_executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(5)
+        .no_delay()
+        .max_operation_elapsed(None)
+        .max_total_elapsed(Some(Duration::ZERO))
+        .build()
+        .expect("executor should build");
+    let total_outcome = total_executor.execute(&total_state, |_current: &usize| {
+        CasDecision::<usize, (), TestError>::retry(TestError("x"))
+    });
+    assert_eq!(
+        total_outcome.report().outcome(),
+        CasExecutionOutcome::ErrorMaxTotalElapsedExceeded
+    );
+    let total = total_outcome
+        .into_result()
+        .expect_err("total elapsed budget should fail");
+    assert_eq!(total.kind(), CasErrorKind::MaxTotalElapsedExceeded);
+    assert_eq!(total.reason(), RetryErrorReason::MaxTotalElapsedExceeded);
+    assert!(total.to_string().contains("max total elapsed exceeded"));
 }
 
 /// Verifies async attempt timeouts use the timeout terminal error formatting.
