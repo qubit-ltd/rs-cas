@@ -30,7 +30,7 @@ pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_secs(60);
 /// Monotonic total retry-flow elapsed-time ceiling for the contention-adaptive strategy.
 ///
 /// Includes user operation time, retry sleeps, and control-path listener work. The
-/// value is above [`CONTENTION_ADAPTIVE_MAX_ELAPSED`](CONTENTION_ADAPTIVE_MAX_ELAPSED)
+/// value is above [`CONTENTION_ADAPTIVE_MAX_ELAPSED`]
 /// so exponential backoff can use part of the wall-time budget.
 pub const CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED: Duration = Duration::from_secs(180);
 
@@ -57,7 +57,7 @@ pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(600);
 
 /// Monotonic total retry-flow elapsed-time ceiling for the reliability-first strategy.
 ///
-/// Set above [`RELIABILITY_FIRST_MAX_ELAPSED`](RELIABILITY_FIRST_MAX_ELAPSED) so long
+/// Set above [`RELIABILITY_FIRST_MAX_ELAPSED`] so long
 /// exponential backoff windows can still fit under a hard end-to-end cap.
 pub const RELIABILITY_FIRST_MAX_TOTAL_ELAPSED: Duration = Duration::from_secs(900);
 
