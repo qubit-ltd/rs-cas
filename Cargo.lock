@@ -626,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-cas"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "qubit-atomic",
  "qubit-common",
@@ -663,9 +663,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-retry"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59c4ecfcd621cf9fd4423d1f89f5a19dfdd9b17572eba82f9566afbadc94039d"
+checksum = "f330d5ee4bd2df51adc08d8a01aae5cad1449cea19d89bf038d4c3880344f840"
 dependencies = [
  "parse-display 0.10.0",
  "qubit-common",
