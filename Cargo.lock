@@ -626,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-cas"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "qubit-atomic",
  "qubit-common",
