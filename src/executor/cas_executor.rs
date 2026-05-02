@@ -1,9 +1,10 @@
 /*******************************************************************************
  *
- *    Copyright (c) 2025 - 2026.
- *    Haixing Hu, Qubit Co. Ltd.
+ *    Copyright (c) 2025 - 2026 Haixing Hu.
  *
- *    All rights reserved.
+ *    SPDX-License-Identifier: Apache-2.0
+ *
+ *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
 //! CAS executor implementation.
@@ -14,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_common::BoxError;
+use qubit_error::BoxError;
 use qubit_function::{Consumer, Function};
 use qubit_retry::{
     AttemptFailure, AttemptFailureDecision, Retry, RetryContext, RetryError, RetryOptions,
