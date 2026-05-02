@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_common::BoxError;
+use qubit_error::BoxError;
 use qubit_function::{Consumer, Function};
 use qubit_retry::{
     AttemptFailure, AttemptFailureDecision, Retry, RetryContext, RetryError, RetryOptions,

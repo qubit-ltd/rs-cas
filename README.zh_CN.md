@@ -45,7 +45,7 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
 
 ```toml
 [dependencies]
-qubit-cas = "0.3.0"
+qubit-cas = "0.4"
 qubit-atomic = "0.10"
 ```
 
@@ -55,7 +55,7 @@ qubit-atomic = "0.10"
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.3.0", features = ["tokio"] }
+qubit-cas = { version = "0.4", features = ["tokio"] }
 qubit-atomic = "0.10"
 ```
 

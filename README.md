@@ -53,7 +53,7 @@ expressed as an explicit, typed decision.
 
 ```toml
 [dependencies]
-qubit-cas = "0.3.0"
+qubit-cas = "0.4"
 qubit-atomic = "0.10"
 ```
 
@@ -65,7 +65,7 @@ Enable asynchronous execution with:
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.3.0", features = ["tokio"] }
+qubit-cas = { version = "0.4", features = ["tokio"] }
 qubit-atomic = "0.10"
 ```
 
