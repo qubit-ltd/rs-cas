@@ -13,11 +13,18 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
-use qubit_retry::{AttemptFailure, RetryError, RetryErrorReason};
+use qubit_retry::{
+    AttemptFailure,
+    RetryError,
+    RetryErrorReason,
+};
 
 use crate::event::CasContext;
 
-use super::{CasAttemptFailure, CasErrorKind};
+use super::{
+    CasAttemptFailure,
+    CasErrorKind,
+};
 
 /// Terminal CAS error returned by [`crate::CasExecutor`].
 #[derive(Clone)]

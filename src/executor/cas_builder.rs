@@ -13,9 +13,18 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use qubit_error::BoxError;
-use qubit_retry::{RetryConfigError, RetryDelay, RetryJitter, RetryOptions};
+use qubit_retry::{
+    RetryConfigError,
+    RetryDelay,
+    RetryJitter,
+    RetryOptions,
+};
 
-use crate::observability::{CasObservabilityConfig, ContentionThresholds, ListenerPanicPolicy};
+use crate::observability::{
+    CasObservabilityConfig,
+    ContentionThresholds,
+    ListenerPanicPolicy,
+};
 use crate::options::CasTimeoutPolicy;
 use crate::strategy::CasStrategy;
 

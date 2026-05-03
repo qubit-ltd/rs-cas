@@ -8,17 +8,34 @@
  *
  ******************************************************************************/
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
-    CasAttemptFailureKind, CasDecision, CasErrorKind, CasEvent, CasExecutionOutcome, CasExecutor,
-    CasHooks, CasObservabilityConfig, ContentionThresholds, ListenerPanicPolicy,
+    CasAttemptFailureKind,
+    CasDecision,
+    CasErrorKind,
+    CasEvent,
+    CasExecutionOutcome,
+    CasExecutor,
+    CasHooks,
+    CasObservabilityConfig,
+    ContentionThresholds,
+    ListenerPanicPolicy,
 };
 
-use crate::support::{NonCloneValue, TestError};
+use crate::support::{
+    NonCloneValue,
+    TestError,
+};
 
 /// Verifies sync execution retries CAS conflicts and reports retry hooks.
 ///

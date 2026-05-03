@@ -9,7 +9,10 @@
  ******************************************************************************/
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{
+    AtomicBool,
+    Ordering,
+};
 use std::time::Instant;
 
 use qubit_cas::CasEvent;

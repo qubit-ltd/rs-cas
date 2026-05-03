@@ -10,27 +10,56 @@
 //! CAS executor implementation.
 
 use std::marker::PhantomData;
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::{Arc, Mutex};
+use std::panic::{
+    AssertUnwindSafe,
+    catch_unwind,
+};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
 use qubit_error::BoxError;
-use qubit_function::{Consumer, Function};
+use qubit_function::{
+    Consumer,
+    Function,
+};
 use qubit_retry::{
-    AttemptFailure, AttemptFailureDecision, Retry, RetryContext, RetryError, RetryOptions,
+    AttemptFailure,
+    AttemptFailureDecision,
+    Retry,
+    RetryContext,
+    RetryError,
+    RetryOptions,
 };
 
 use crate::cas_decision::CasDecision;
 use crate::cas_outcome::CasOutcome;
 use crate::cas_success::CasSuccess;
-use crate::error::{CasAttemptFailure, CasError, CasErrorKind};
-use crate::event::{CasContext, CasEvent, CasHooks};
+use crate::error::{
+    CasAttemptFailure,
+    CasError,
+    CasErrorKind,
+};
+use crate::event::{
+    CasContext,
+    CasEvent,
+    CasHooks,
+};
 use crate::observability::{
-    CasAlert, CasObservabilityConfig, CasObservabilityMode, ListenerPanicPolicy,
+    CasAlert,
+    CasObservabilityConfig,
+    CasObservabilityMode,
+    ListenerPanicPolicy,
 };
 use crate::options::CasTimeoutPolicy;
-use crate::report::{CasExecutionOutcome, CasExecutionReport, CasReportBuilder};
+use crate::report::{
+    CasExecutionOutcome,
+    CasExecutionReport,
+    CasReportBuilder,
+};
 use crate::strategy::CasStrategy;
 
 use super::cas_builder::CasBuilder;

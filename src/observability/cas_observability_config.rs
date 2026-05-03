@@ -8,7 +8,11 @@
  *
  ******************************************************************************/
 
-use super::{CasObservabilityMode, ContentionThresholds, ListenerPanicPolicy};
+use super::{
+    CasObservabilityMode,
+    ContentionThresholds,
+    ListenerPanicPolicy,
+};
 
 /// Observability settings shared by every execution of an executor.
 #[derive(Debug, Clone, PartialEq)]

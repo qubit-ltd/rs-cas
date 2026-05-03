@@ -8,7 +8,10 @@
  *
  ******************************************************************************/
 
-use std::time::{Duration, Instant};
+use std::time::{
+    Duration,
+    Instant,
+};
 
 use crate::observability::ContentionThresholds;
 

@@ -13,7 +13,11 @@ use qubit_function::Consumer;
 
 use crate::observability::CasAlert;
 
-use super::{CasAlertHook, CasEvent, CasEventHook};
+use super::{
+    CasAlertHook,
+    CasEvent,
+    CasEventHook,
+};
 
 /// Per-execution hooks for observing CAS lifecycle events.
 #[derive(Clone)]

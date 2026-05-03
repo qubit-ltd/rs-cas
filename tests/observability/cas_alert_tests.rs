@@ -10,11 +10,18 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
-    CasDecision, CasExecutor, CasHooks, CasObservabilityConfig, CasObservabilityMode,
+    CasDecision,
+    CasExecutor,
+    CasHooks,
+    CasObservabilityConfig,
+    CasObservabilityMode,
     ContentionThresholds,
 };
 

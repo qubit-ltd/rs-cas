@@ -10,7 +10,10 @@
 
 use std::sync::Arc;
 
-use qubit_cas::{CasAttemptFailure, CasAttemptFailureKind};
+use qubit_cas::{
+    CasAttemptFailure,
+    CasAttemptFailureKind,
+};
 
 use crate::support::TestError;
 

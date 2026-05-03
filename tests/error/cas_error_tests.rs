@@ -10,11 +10,19 @@
 
 use std::error::Error;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasErrorKind, CasExecutionOutcome, CasExecutor};
+use qubit_cas::{
+    CasDecision,
+    CasErrorKind,
+    CasExecutionOutcome,
+    CasExecutor,
+};
 use qubit_retry::RetryErrorReason;
 
 use crate::support::TestError;

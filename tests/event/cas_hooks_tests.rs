@@ -8,10 +8,18 @@
  *
  ******************************************************************************/
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasEvent, CasHooks, CasObservabilityConfig};
+use qubit_cas::{
+    CasDecision,
+    CasEvent,
+    CasHooks,
+    CasObservabilityConfig,
+};
 use qubit_function::Consumer;
 
 use crate::support::TestError;

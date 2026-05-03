@@ -10,12 +10,20 @@
 
 use std::hint::black_box;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
 use std::time::Instant;
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
-    CasDecision, CasEvent, CasExecutor, CasHooks, CasObservabilityConfig, ContentionThresholds,
+    CasDecision,
+    CasEvent,
+    CasExecutor,
+    CasHooks,
+    CasObservabilityConfig,
+    ContentionThresholds,
 };
 
 const ITERATIONS: usize = 200_000;

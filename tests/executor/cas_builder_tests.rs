@@ -11,14 +11,26 @@
 use std::time::Duration;
 
 use qubit_cas::constants::{
-    CONTENTION_ADAPTIVE_MAX_ATTEMPTS, DEFAULT_CAS_MAX_ATTEMPTS, LATENCY_FIRST_MAX_ATTEMPTS,
+    CONTENTION_ADAPTIVE_MAX_ATTEMPTS,
+    DEFAULT_CAS_MAX_ATTEMPTS,
+    LATENCY_FIRST_MAX_ATTEMPTS,
     RELIABILITY_FIRST_MAX_ATTEMPTS,
 };
 use qubit_cas::{
-    CasBuilder, CasExecutor, CasObservabilityConfig, CasObservabilityMode, CasStrategy,
-    CasTimeoutPolicy, ContentionThresholds, ListenerPanicPolicy,
+    CasBuilder,
+    CasExecutor,
+    CasObservabilityConfig,
+    CasObservabilityMode,
+    CasStrategy,
+    CasTimeoutPolicy,
+    ContentionThresholds,
+    ListenerPanicPolicy,
 };
-use qubit_retry::{RetryDelay, RetryJitter, RetryOptions};
+use qubit_retry::{
+    RetryDelay,
+    RetryJitter,
+    RetryOptions,
+};
 
 use crate::support::TestError;
 
