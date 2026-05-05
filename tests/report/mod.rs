@@ -10,3 +10,4 @@
 
 mod cas_execution_outcome_tests;
 mod cas_execution_report_tests;
+mod cas_report_builder_tests;

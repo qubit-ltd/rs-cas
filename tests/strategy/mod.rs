@@ -8,4 +8,5 @@
  *
  ******************************************************************************/
 
+mod cas_strategy_profile_tests;
 mod cas_strategy_tests;

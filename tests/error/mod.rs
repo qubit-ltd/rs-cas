@@ -10,4 +10,5 @@
 
 mod cas_attempt_failure_kind_tests;
 mod cas_attempt_failure_tests;
+mod cas_error_kind_tests;
 mod cas_error_tests;
