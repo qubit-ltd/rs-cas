@@ -402,7 +402,7 @@ By contributing, you agree that your contribution is licensed under the same
 
 ## License and Copyright
 
-Copyright © 2026 Haixing Hu, Qubit Co. Ltd.
+Copyright (c) 2026. Haixing Hu.
 
 This software is licensed under the [Apache License, Version 2.0](LICENSE).
 
