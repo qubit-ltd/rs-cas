@@ -23,6 +23,7 @@ pub mod constants;
 pub mod error;
 pub mod event;
 pub mod executor;
+pub mod fast;
 pub mod observability;
 pub mod options;
 pub mod report;
@@ -45,6 +46,14 @@ pub use event::{
 pub use executor::{
     CasBuilder,
     CasExecutor,
+};
+pub use fast::{
+    FastCas,
+    FastCasDecision,
+    FastCasError,
+    FastCasPolicy,
+    FastCasState,
+    FastCasSuccess,
 };
 pub use observability::{
     CasAlert,

@@ -27,6 +27,10 @@ use qubit_cas::constants::{
     RELIABILITY_FIRST_MAX_ELAPSED,
     RELIABILITY_FIRST_MAX_TOTAL_ELAPSED,
 };
+use qubit_cas::{
+    FastCas,
+    FastCasState,
+};
 use qubit_retry::constants::DEFAULT_RETRY_MAX_ATTEMPTS;
 
 #[test]
@@ -61,4 +65,16 @@ fn test_cas_constants_match_retry_default_and_strategy_budgets() {
 fn test_total_elapsed_budgets_exceed_operation_budgets() {
     assert!(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED > CONTENTION_ADAPTIVE_MAX_ELAPSED);
     assert!(RELIABILITY_FIRST_MAX_TOTAL_ELAPSED > RELIABILITY_FIRST_MAX_ELAPSED);
+}
+
+#[test]
+fn test_fast_cas_smoke_for_constants_test_target() {
+    let state = FastCasState::new(0);
+    let success = FastCas::once()
+        .update_by(&state, |current| {
+            Ok::<_, &'static str>((current + 1, current + 1))
+        })
+        .expect("fast CAS should update");
+
+    assert_eq!(success.current(), 1);
 }

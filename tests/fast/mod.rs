@@ -7,18 +7,10 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Integration tests for `qubit-cas`.
 
-mod cas_outcome_tests;
-mod constants_tests;
-mod decision;
-mod error;
-mod event;
-mod executor;
-mod fast;
-mod observability;
-mod options;
-mod report;
-mod strategy;
-mod success;
-mod support;
+mod fast_cas_decision_tests;
+mod fast_cas_error_tests;
+mod fast_cas_policy_tests;
+mod fast_cas_state_tests;
+mod fast_cas_success_tests;
+mod fast_cas_tests;

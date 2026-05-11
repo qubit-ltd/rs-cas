@@ -42,6 +42,7 @@ qubit-atomic = "0.10"
 qubit-error = "0.2"
 qubit-function = "0.13"
 qubit-retry = "0.10"
+konst = { version = "0.4.3", default-features = false, features = ["cmp"] }
 
 [dev-dependencies]
 tokio = { version = "1.52", features = ["full", "test-util"] }

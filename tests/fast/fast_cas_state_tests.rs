@@ -7,18 +7,14 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Integration tests for `qubit-cas`.
 
-mod cas_outcome_tests;
-mod constants_tests;
-mod decision;
-mod error;
-mod event;
-mod executor;
-mod fast;
-mod observability;
-mod options;
-mod report;
-mod strategy;
-mod success;
-mod support;
+use qubit_cas::FastCasState;
+
+#[test]
+fn test_fast_cas_state_alias_uses_atomic_usize_api() {
+    let state = FastCasState::new(1);
+
+    assert_eq!(state.load(), 1);
+    assert!(state.compare_set(1, 2).is_ok());
+    assert_eq!(state.load(), 2);
+}
