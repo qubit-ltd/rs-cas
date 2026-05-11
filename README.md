@@ -48,13 +48,16 @@ expressed as an explicit, typed decision.
   behavior.
 - **Structured results**: `CasSuccess`, `CasError`, and `CasAttemptFailure`
   expose the final state, previous state, output, error kind, and last failure.
+- **FastCas**: ultra-light CAS over compact `usize` state codes (`FastCasState`)
+  for hot paths: no allocation, hooks, or execution reports, and only
+  compare-and-swap conflicts are retried (`spin`, `spin-yield`, or
+  single-attempt policies).
 
 ## Installation
 
 ```toml
 [dependencies]
-qubit-cas = "0.4"
-qubit-atomic = "0.10"
+qubit-cas = "0.5"
 ```
 
 `qubit-cas` expects the shared state to be held in `qubit_atomic::AtomicRef<T>`.
@@ -65,8 +68,7 @@ Enable asynchronous execution with:
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.4", features = ["tokio"] }
-qubit-atomic = "0.10"
+qubit-cas = { version = "0.5", features = ["tokio"] }
 ```
 
 Optional features:
@@ -233,6 +235,101 @@ In practice, start with `latency_first()`. If reports show
 contended and should move to `contention_adaptive()`. If your operation
 prioritizes "succeed eventually" over "return fast", use `reliability_first()`.
 
+## Fast CAS for State Codes
+
+`FastCas` is the low-level CAS path for shared state that is already encoded as
+a compact `usize`. It is designed for state machines, executors, thread-pool
+internals, and other hot paths where state is a numeric code and transitions
+must stay allocation-free.
+
+The regular `CasExecutor` works with immutable `Arc<T>` snapshots and provides
+business retry, hooks, reports, async execution, timeout handling, and contention
+observation. `FastCas` deliberately omits those facilities. Each attempt only
+loads the current `usize`, asks the caller for a transition decision, and tries
+one atomic compare-and-set for that observed value. The smaller surface keeps
+the fast path predictable and suitable for tight state-transition loops.
+
+| Need | Use |
+| --- | --- |
+| Rich snapshots, reports, hooks, async support, timeout handling, or business-level retry | `CasExecutor` |
+| Encoded `usize` state, allocation-free execution, no report construction, and only CAS-conflict retry | `FastCas` |
+
+The core types are:
+
+- `FastCasState`: a semantic alias for `qubit_atomic::Atomic<usize>`.
+- `FastCas`: a reusable executor carrying only a `FastCasPolicy`.
+- `FastCasPolicy`: single attempt, bounded spin, or bounded spin-then-yield.
+- `FastCasDecision`: `Update`, `Finish`, or `Abort` for each observed state.
+- `FastCasSuccess`: previous state, current state, output, and attempt count.
+- `FastCasError`: either caller-requested `Abort` or retry-budget `Conflict`.
+
+```rust
+use qubit_cas::{
+    FastCas,
+    FastCasState,
+};
+
+let state = FastCasState::new(0);
+let cas = FastCas::spin(8);
+
+let success = cas
+    .update_by(&state, |current| {
+        let next = current + 1;
+        Ok::<_, &'static str>((next, next))
+    })
+    .expect("state code should update");
+
+assert_eq!(success.previous(), 0);
+assert_eq!(success.current(), 1);
+assert_eq!(success.into_output(), 1);
+assert_eq!(state.load(), 1);
+```
+
+For explicit state machines, return a `FastCasDecision` directly:
+
+```rust
+use qubit_cas::{
+    FastCas,
+    FastCasDecision,
+    FastCasState,
+};
+
+const IDLE: usize = 0;
+const RUNNING: usize = 1;
+const DONE: usize = 2;
+
+let state = FastCasState::new(IDLE);
+let cas = FastCas::spin(8);
+
+cas.compare_update(&state, IDLE, RUNNING)
+    .expect("IDLE should transition to RUNNING");
+
+let success = cas
+    .execute(&state, |current| match current {
+        RUNNING => FastCasDecision::<_, &'static str>::update(DONE, DONE),
+        DONE => FastCasDecision::finish(DONE),
+        _ => FastCasDecision::abort("invalid state"),
+    })
+    .expect("transition should be valid");
+
+assert_eq!(success.current(), DONE);
+assert_eq!(success.into_output(), DONE);
+```
+
+`FastCas` retries only CAS conflicts. It does not retry caller-returned business
+errors, build execution reports, or invoke hooks. The operation closure is `Fn`
+and may be called more than once when another writer wins the race first, so it
+should be deterministic and free of non-idempotent side effects. Use
+`compare_update` or `compare_update_with` when the caller already knows the
+expected current code and wants a fixed `expected -> next` transition with no
+recomputation from a different observed state.
+
+`FastCasPolicy::once()` performs at most one compare-and-set attempt.
+`FastCasPolicy::spin(max_attempts)` retries conflicts in a tight bounded loop.
+`FastCasPolicy::spin_yield(spin_attempts, max_attempts)` spins first and calls
+`thread::yield_now()` before later attempts. Zero attempt counts are normalized
+to one, so every policy can make progress from at least one observed state.
+
 ## Retry Configuration
 
 Use the builder when the preset executors are not enough:
@@ -355,6 +452,10 @@ async fn main() {
   event stream with contention alerts.
 - `ContentionThresholds`: classifies hot contention from attempts, conflicts,
   and conflict ratio.
+- `FastCas`: ultra-light CAS executor for `usize` state codes.
+- `FastCasState`: semantic alias for `Atomic<usize>` used with `FastCas`.
+- `FastCasDecision`, `FastCasSuccess`, `FastCasError`, and `FastCasPolicy`:
+  decision, result, failure, and retry-policy types for the fast path.
 
 ## Project Layout
 
@@ -362,6 +463,7 @@ async fn main() {
 - `src/executor`: builder and synchronous/asynchronous CAS executor.
 - `src/event`: execution context and lifecycle hooks.
 - `src/error`: attempt-level and terminal CAS errors.
+- `src/fast`: ultra-light CAS primitives for compact `usize` state codes.
 - `src/observability`: observability modes, contention thresholds, and alerts.
 - `src/options`: timeout policy options.
 - `src/outcome` and `src/report`: execution result wrapper and observability
@@ -404,7 +506,8 @@ By contributing, you agree that your contribution is licensed under the same
 
 Copyright (c) 2026. Haixing Hu.
 
-This software is licensed under the [Apache License, Version 2.0](LICENSE).
+This software is licensed under the [Apache License, Version 2.0](LICENSE);
+the full license text is available in the repository root.
 
 ## Author and Maintenance
 
