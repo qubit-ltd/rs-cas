@@ -1,7 +1,7 @@
 # Qubit CAS
 
 [![Rust CI](https://github.com/qubit-ltd/rs-cas/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-cas/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-cas/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-cas?branch=main)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-cas/coverage-badge.json)](https://qubit-ltd.github.io/rs-cas/coverage/)
 [![Crates.io](https://img.shields.io/crates/v/qubit-cas.svg?color=blue)](https://crates.io/crates/qubit-cas)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -48,7 +48,7 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
 
 ```toml
 [dependencies]
-qubit-cas = "0.5"
+qubit-cas = "0.6.1"
 ```
 
 `qubit-cas` 使用 `qubit_atomic::AtomicRef<T>` 保存共享状态。应用代码如果需要构造或
@@ -58,7 +58,7 @@ qubit-cas = "0.5"
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.5", features = ["tokio"] }
+qubit-cas = { version = "0.6.1", features = ["tokio"] }
 ```
 
 可选 feature：

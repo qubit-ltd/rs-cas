@@ -1,7 +1,7 @@
 # Qubit CAS
 
 [![Rust CI](https://github.com/qubit-ltd/rs-cas/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-cas/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/qubit-ltd/rs-cas/badge.svg?branch=main)](https://coveralls.io/github/qubit-ltd/rs-cas?branch=main)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-cas/coverage-badge.json)](https://qubit-ltd.github.io/rs-cas/coverage/)
 [![Crates.io](https://img.shields.io/crates/v/qubit-cas.svg?color=blue)](https://crates.io/crates/qubit-cas)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -57,7 +57,7 @@ expressed as an explicit, typed decision.
 
 ```toml
 [dependencies]
-qubit-cas = "0.5"
+qubit-cas = "0.6.1"
 ```
 
 `qubit-cas` expects the shared state to be held in `qubit_atomic::AtomicRef<T>`.
@@ -68,7 +68,7 @@ Enable asynchronous execution with:
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.5", features = ["tokio"] }
+qubit-cas = { version = "0.6.1", features = ["tokio"] }
 ```
 
 Optional features:
