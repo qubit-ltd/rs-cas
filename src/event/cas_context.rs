@@ -35,16 +35,15 @@ pub struct CasContext {
 }
 
 impl CasContext {
-    /// Creates a context from a retry context plus the configured timeout.
+    /// Creates a context from a retry context.
     ///
     /// # Parameters
     /// - `context`: Retry-layer context to copy.
-    /// - `attempt_timeout`: CAS attempt timeout configured by the executor.
     ///
     /// # Returns
     /// A copied [`CasContext`] value.
     #[inline]
-    pub(crate) fn new(context: &RetryContext, attempt_timeout: Option<Duration>) -> Self {
+    pub(crate) fn new(context: &RetryContext) -> Self {
         Self {
             attempt: context.attempt(),
             max_attempts: context.max_attempts(),
@@ -52,7 +51,7 @@ impl CasContext {
             max_total_elapsed: context.max_total_elapsed(),
             total_elapsed: context.total_elapsed(),
             attempt_elapsed: context.attempt_elapsed(),
-            attempt_timeout: attempt_timeout.or(context.attempt_timeout()),
+            attempt_timeout: context.attempt_timeout(),
             next_delay: context.next_delay(),
         }
     }

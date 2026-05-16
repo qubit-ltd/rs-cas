@@ -29,6 +29,8 @@ use qubit_function::{
 use qubit_retry::{
     AttemptFailure,
     AttemptFailureDecision,
+    AttemptTimeoutPolicy,
+    AttemptTimeoutSource,
     Retry,
     RetryContext,
     RetryError,
@@ -54,7 +56,6 @@ use crate::observability::{
     CasObservabilityMode,
     ListenerPanicPolicy,
 };
-use crate::options::CasTimeoutPolicy;
 use crate::report::{
     CasExecutionOutcome,
     CasExecutionReport,
@@ -69,10 +70,6 @@ use super::cas_builder::CasBuilder;
 pub struct CasExecutor<T, E = BoxError> {
     /// Immutable retry options shared by every execution.
     options: RetryOptions,
-    /// Optional timeout for each async CAS attempt.
-    attempt_timeout: Option<Duration>,
-    /// Policy used when one async attempt times out.
-    timeout_policy: CasTimeoutPolicy,
     /// Observability settings shared by executions.
     observability: CasObservabilityConfig,
     /// Marker preserving `T` and `E`.
@@ -135,7 +132,7 @@ impl<T, E> CasExecutor<T, E> {
     /// - `options`: Retry options to validate and install.
     ///
     /// # Returns
-    /// A configured executor using the default timeout policy.
+    /// A configured executor using the supplied retry options.
     ///
     /// # Errors
     /// Returns the retry-layer validation error when `options` are invalid.
@@ -191,23 +188,14 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Parameters
     /// - `options`: Validated retry options.
-    /// - `attempt_timeout`: Optional async attempt timeout.
-    /// - `timeout_policy`: Policy used when one attempt exceeds the timeout.
     /// - `observability`: Observability settings shared by executions.
     ///
     /// # Returns
     /// A configured executor.
     #[inline]
-    pub(crate) fn new(
-        options: RetryOptions,
-        attempt_timeout: Option<Duration>,
-        timeout_policy: CasTimeoutPolicy,
-        observability: CasObservabilityConfig,
-    ) -> Self {
+    pub(crate) fn new(options: RetryOptions, observability: CasObservabilityConfig) -> Self {
         Self {
             options,
-            attempt_timeout,
-            timeout_policy,
             observability,
             marker: PhantomData,
         }
@@ -220,24 +208,6 @@ impl<T, E> CasExecutor<T, E> {
     #[inline]
     pub fn options(&self) -> &RetryOptions {
         &self.options
-    }
-
-    /// Returns the configured async attempt timeout.
-    ///
-    /// # Returns
-    /// `Some(Duration)` when async attempts have a timeout.
-    #[inline]
-    pub fn attempt_timeout(&self) -> Option<Duration> {
-        self.attempt_timeout
-    }
-
-    /// Returns the timeout policy.
-    ///
-    /// # Returns
-    /// Policy used when an async attempt exceeds the timeout.
-    #[inline]
-    pub fn timeout_policy(&self) -> CasTimeoutPolicy {
-        self.timeout_policy
     }
 
     /// Returns observability settings used by this executor.
@@ -289,6 +259,7 @@ impl<T, E> CasExecutor<T, E> {
         O: Function<T, CasDecision<T, R, E>>,
     {
         let success_context = Arc::new(Mutex::new(None));
+        let attempt_snapshot = Arc::new(Mutex::new(None));
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
         let retry = self.build_retry(
@@ -297,7 +268,13 @@ impl<T, E> CasExecutor<T, E> {
             Arc::clone(&report_builder),
         );
         let attempt = retry.run(|| self.run_sync_attempt(state, &operation));
-        self.finish_execution(attempt, hooks, success_context, report_builder)
+        self.finish_execution(
+            attempt,
+            hooks,
+            success_context,
+            attempt_snapshot,
+            report_builder,
+        )
     }
 
     /// Executes one asynchronous CAS operation.
@@ -347,6 +324,7 @@ impl<T, E> CasExecutor<T, E> {
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
         let success_context = Arc::new(Mutex::new(None));
+        let attempt_snapshot = Arc::new(Mutex::new(None));
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
         let retry = self.build_retry(
@@ -354,10 +332,19 @@ impl<T, E> CasExecutor<T, E> {
             Arc::clone(&success_context),
             Arc::clone(&report_builder),
         );
+        let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let attempt = retry
-            .run_async(|| self.run_async_attempt(state, &operation))
+            .run_async(|| {
+                self.run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt))
+            })
             .await;
-        self.finish_execution(attempt, hooks, success_context, report_builder)
+        self.finish_execution(
+            attempt,
+            hooks,
+            success_context,
+            attempt_snapshot,
+            report_builder,
+        )
     }
 
     /// Builds one retry policy for a single CAS execution.
@@ -366,7 +353,6 @@ impl<T, E> CasExecutor<T, E> {
     /// - `hooks`: Hook registrations for the current execution.
     /// - `success_context`: Shared slot used to capture the retry success
     ///   context.
-    ///
     /// # Returns
     /// A retry policy configured for one CAS execution.
     fn build_retry(
@@ -380,8 +366,10 @@ impl<T, E> CasExecutor<T, E> {
         E: 'static,
     {
         let event_hook = hooks.event_hook();
-        let timeout_policy = self.timeout_policy;
-        let attempt_timeout = self.attempt_timeout;
+        let retry_timeout_policy = self
+            .options
+            .attempt_timeout()
+            .map(|attempt_timeout| attempt_timeout.policy());
         let observability = self.observability.clone();
 
         let mut builder = Retry::<CasAttemptFailure<T, E>>::builder()
@@ -399,10 +387,40 @@ impl<T, E> CasExecutor<T, E> {
                         }
                         AttemptFailure::Error(failure) => failure,
                         AttemptFailure::Timeout => {
-                            unreachable!("CAS executor manages async timeouts explicitly")
+                            let cas_context = CasContext::new(context);
+                            report_builder
+                                .lock()
+                                .expect("CAS report builder should be lockable")
+                                .record_timeout();
+                            if Self::should_emit_events(&observability, &event_hook) {
+                                let hook = event_hook
+                                    .as_ref()
+                                    .expect("event hook should exist when events are emitted");
+                                Self::dispatch_event(
+                                    &observability,
+                                    hook,
+                                    CasEvent::AttemptFailed {
+                                        context: cas_context,
+                                        kind: crate::error::CasAttemptFailureKind::Timeout,
+                                    },
+                                );
+                                if context.attempt_timeout_source()
+                                    == Some(AttemptTimeoutSource::Configured)
+                                    && retry_timeout_policy == Some(AttemptTimeoutPolicy::Retry)
+                                {
+                                    Self::dispatch_event(
+                                        &observability,
+                                        hook,
+                                        CasEvent::RetryRequested {
+                                            context: cas_context,
+                                        },
+                                    );
+                                }
+                            }
+                            return AttemptFailureDecision::UseDefault;
                         }
                     };
-                    let cas_context = CasContext::new(context, attempt_timeout);
+                    let cas_context = CasContext::new(context);
                     {
                         let mut report = report_builder
                             .lock()
@@ -442,23 +460,7 @@ impl<T, E> CasExecutor<T, E> {
                             AttemptFailureDecision::Retry
                         }
                         CasAttemptFailure::Abort { .. } => AttemptFailureDecision::Abort,
-                        CasAttemptFailure::Timeout { .. } => match timeout_policy {
-                            CasTimeoutPolicy::Retry => {
-                                if Self::should_emit_events(&observability, &event_hook) {
-                                    Self::dispatch_event(
-                                        &observability,
-                                        event_hook.as_ref().expect(
-                                            "event hook should exist when events are emitted",
-                                        ),
-                                        CasEvent::RetryRequested {
-                                            context: cas_context,
-                                        },
-                                    );
-                                }
-                                AttemptFailureDecision::Retry
-                            }
-                            CasTimeoutPolicy::Abort => AttemptFailureDecision::Abort,
-                        },
+                        CasAttemptFailure::Timeout { .. } => AttemptFailureDecision::UseDefault,
                     }
                 },
             );
@@ -518,20 +520,17 @@ impl<T, E> CasExecutor<T, E> {
         &self,
         state: &AtomicRef<T>,
         operation: &O,
+        attempt_snapshot: Arc<Mutex<Option<Arc<T>>>>,
     ) -> Result<AttemptSuccess<T, R>, CasAttemptFailure<T, E>>
     where
         O: Fn(Arc<T>) -> Fut,
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
         let current = state.load();
-        let decision = if let Some(timeout) = self.attempt_timeout {
-            match tokio::time::timeout(timeout, operation(Arc::clone(&current))).await {
-                Ok(decision) => decision,
-                Err(_) => return Err(CasAttemptFailure::timeout(current)),
-            }
-        } else {
-            operation(Arc::clone(&current)).await
-        };
+        *attempt_snapshot
+            .lock()
+            .expect("CAS attempt snapshot slot should be lockable") = Some(Arc::clone(&current));
+        let decision = operation(Arc::clone(&current)).await;
 
         match decision {
             CasDecision::Update { next, output } => {
@@ -564,6 +563,7 @@ impl<T, E> CasExecutor<T, E> {
         attempt: Result<AttemptSuccess<T, R>, RetryError<CasAttemptFailure<T, E>>>,
         hooks: CasHooks,
         success_context: Arc<Mutex<Option<RetryContext>>>,
+        attempt_snapshot: Arc<Mutex<Option<Arc<T>>>>,
         report_builder: Arc<Mutex<CasReportBuilder>>,
     ) -> CasOutcome<T, R, E>
     where
@@ -600,7 +600,11 @@ impl<T, E> CasExecutor<T, E> {
                 CasOutcome::new(Ok(success), report)
             }
             Err(error) => {
-                let error = CasError::new(error, self.attempt_timeout);
+                let timeout_current = attempt_snapshot
+                    .lock()
+                    .expect("CAS attempt snapshot slot should be lockable")
+                    .clone();
+                let error = CasError::new(error, timeout_current);
                 let context = error.context();
                 let outcome = Self::error_outcome(error.kind());
                 let report = self.finish_report(
@@ -632,7 +636,7 @@ impl<T, E> CasExecutor<T, E> {
         success: AttemptSuccess<T, R>,
         context: RetryContext,
     ) -> CasSuccess<T, R> {
-        let context = CasContext::new(&context, self.attempt_timeout);
+        let context = CasContext::new(&context);
         match success {
             AttemptSuccess::Updated {
                 previous,

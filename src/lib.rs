@@ -25,7 +25,6 @@ pub mod event;
 pub mod executor;
 pub mod fast;
 pub mod observability;
-pub mod options;
 pub mod report;
 pub mod strategy;
 
@@ -62,7 +61,6 @@ pub use observability::{
     ContentionThresholds,
     ListenerPanicPolicy,
 };
-pub use options::CasTimeoutPolicy;
 pub use report::{
     CasExecutionOutcome,
     CasExecutionReport,

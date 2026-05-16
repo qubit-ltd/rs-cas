@@ -15,7 +15,6 @@ mod event;
 mod executor;
 mod fast;
 mod observability;
-mod options;
 mod report;
 mod strategy;
 mod success;

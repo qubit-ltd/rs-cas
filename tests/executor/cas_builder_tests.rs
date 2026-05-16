@@ -22,11 +22,11 @@ use qubit_cas::{
     CasObservabilityConfig,
     CasObservabilityMode,
     CasStrategy,
-    CasTimeoutPolicy,
     ContentionThresholds,
     ListenerPanicPolicy,
 };
 use qubit_retry::{
+    AttemptTimeoutOption,
     RetryDelay,
     RetryJitter,
     RetryOptions,
@@ -58,8 +58,10 @@ fn test_builder_default_and_delay_helpers_work() {
         &RetryDelay::fixed(Duration::from_millis(1))
     );
     assert_eq!(executor.options().jitter(), RetryJitter::factor(0.0));
-    assert_eq!(executor.attempt_timeout(), Some(Duration::from_millis(10)));
-    assert_eq!(executor.timeout_policy(), CasTimeoutPolicy::Abort);
+    assert_eq!(
+        executor.options().attempt_timeout(),
+        Some(AttemptTimeoutOption::abort(Duration::from_millis(10)))
+    );
 }
 
 /// Verifies builder can adopt retry options and random delay settings.
@@ -93,6 +95,55 @@ fn test_builder_options_and_random_delay_work() {
     assert_eq!(
         random.options().delay(),
         &RetryDelay::random(Duration::from_millis(1), Duration::from_millis(5))
+    );
+}
+
+/// Verifies retry option snapshots keep per-attempt timeout settings intact.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_builder_options_preserves_attempt_timeout_option() {
+    let options = RetryOptions::new_with_attempt_timeout(
+        4,
+        Some(Duration::from_millis(200)),
+        None,
+        RetryDelay::none(),
+        RetryJitter::none(),
+        Some(AttemptTimeoutOption::abort(Duration::from_millis(7))),
+    )
+    .expect("retry options should be valid");
+
+    let executor = CasExecutor::<usize, TestError>::from_options(options.clone())
+        .expect("executor should build from options");
+
+    assert_eq!(executor.options(), &options);
+    assert_eq!(
+        executor.options().attempt_timeout(),
+        Some(AttemptTimeoutOption::abort(Duration::from_millis(7)))
+    );
+}
+
+/// Verifies the builder installs complete retry-layer timeout options.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_builder_attempt_timeout_option_work() {
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .attempt_timeout_option(Some(AttemptTimeoutOption::retry(Duration::from_millis(9))))
+        .build()
+        .expect("executor should build");
+
+    assert_eq!(
+        executor.options().attempt_timeout(),
+        Some(AttemptTimeoutOption::retry(Duration::from_millis(9)))
     );
 }
 

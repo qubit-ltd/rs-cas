@@ -93,7 +93,6 @@ impl<T, E> CasAttemptFailure<T, E> {
     /// # Returns
     /// A [`CasAttemptFailure::Timeout`] value.
     #[inline]
-    #[cfg(feature = "tokio")]
     pub(crate) fn timeout(current: Arc<T>) -> Self {
         Self::Timeout { current }
     }

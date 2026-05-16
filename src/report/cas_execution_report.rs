@@ -56,8 +56,8 @@ impl CasExecutionReport {
     /// - `conflicts`: Number of compare-and-swap conflicts encountered.
     /// - `retry_errors`: Number of retryable business failures.
     /// - `aborts`: Number of business aborts.
-    /// - `timeouts`: Number of async attempt timeouts (when timeout policy is
-    ///   configured).
+    /// - `timeouts`: Number of async attempt timeouts when per-attempt timeout
+    ///   is configured.
     /// - `started_at`: Instant captured before the first attempt.
     /// - `finished_at`: Instant captured when the flow completed.
     /// - `max_attempts`: Configured maximum number of attempts.

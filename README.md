@@ -37,7 +37,7 @@ expressed as an explicit, typed decision.
 - **Synchronous and asynchronous APIs**: `execute` works without an async
   runtime; `execute_async` is available with the `tokio` feature.
 - **Async timeout control**: per-attempt timeouts can be retried or converted
-  into immediate aborts with `CasTimeoutPolicy`.
+  into immediate aborts through `qubit-retry`'s retry options.
 - **Observable execution reports**: every execution returns a `CasOutcome`
   containing a `CasExecutionReport` with attempts, conflicts, conflict ratio,
   elapsed time, and terminal outcome.
@@ -209,8 +209,8 @@ Terminal failures are returned as `CasError<T, E>` and classified by
 - `Abort`: the operation returned `CasDecision::abort`.
 - `Conflict`: compare-and-swap conflicts exhausted the retry policy.
 - `RetryExhausted`: retryable business failures exhausted the retry policy.
-- `AttemptTimeout`: an async attempt timed out and the timeout policy stopped
-  the flow, or timeout retries were exhausted.
+- `AttemptTimeout`: an async attempt timed out and the retry-layer timeout
+  policy stopped the flow, or timeout retries were exhausted.
 - `MaxOperationElapsedExceeded`: the cumulative user-operation time budget was
   exceeded.
 - `MaxTotalElapsedExceeded`: the whole retry flow, including delays and hooks,
@@ -441,7 +441,7 @@ async fn main() {
 - `CasExecutor<T, E>`: reusable CAS executor bound to a state type `T` and
   business error type `E`.
 - `CasBuilder<T, E>`: configures retry attempts, elapsed budgets, delay,
-  jitter, async timeouts, timeout policy, observability, and strategy presets.
+  jitter, async timeout options, observability, and strategy presets.
 - `CasDecision<T, R, E>`: per-attempt decision returned by user logic.
 - `CasOutcome<T, R, E>`: terminal result plus `CasExecutionReport`.
 - `CasSuccess<T, R>`: successful update or no-write finish, including current
@@ -465,7 +465,6 @@ async fn main() {
 - `src/error`: attempt-level and terminal CAS errors.
 - `src/fast`: ultra-light CAS primitives for compact `usize` state codes.
 - `src/observability`: observability modes, contention thresholds, and alerts.
-- `src/options`: timeout policy options.
 - `src/outcome` and `src/report`: execution result wrapper and observability
   reports.
 - `src/strategy`: built-in execution strategies and strategy profiles.

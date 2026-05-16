@@ -50,3 +50,45 @@ fn test_fast_cas_success_accessors_for_update_and_finish() {
     assert!(!finished.is_updated());
     assert!(finished.is_finished());
 }
+
+/// Verifies same-value execute updates are classified by decision path.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_fast_cas_success_same_value_update_is_updated() {
+    let state = FastCasState::new(3);
+    let success = FastCas::once()
+        .execute(&state, |_current| {
+            FastCasDecision::<&'static str, &'static str>::update(3, "same")
+        })
+        .expect("same-value update should succeed");
+
+    assert_eq!(success.previous(), 3);
+    assert_eq!(success.current(), 3);
+    assert!(success.is_updated());
+    assert!(!success.is_finished());
+}
+
+/// Verifies same-value compare updates are classified as updates.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_fast_cas_success_compare_update_same_value_is_updated() {
+    let state = FastCasState::new(5);
+    let success = FastCas::once()
+        .compare_update(&state, 5, 5)
+        .expect("same-value compare update should succeed");
+
+    assert_eq!(success.previous(), 5);
+    assert_eq!(success.current(), 5);
+    assert!(success.is_updated());
+    assert!(!success.is_finished());
+}

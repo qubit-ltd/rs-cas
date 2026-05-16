@@ -14,6 +14,8 @@ use std::time::Duration;
 
 use qubit_error::BoxError;
 use qubit_retry::{
+    AttemptTimeoutOption,
+    RetryBuilder,
     RetryConfigError,
     RetryDelay,
     RetryJitter,
@@ -25,31 +27,16 @@ use crate::observability::{
     ContentionThresholds,
     ListenerPanicPolicy,
 };
-use crate::options::CasTimeoutPolicy;
 use crate::strategy::CasStrategy;
 
 use super::cas_executor::CasExecutor;
 
 /// Builder for [`CasExecutor`](crate::CasExecutor).
 pub struct CasBuilder<T, E = BoxError> {
-    /// Maximum attempts, including the initial attempt.
-    max_attempts: u32,
-    /// Maximum cumulative user operation time for the retry flow.
-    max_operation_elapsed: Option<Duration>,
-    /// Maximum monotonic elapsed time for the whole retry flow.
-    max_total_elapsed: Option<Duration>,
-    /// Base retry delay strategy.
-    delay: RetryDelay,
-    /// Jitter strategy applied to the base delay.
-    jitter: RetryJitter,
-    /// Optional async attempt timeout.
-    attempt_timeout: Option<Duration>,
-    /// Policy used when one attempt exceeds the timeout.
-    timeout_policy: CasTimeoutPolicy,
+    /// Retry-layer builder that owns all retry-related settings.
+    retry: RetryBuilder<BoxError>,
     /// Observability settings.
     observability: CasObservabilityConfig,
-    /// Stored validation error for zero max attempts.
-    max_attempts_error: Option<RetryConfigError>,
     /// Marker preserving the executor type parameters.
     marker: PhantomData<fn() -> (T, E)>,
 }
@@ -60,17 +47,9 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// A [`CasBuilder`] using [`RetryOptions::default`].
     pub fn new() -> Self {
-        let options = RetryOptions::default();
         Self {
-            max_attempts: options.max_attempts(),
-            max_operation_elapsed: options.max_operation_elapsed(),
-            max_total_elapsed: options.max_total_elapsed(),
-            delay: options.delay().clone(),
-            jitter: options.jitter(),
-            attempt_timeout: None,
-            timeout_policy: CasTimeoutPolicy::Retry,
+            retry: RetryBuilder::new(),
             observability: CasObservabilityConfig::default(),
-            max_attempts_error: None,
             marker: PhantomData,
         }
     }
@@ -83,12 +62,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     pub fn options(mut self, options: RetryOptions) -> Self {
-        self.max_attempts = options.max_attempts();
-        self.max_operation_elapsed = options.max_operation_elapsed();
-        self.max_total_elapsed = options.max_total_elapsed();
-        self.delay = options.delay().clone();
-        self.jitter = options.jitter();
-        self.max_attempts_error = None;
+        self.retry = self.retry.options(options);
         self
     }
 
@@ -100,15 +74,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     pub fn max_attempts(mut self, max_attempts: u32) -> Self {
-        if max_attempts == 0 {
-            self.max_attempts_error = Some(RetryConfigError::invalid_value(
-                qubit_retry::constants::KEY_MAX_ATTEMPTS,
-                "max_attempts must be greater than zero",
-            ));
-        } else {
-            self.max_attempts = max_attempts;
-            self.max_attempts_error = None;
-        }
+        self.retry = self.retry.max_attempts(max_attempts);
         self
     }
 
@@ -133,7 +99,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn max_operation_elapsed(mut self, max_operation_elapsed: Option<Duration>) -> Self {
-        self.max_operation_elapsed = max_operation_elapsed;
+        self.retry = self.retry.max_operation_elapsed(max_operation_elapsed);
         self
     }
 
@@ -146,7 +112,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn max_total_elapsed(mut self, max_total_elapsed: Option<Duration>) -> Self {
-        self.max_total_elapsed = max_total_elapsed;
+        self.retry = self.retry.max_total_elapsed(max_total_elapsed);
         self
     }
 
@@ -159,7 +125,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn delay(mut self, delay: RetryDelay) -> Self {
-        self.delay = delay;
+        self.retry = self.retry.delay(delay);
         self
     }
 
@@ -238,7 +204,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn jitter(mut self, jitter: RetryJitter) -> Self {
-        self.jitter = jitter;
+        self.retry = self.retry.jitter(jitter);
         self
     }
 
@@ -263,7 +229,20 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn attempt_timeout(mut self, attempt_timeout: Option<Duration>) -> Self {
-        self.attempt_timeout = attempt_timeout;
+        self.retry = self.retry.attempt_timeout(attempt_timeout);
+        self
+    }
+
+    /// Sets the complete retry-layer attempt timeout option.
+    ///
+    /// # Parameters
+    /// - `attempt_timeout`: Timeout option owned by the retry layer.
+    ///
+    /// # Returns
+    /// The updated builder.
+    #[inline]
+    pub fn attempt_timeout_option(mut self, attempt_timeout: Option<AttemptTimeoutOption>) -> Self {
+        self.retry = self.retry.attempt_timeout_option(attempt_timeout);
         self
     }
 
@@ -273,7 +252,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn retry_on_timeout(mut self) -> Self {
-        self.timeout_policy = CasTimeoutPolicy::Retry;
+        self.retry = self.retry.retry_on_timeout();
         self
     }
 
@@ -283,7 +262,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline]
     pub fn abort_on_timeout(mut self) -> Self {
-        self.timeout_policy = CasTimeoutPolicy::Abort;
+        self.retry = self.retry.abort_on_timeout();
         self
     }
 
@@ -356,29 +335,9 @@ impl<T, E> CasBuilder<T, E> {
     /// Returns [`RetryConfigError`] when the configured retry settings are
     /// invalid.
     pub fn build(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
-        if let Some(error) = self.max_attempts_error {
-            return Err(error);
-        }
-        if self
-            .attempt_timeout
-            .is_some_and(|attempt_timeout| attempt_timeout.is_zero())
-        {
-            return Err(RetryConfigError::invalid_value(
-                qubit_retry::constants::KEY_ATTEMPT_TIMEOUT_MILLIS,
-                "attempt_timeout must be greater than zero",
-            ));
-        }
-        let options = RetryOptions::new(
-            self.max_attempts,
-            self.max_operation_elapsed,
-            self.max_total_elapsed,
-            self.delay,
-            self.jitter,
-        )?;
+        let retry = self.retry.build()?;
         Ok(CasExecutor::new(
-            options,
-            self.attempt_timeout,
-            self.timeout_policy,
+            retry.options().clone(),
             self.observability,
         ))
     }

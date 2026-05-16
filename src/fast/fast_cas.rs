@@ -233,7 +233,9 @@ impl FastCas {
             match operation(current) {
                 FastCasDecision::Update { next, output } => {
                     match state.compare_set(current, next) {
-                        Ok(()) => return Ok(FastCasSuccess::new(current, next, output, attempts)),
+                        Ok(()) => {
+                            return Ok(FastCasSuccess::updated(current, next, output, attempts));
+                        }
                         Err(actual) if attempts >= max_attempts => {
                             return Err(FastCasError::Conflict {
                                 current: actual,
@@ -244,7 +246,7 @@ impl FastCas {
                     }
                 }
                 FastCasDecision::Finish { output } => {
-                    return Ok(FastCasSuccess::new(current, current, output, attempts));
+                    return Ok(FastCasSuccess::finished(current, output, attempts));
                 }
                 FastCasDecision::Abort { error } => {
                     return Err(FastCasError::Abort {
@@ -403,7 +405,7 @@ impl FastCas {
     {
         let attempts = 1;
         match state.compare_set(expected, next) {
-            Ok(()) => Ok(FastCasSuccess::new(
+            Ok(()) => Ok(FastCasSuccess::updated(
                 expected,
                 next,
                 output(expected, next),

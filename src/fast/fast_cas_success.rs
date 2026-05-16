@@ -9,6 +9,12 @@
  ******************************************************************************/
 //! Successful fast compare-and-swap results.
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FastCasSuccessKind {
+    Updated,
+    Finished,
+}
+
 /// Successful [`crate::FastCas`] result.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct FastCasSuccess<R> {
@@ -20,10 +26,12 @@ pub struct FastCasSuccess<R> {
     output: R,
     /// Number of attempts consumed.
     attempts: u32,
+    /// Decision path that produced the success.
+    kind: FastCasSuccessKind,
 }
 
 impl<R> FastCasSuccess<R> {
-    /// Creates a successful result.
+    /// Creates a successful update result.
     ///
     /// # Parameters
     /// - `previous`: State observed by the successful attempt.
@@ -32,14 +40,35 @@ impl<R> FastCasSuccess<R> {
     /// - `attempts`: Number of attempts consumed.
     ///
     /// # Returns
-    /// A successful result value.
+    /// A successful update result value.
     #[inline]
-    pub(crate) const fn new(previous: usize, current: usize, output: R, attempts: u32) -> Self {
+    pub(crate) const fn updated(previous: usize, current: usize, output: R, attempts: u32) -> Self {
         Self {
             previous,
             current,
             output,
             attempts,
+            kind: FastCasSuccessKind::Updated,
+        }
+    }
+
+    /// Creates a successful finish result.
+    ///
+    /// # Parameters
+    /// - `current`: State observed when the operation finished.
+    /// - `output`: Business output.
+    /// - `attempts`: Number of attempts consumed.
+    ///
+    /// # Returns
+    /// A successful finish result value.
+    #[inline]
+    pub(crate) const fn finished(current: usize, output: R, attempts: u32) -> Self {
+        Self {
+            previous: current,
+            current,
+            output,
+            attempts,
+            kind: FastCasSuccessKind::Finished,
         }
     }
 
@@ -89,21 +118,22 @@ impl<R> FastCasSuccess<R> {
         self.attempts
     }
 
-    /// Tests whether this success installed a different state.
+    /// Tests whether this success came from an update decision.
     ///
     /// # Returns
-    /// `true` when `current` differs from `previous`.
+    /// `true` when the operation successfully executed an update decision,
+    /// even if the installed state equals the previously observed state.
     #[inline]
     pub const fn is_updated(&self) -> bool {
-        self.previous != self.current
+        matches!(self.kind, FastCasSuccessKind::Updated)
     }
 
-    /// Tests whether this success completed without changing state.
+    /// Tests whether this success came from a finish decision.
     ///
     /// # Returns
-    /// `true` when `current` equals `previous`.
+    /// `true` when the operation completed through a finish decision.
     #[inline]
     pub const fn is_finished(&self) -> bool {
-        self.previous == self.current
+        matches!(self.kind, FastCasSuccessKind::Finished)
     }
 }

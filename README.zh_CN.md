@@ -175,7 +175,7 @@ CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让�
 - `Abort`：operation 返回了 `CasDecision::abort`。
 - `Conflict`：compare-and-swap 冲突耗尽了重试策略。
 - `RetryExhausted`：可重试业务失败耗尽了重试策略。
-- `AttemptTimeout`：异步 attempt 超时并按超时策略终止，或超时重试已耗尽。
+- `AttemptTimeout`：异步 attempt 超时并按 retry 层超时策略终止，或超时重试已耗尽。
 - `MaxOperationElapsedExceeded`：累计用户 operation 执行时间超过预算。
 - `MaxTotalElapsedExceeded`：整个 retry flow（包含延迟与 hook）超过总耗时预算。
 
@@ -387,7 +387,7 @@ async fn main() {
 ## 公共 API 速览
 
 - `CasExecutor<T, E>`：可复用的 CAS 执行器，绑定状态类型 `T` 和业务错误类型 `E`。
-- `CasBuilder<T, E>`：配置重试次数、elapsed 预算、延迟、抖动、异步超时、超时策略、可观测能力和策略预设。
+- `CasBuilder<T, E>`：配置重试次数、elapsed 预算、延迟、抖动、异步超时选项、可观测能力和策略预设。
 - `CasDecision<T, R, E>`：用户逻辑在每次 attempt 中返回的决策。
 - `CasOutcome<T, R, E>`：终态结果与 `CasExecutionReport` 的组合。
 - `CasSuccess<T, R>`：成功更新或无写入完成，包含当前状态、可选旧状态、业务输出和 attempt 上下文。
@@ -408,7 +408,6 @@ async fn main() {
 - `src/error`：尝试级失败和终止级 CAS 错误。
 - `src/fast`：面向紧凑 `usize` 状态码的超轻量 CAS 原语。
 - `src/observability`：可观测模式、争用阈值和告警类型。
-- `src/options`：超时处理策略。
 - `src/outcome` 与 `src/report`：执行结果包装与可观测报告。
 - `src/strategy`：内置执行策略和策略画像。
 - `benches`：观测模式开销基准测试。

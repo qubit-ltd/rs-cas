@@ -44,23 +44,22 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Parameters
     /// - `inner`: Retry-layer error to wrap.
-    /// - `attempt_timeout`: Optional timeout configured by the executor.
+    /// - `timeout_current`: State snapshot captured before a retry-layer
+    ///   timeout, when one is available.
     ///
     /// # Returns
     /// A [`CasError`] wrapper.
     #[inline]
     pub(crate) fn new(
         inner: RetryError<CasAttemptFailure<T, E>>,
-        attempt_timeout: Option<std::time::Duration>,
+        timeout_current: Option<Arc<T>>,
     ) -> Self {
         let (reason, raw_last_failure, retry_context) = inner.into_parts();
-        let context = CasContext::new(&retry_context, attempt_timeout);
+        let context = CasContext::new(&retry_context);
         let last_failure = match raw_last_failure {
             Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout)
-            | Some(AttemptFailure::Panic(_))
-            | Some(AttemptFailure::Executor(_))
-            | None => None,
+            Some(AttemptFailure::Timeout) => timeout_current.map(CasAttemptFailure::timeout),
+            Some(AttemptFailure::Panic(_)) | Some(AttemptFailure::Executor(_)) | None => None,
         };
         let kind = Self::classify_kind(reason, last_failure.as_ref());
         Self {
