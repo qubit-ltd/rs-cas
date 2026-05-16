@@ -359,6 +359,15 @@ impl<T, E> CasBuilder<T, E> {
         if let Some(error) = self.max_attempts_error {
             return Err(error);
         }
+        if self
+            .attempt_timeout
+            .is_some_and(|attempt_timeout| attempt_timeout.is_zero())
+        {
+            return Err(RetryConfigError::invalid_value(
+                qubit_retry::constants::KEY_ATTEMPT_TIMEOUT_MILLIS,
+                "attempt_timeout must be greater than zero",
+            ));
+        }
         let options = RetryOptions::new(
             self.max_attempts,
             self.max_operation_elapsed,

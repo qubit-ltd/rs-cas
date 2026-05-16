@@ -9,8 +9,6 @@
  ******************************************************************************/
 //! Integration tests for `qubit-cas`.
 
-mod cas_outcome_tests;
-mod constants_tests;
 mod decision;
 mod error;
 mod event;

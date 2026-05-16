@@ -9,8 +9,6 @@
  ******************************************************************************/
 //! Retry policy for fast compare-and-swap operations.
 
-use konst::cmp::min;
-
 /// Retry policy used by [`crate::FastCas`] when compare-and-swap loses a race.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum FastCasPolicy {
@@ -72,8 +70,13 @@ impl FastCasPolicy {
     #[inline]
     pub const fn spin_yield(spin_attempts: u32, max_attempts: u32) -> Self {
         let max_attempts = normalize_attempts(max_attempts);
+        let spin_attempts = if spin_attempts < max_attempts {
+            spin_attempts
+        } else {
+            max_attempts
+        };
         Self::SpinYield {
-            spin_attempts: min!(spin_attempts, max_attempts),
+            spin_attempts,
             max_attempts,
         }
     }

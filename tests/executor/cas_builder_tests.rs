@@ -194,6 +194,22 @@ fn test_builder_validates_max_attempts() {
     assert!(error.to_string().contains("max_attempts"));
 }
 
+/// Verifies zero attempt timeouts are rejected at build time.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_builder_validates_attempt_timeout() {
+    let error = CasExecutor::<usize, TestError>::builder()
+        .attempt_timeout(Some(Duration::ZERO))
+        .build()
+        .expect_err("zero attempt timeout should be rejected");
+    assert!(error.to_string().contains("attempt_timeout"));
+}
+
 /// Verifies invalid retry options from delay validation are rejected.
 ///
 /// # Parameters
