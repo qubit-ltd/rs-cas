@@ -53,10 +53,7 @@ fn test_builder_default_and_delay_helpers_work() {
         .expect("executor should build");
 
     assert_eq!(executor.options().max_attempts(), 3);
-    assert_eq!(
-        executor.options().delay(),
-        &RetryDelay::fixed(Duration::from_millis(1))
-    );
+    assert_eq!(executor.options().delay(), &RetryDelay::fixed(Duration::from_millis(1)));
     assert_eq!(executor.options().jitter(), RetryJitter::factor(0.0));
     assert_eq!(
         executor.options().attempt_timeout(),
@@ -81,8 +78,8 @@ fn test_builder_options_and_random_delay_work() {
         RetryJitter::factor(0.25),
     )
     .expect("retry options should be valid");
-    let executor = CasExecutor::<usize, TestError>::from_options(options.clone())
-        .expect("executor should build from options");
+    let executor =
+        CasExecutor::<usize, TestError>::from_options(options.clone()).expect("executor should build from options");
 
     assert_eq!(executor.options(), &options);
 
@@ -117,8 +114,8 @@ fn test_builder_options_preserves_attempt_timeout_option() {
     )
     .expect("retry options should be valid");
 
-    let executor = CasExecutor::<usize, TestError>::from_options(options.clone())
-        .expect("executor should build from options");
+    let executor =
+        CasExecutor::<usize, TestError>::from_options(options.clone()).expect("executor should build from options");
 
     assert_eq!(executor.options(), &options);
     assert_eq!(
@@ -163,13 +160,9 @@ fn test_builder_strategies_work() {
     );
 
     let latency_first = CasExecutor::<usize, TestError>::latency_first();
-    assert_eq!(
-        latency_first.options().max_attempts(),
-        LATENCY_FIRST_MAX_ATTEMPTS
-    );
+    assert_eq!(latency_first.options().max_attempts(), LATENCY_FIRST_MAX_ATTEMPTS);
 
-    let reliability_first =
-        CasExecutor::<usize, TestError>::with_strategy(CasStrategy::ReliabilityFirst);
+    let reliability_first = CasExecutor::<usize, TestError>::with_strategy(CasStrategy::ReliabilityFirst);
     assert_eq!(
         reliability_first.options().max_attempts(),
         RELIABILITY_FIRST_MAX_ATTEMPTS
@@ -187,10 +180,7 @@ fn test_builder_strategies_work() {
 fn test_builder_observability_settings_work() {
     let thresholds = ContentionThresholds::new(3, 1, 0.5);
     let executor = CasExecutor::<usize, TestError>::builder()
-        .observability(
-            CasObservabilityConfig::event_stream()
-                .with_listener_panic_policy(ListenerPanicPolicy::Isolate),
-        )
+        .observability(CasObservabilityConfig::event_stream().with_listener_panic_policy(ListenerPanicPolicy::Isolate))
         .alert_on_contention(thresholds)
         .build()
         .expect("executor should build");
@@ -203,10 +193,7 @@ fn test_builder_observability_settings_work() {
         executor.observability().listener_panic_policy(),
         ListenerPanicPolicy::Isolate
     );
-    assert_eq!(
-        executor.observability().contention_thresholds(),
-        Some(thresholds)
-    );
+    assert_eq!(executor.observability().contention_thresholds(), Some(thresholds));
 }
 
 /// Verifies listener panic isolation is installed by builder helpers.
@@ -289,10 +276,7 @@ fn test_builder_default_and_reliability_first_work() {
     let default_executor = CasBuilder::<usize, TestError>::default()
         .build()
         .expect("default builder should build");
-    assert_eq!(
-        default_executor.options().max_attempts(),
-        DEFAULT_CAS_MAX_ATTEMPTS
-    );
+    assert_eq!(default_executor.options().max_attempts(), DEFAULT_CAS_MAX_ATTEMPTS);
 
     let reliability_executor = CasExecutor::<usize, TestError>::builder()
         .build_reliability_first()
@@ -303,8 +287,5 @@ fn test_builder_default_and_reliability_first_work() {
     );
 
     let convenience = CasExecutor::<usize, TestError>::reliability_first();
-    assert_eq!(
-        convenience.options().max_attempts(),
-        RELIABILITY_FIRST_MAX_ATTEMPTS
-    );
+    assert_eq!(convenience.options().max_attempts(), RELIABILITY_FIRST_MAX_ATTEMPTS);
 }

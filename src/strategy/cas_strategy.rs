@@ -60,13 +60,9 @@ impl CasStrategy {
     #[inline]
     pub fn profile(self) -> CasStrategyProfile {
         match self {
-            Self::LatencyFirst => CasStrategyProfile::new(
-                LATENCY_FIRST_MAX_ATTEMPTS,
-                LATENCY_FIRST_MAX_ELAPSED,
-                None,
-                0.0,
-                false,
-            ),
+            Self::LatencyFirst => {
+                CasStrategyProfile::new(LATENCY_FIRST_MAX_ATTEMPTS, LATENCY_FIRST_MAX_ELAPSED, None, 0.0, false)
+            }
             Self::ContentionAdaptive => CasStrategyProfile::new(
                 CONTENTION_ADAPTIVE_MAX_ATTEMPTS,
                 CONTENTION_ADAPTIVE_MAX_ELAPSED,

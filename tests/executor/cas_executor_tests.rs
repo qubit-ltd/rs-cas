@@ -87,10 +87,7 @@ fn test_execute_retries_conflict_and_calls_retry_hook() {
         .expect("second attempt should succeed");
 
     assert!(success.is_updated());
-    assert_eq!(
-        **success.previous().expect("updated success has previous"),
-        1
-    );
+    assert_eq!(**success.previous().expect("updated success has previous"), 1);
     assert_eq!(**success.current(), 2);
     assert_eq!(*success.output(), 11);
     assert_eq!(success.attempts(), 2);
@@ -149,14 +146,11 @@ fn test_execute_emits_contention_alert() {
     let alert_events = Arc::clone(&alerts);
     let thresholds = ContentionThresholds::new(2, 1, 0.5);
     let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
-        alert_events
-            .lock()
-            .expect("alert events should be lockable")
-            .push((
-                alert.report().attempts_total(),
-                alert.report().conflicts(),
-                alert.thresholds(),
-            ));
+        alert_events.lock().expect("alert events should be lockable").push((
+            alert.report().attempts_total(),
+            alert.report().conflicts(),
+            alert.thresholds(),
+        ));
     });
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
@@ -415,10 +409,7 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
         .expect_err("max elapsed should fail");
 
     assert_eq!(error.kind(), CasErrorKind::MaxOperationElapsedExceeded);
-    assert_eq!(
-        error.last_failure().map(|failure| failure.is_retry()),
-        Some(true)
-    );
+    assert_eq!(error.last_failure().map(|failure| failure.is_retry()), Some(true));
     assert_eq!(error.current().map(|current| **current), Some(11));
 }
 
@@ -478,10 +469,7 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
         .expect("second async attempt should succeed");
 
     assert_eq!(success.attempts(), 2);
-    assert_eq!(
-        success.context().attempt_timeout(),
-        Some(Duration::from_millis(10))
-    );
+    assert_eq!(success.context().attempt_timeout(), Some(Duration::from_millis(10)));
     assert_eq!(**success.current(), 1);
     assert_eq!(*success.output(), 100);
     assert_eq!(
@@ -542,8 +530,8 @@ async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout()
         Some(AttemptTimeoutOption::abort(Duration::from_millis(10))),
     )
     .expect("retry options should be valid");
-    let executor = CasExecutor::<usize, TestError>::from_options(options)
-        .expect("executor should build from retry options");
+    let executor =
+        CasExecutor::<usize, TestError>::from_options(options).expect("executor should build from retry options");
 
     let error = executor
         .execute_async(&state, |_current: Arc<usize>| async move {

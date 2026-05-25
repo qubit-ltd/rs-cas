@@ -42,14 +42,11 @@ fn test_cas_alert_exposes_report_and_thresholds() {
     let alerts = Arc::new(Mutex::new(Vec::new()));
     let alert_events = Arc::clone(&alerts);
     let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
-        alert_events
-            .lock()
-            .expect("alert events should be lockable")
-            .push((
-                alert.report().attempts_total(),
-                alert.report().conflicts(),
-                alert.thresholds(),
-            ));
+        alert_events.lock().expect("alert events should be lockable").push((
+            alert.report().attempts_total(),
+            alert.report().conflicts(),
+            alert.thresholds(),
+        ));
     });
 
     let executor = CasExecutor::<usize, TestError>::builder()

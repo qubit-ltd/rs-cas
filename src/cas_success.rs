@@ -51,12 +51,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// A [`CasSuccess::Updated`] value.
     #[inline]
-    pub(crate) fn updated(
-        previous: Arc<T>,
-        current: Arc<T>,
-        output: R,
-        context: CasContext,
-    ) -> Self {
+    pub(crate) fn updated(previous: Arc<T>, current: Arc<T>, output: R, context: CasContext) -> Self {
         Self::Updated {
             previous,
             current,

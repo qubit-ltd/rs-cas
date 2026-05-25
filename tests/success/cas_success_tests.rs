@@ -32,9 +32,7 @@ fn test_success_accessors_cover_updated_and_finished_variants() {
         .expect("executor should build");
 
     let updated = executor
-        .execute(&state, |current: &usize| {
-            CasDecision::update(*current + 1, "updated")
-        })
+        .execute(&state, |current: &usize| CasDecision::update(*current + 1, "updated"))
         .expect("update should succeed");
     assert!(updated.previous().is_some());
     assert_eq!(updated.clone().into_output(), "updated");

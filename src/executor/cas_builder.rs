@@ -186,12 +186,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn exponential_backoff_with_multiplier(
-        self,
-        initial: Duration,
-        max: Duration,
-        multiplier: f64,
-    ) -> Self {
+    pub fn exponential_backoff_with_multiplier(self, initial: Duration, max: Duration, multiplier: f64) -> Self {
         self.delay(RetryDelay::exponential(initial, max, multiplier))
     }
 
@@ -280,9 +275,7 @@ impl<T, E> CasBuilder<T, E> {
             .max_operation_elapsed(Some(profile.max_operation_elapsed()))
             .max_total_elapsed(profile.max_total_elapsed());
         if let Some((initial, max, jitter)) = strategy.backoff() {
-            builder
-                .exponential_backoff(initial, max)
-                .jitter_factor(jitter)
+            builder.exponential_backoff(initial, max).jitter_factor(jitter)
         } else {
             builder.no_delay()
         }
@@ -336,10 +329,7 @@ impl<T, E> CasBuilder<T, E> {
     /// invalid.
     pub fn build(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
         let retry = self.retry.build()?;
-        Ok(CasExecutor::new(
-            retry.options().clone(),
-            self.observability,
-        ))
+        Ok(CasExecutor::new(retry.options().clone(), self.observability))
     }
 
     /// Builds one executor with the contention-adaptive strategy.

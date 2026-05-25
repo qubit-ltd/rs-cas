@@ -114,11 +114,7 @@ struct BenchResult {
     conflicts: u64,
 }
 
-fn measure_executor(
-    executor: CasExecutor<usize, &'static str>,
-    hooks: CasHooks,
-    force_conflict: bool,
-) -> BenchResult {
+fn measure_executor(executor: CasExecutor<usize, &'static str>, hooks: CasHooks, force_conflict: bool) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
         let _ = run_executor_sample(executor.clone(), hooks.clone(), force_conflict);
     }
@@ -236,19 +232,11 @@ fn run_raw_sample(force_conflict: bool) -> BenchResult {
 }
 
 fn median(samples: &mut [f64]) -> f64 {
-    samples.sort_by(|left, right| {
-        left.partial_cmp(right)
-            .expect("benchmark samples should not be NaN")
-    });
+    samples.sort_by(|left, right| left.partial_cmp(right).expect("benchmark samples should not be NaN"));
     samples[samples.len() / 2]
 }
 
-fn print_row(
-    name: &'static str,
-    result: &BenchResult,
-    raw_ops: Option<f64>,
-    report_ops: Option<f64>,
-) {
+fn print_row(name: &'static str, result: &BenchResult, raw_ops: Option<f64>, report_ops: Option<f64>) {
     let raw_loss = raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     let report_loss = report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     println!(

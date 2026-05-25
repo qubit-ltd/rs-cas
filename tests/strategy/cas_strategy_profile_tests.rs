@@ -28,10 +28,7 @@ fn test_cas_strategy_profile_accessors() {
     assert!(!latency.uses_backoff());
 
     let contention = CasStrategy::ContentionAdaptive.profile();
-    assert_eq!(
-        contention.max_operation_elapsed(),
-        CONTENTION_ADAPTIVE_MAX_ELAPSED
-    );
+    assert_eq!(contention.max_operation_elapsed(), CONTENTION_ADAPTIVE_MAX_ELAPSED);
     assert_eq!(
         contention.max_total_elapsed(),
         Some(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED)
@@ -40,10 +37,7 @@ fn test_cas_strategy_profile_accessors() {
     assert!(contention.uses_backoff());
 
     let reliability = CasStrategy::ReliabilityFirst.profile();
-    assert_eq!(
-        reliability.max_operation_elapsed(),
-        RELIABILITY_FIRST_MAX_ELAPSED
-    );
+    assert_eq!(reliability.max_operation_elapsed(), RELIABILITY_FIRST_MAX_ELAPSED);
     assert_eq!(
         reliability.max_total_elapsed(),
         Some(RELIABILITY_FIRST_MAX_TOTAL_ELAPSED)

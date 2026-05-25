@@ -50,10 +50,7 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// A [`CasError`] wrapper.
     #[inline]
-    pub(crate) fn new(
-        inner: RetryError<CasAttemptFailure<T, E>>,
-        timeout_current: Option<Arc<T>>,
-    ) -> Self {
+    pub(crate) fn new(inner: RetryError<CasAttemptFailure<T, E>>, timeout_current: Option<Arc<T>>) -> Self {
         let (reason, raw_last_failure, retry_context) = inner.into_parts();
         let context = CasContext::new(&retry_context);
         let last_failure = match raw_last_failure {
@@ -78,10 +75,7 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Returns
     /// Derived high-level CAS error kind.
-    fn classify_kind(
-        reason: RetryErrorReason,
-        last_failure: Option<&CasAttemptFailure<T, E>>,
-    ) -> CasErrorKind {
+    fn classify_kind(reason: RetryErrorReason, last_failure: Option<&CasAttemptFailure<T, E>>) -> CasErrorKind {
         match reason {
             RetryErrorReason::Aborted => match last_failure {
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
@@ -94,9 +88,7 @@ impl<T, E> CasError<T, E> {
                 Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                 _ => CasErrorKind::RetryExhausted,
             },
-            RetryErrorReason::MaxOperationElapsedExceeded => {
-                CasErrorKind::MaxOperationElapsedExceeded
-            }
+            RetryErrorReason::MaxOperationElapsedExceeded => CasErrorKind::MaxOperationElapsedExceeded,
             RetryErrorReason::MaxTotalElapsedExceeded => CasErrorKind::MaxTotalElapsedExceeded,
         }
     }

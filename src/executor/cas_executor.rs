@@ -247,12 +247,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
-    pub fn execute_with_hooks<R, O>(
-        &self,
-        state: &AtomicRef<T>,
-        operation: O,
-        hooks: CasHooks,
-    ) -> CasOutcome<T, R, E>
+    pub fn execute_with_hooks<R, O>(&self, state: &AtomicRef<T>, operation: O, hooks: CasHooks) -> CasOutcome<T, R, E>
     where
         T: 'static,
         E: 'static,
@@ -262,19 +257,9 @@ impl<T, E> CasExecutor<T, E> {
         let attempt_snapshot = Arc::new(Mutex::new(None));
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
-        let retry = self.build_retry(
-            &hooks,
-            Arc::clone(&success_context),
-            Arc::clone(&report_builder),
-        );
+        let retry = self.build_retry(&hooks, Arc::clone(&success_context), Arc::clone(&report_builder));
         let attempt = retry.run(|| self.run_sync_attempt(state, &operation));
-        self.finish_execution(
-            attempt,
-            hooks,
-            success_context,
-            attempt_snapshot,
-            report_builder,
-        )
+        self.finish_execution(attempt, hooks, success_context, attempt_snapshot, report_builder)
     }
 
     /// Executes one asynchronous CAS operation.
@@ -286,19 +271,14 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// A terminal result together with the execution report.
     #[cfg(feature = "tokio")]
-    pub async fn execute_async<R, O, Fut>(
-        &self,
-        state: &AtomicRef<T>,
-        operation: O,
-    ) -> CasOutcome<T, R, E>
+    pub async fn execute_async<R, O, Fut>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
         T: 'static,
         E: 'static,
         O: Fn(Arc<T>) -> Fut,
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
-        self.execute_async_with_hooks(state, operation, CasHooks::new())
-            .await
+        self.execute_async_with_hooks(state, operation, CasHooks::new()).await
     }
 
     /// Executes one asynchronous CAS operation with lifecycle hooks.
@@ -327,24 +307,12 @@ impl<T, E> CasExecutor<T, E> {
         let attempt_snapshot = Arc::new(Mutex::new(None));
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
-        let retry = self.build_retry(
-            &hooks,
-            Arc::clone(&success_context),
-            Arc::clone(&report_builder),
-        );
+        let retry = self.build_retry(&hooks, Arc::clone(&success_context), Arc::clone(&report_builder));
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let attempt = retry
-            .run_async(|| {
-                self.run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt))
-            })
+            .run_async(|| self.run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt)))
             .await;
-        self.finish_execution(
-            attempt,
-            hooks,
-            success_context,
-            attempt_snapshot,
-            report_builder,
-        )
+        self.finish_execution(attempt, hooks, success_context, attempt_snapshot, report_builder)
     }
 
     /// Builds one retry policy for a single CAS execution.
@@ -404,16 +372,13 @@ impl<T, E> CasExecutor<T, E> {
                                         kind: crate::error::CasAttemptFailureKind::Timeout,
                                     },
                                 );
-                                if context.attempt_timeout_source()
-                                    == Some(AttemptTimeoutSource::Configured)
+                                if context.attempt_timeout_source() == Some(AttemptTimeoutSource::Configured)
                                     && retry_timeout_policy == Some(AttemptTimeoutPolicy::Retry)
                                 {
                                     Self::dispatch_event(
                                         &observability,
                                         hook,
-                                        CasEvent::RetryRequested {
-                                            context: cas_context,
-                                        },
+                                        CasEvent::RetryRequested { context: cas_context },
                                     );
                                 }
                             }
@@ -422,9 +387,7 @@ impl<T, E> CasExecutor<T, E> {
                     };
                     let cas_context = CasContext::new(context);
                     {
-                        let mut report = report_builder
-                            .lock()
-                            .expect("CAS report builder should be lockable");
+                        let mut report = report_builder.lock().expect("CAS report builder should be lockable");
                         match failure {
                             CasAttemptFailure::Conflict { .. } => report.record_conflict(),
                             CasAttemptFailure::Retry { .. } => report.record_retry_error(),
@@ -452,9 +415,7 @@ impl<T, E> CasExecutor<T, E> {
                                     event_hook
                                         .as_ref()
                                         .expect("event hook should exist when events are emitted"),
-                                    CasEvent::RetryRequested {
-                                        context: cas_context,
-                                    },
+                                    CasEvent::RetryRequested { context: cas_context },
                                 );
                             }
                             AttemptFailureDecision::Retry
@@ -491,16 +452,14 @@ impl<T, E> CasExecutor<T, E> {
     {
         let current = state.load();
         match operation.apply(current.as_ref()) {
-            CasDecision::Update { next, output } => {
-                match state.compare_set(&current, Arc::clone(&next)) {
-                    Ok(()) => Ok(AttemptSuccess::Updated {
-                        previous: current,
-                        current: next,
-                        output,
-                    }),
-                    Err(actual) => Err(CasAttemptFailure::conflict(actual)),
-                }
-            }
+            CasDecision::Update { next, output } => match state.compare_set(&current, Arc::clone(&next)) {
+                Ok(()) => Ok(AttemptSuccess::Updated {
+                    previous: current,
+                    current: next,
+                    output,
+                }),
+                Err(actual) => Err(CasAttemptFailure::conflict(actual)),
+            },
             CasDecision::Finish { output } => Ok(AttemptSuccess::Finished { current, output }),
             CasDecision::Retry(error) => Err(CasAttemptFailure::retry(current, error)),
             CasDecision::Abort(error) => Err(CasAttemptFailure::abort(current, error)),
@@ -533,16 +492,14 @@ impl<T, E> CasExecutor<T, E> {
         let decision = operation(Arc::clone(&current)).await;
 
         match decision {
-            CasDecision::Update { next, output } => {
-                match state.compare_set(&current, Arc::clone(&next)) {
-                    Ok(()) => Ok(AttemptSuccess::Updated {
-                        previous: current,
-                        current: next,
-                        output,
-                    }),
-                    Err(actual) => Err(CasAttemptFailure::conflict(actual)),
-                }
-            }
+            CasDecision::Update { next, output } => match state.compare_set(&current, Arc::clone(&next)) {
+                Ok(()) => Ok(AttemptSuccess::Updated {
+                    previous: current,
+                    current: next,
+                    output,
+                }),
+                Err(actual) => Err(CasAttemptFailure::conflict(actual)),
+            },
             CasDecision::Finish { output } => Ok(AttemptSuccess::Finished { current, output }),
             CasDecision::Retry(error) => Err(CasAttemptFailure::retry(current, error)),
             CasDecision::Abort(error) => Err(CasAttemptFailure::abort(current, error)),
@@ -631,11 +588,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// Public CAS success value with context attached.
-    fn enrich_success<R>(
-        &self,
-        success: AttemptSuccess<T, R>,
-        context: RetryContext,
-    ) -> CasSuccess<T, R> {
+    fn enrich_success<R>(&self, success: AttemptSuccess<T, R>, context: RetryContext) -> CasSuccess<T, R> {
         let context = CasContext::new(&context);
         match success {
             AttemptSuccess::Updated {
@@ -643,9 +596,7 @@ impl<T, E> CasExecutor<T, E> {
                 current,
                 output,
             } => CasSuccess::updated(previous, current, output, context),
-            AttemptSuccess::Finished { current, output } => {
-                CasSuccess::finished(current, output, context)
-            }
+            AttemptSuccess::Finished { current, output } => CasSuccess::finished(current, output, context),
         }
     }
 
@@ -659,9 +610,7 @@ impl<T, E> CasExecutor<T, E> {
         T: 'static,
         E: 'static,
     {
-        if hooks.event_hook().is_none()
-            || self.observability.mode() == CasObservabilityMode::ReportOnly
-        {
+        if hooks.event_hook().is_none() || self.observability.mode() == CasObservabilityMode::ReportOnly {
             return;
         }
         let started_at = report_builder
@@ -718,9 +667,7 @@ impl<T, E> CasExecutor<T, E> {
                 event_hook
                     .as_ref()
                     .expect("event hook should exist when events are emitted"),
-                CasEvent::ExecutionFinished {
-                    report: report.clone(),
-                },
+                CasEvent::ExecutionFinished { report: report.clone() },
             );
         }
         if self.observability.mode() == CasObservabilityMode::EventStreamWithAlert
@@ -750,12 +697,8 @@ impl<T, E> CasExecutor<T, E> {
             CasErrorKind::Conflict => CasExecutionOutcome::ErrorConflictExhausted,
             CasErrorKind::RetryExhausted => CasExecutionOutcome::ErrorRetryExhausted,
             CasErrorKind::AttemptTimeout => CasExecutionOutcome::ErrorAttemptTimeout,
-            CasErrorKind::MaxOperationElapsedExceeded => {
-                CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
-            }
-            CasErrorKind::MaxTotalElapsedExceeded => {
-                CasExecutionOutcome::ErrorMaxTotalElapsedExceeded
-            }
+            CasErrorKind::MaxOperationElapsedExceeded => CasExecutionOutcome::ErrorMaxOperationElapsedExceeded,
+            CasErrorKind::MaxTotalElapsedExceeded => CasExecutionOutcome::ErrorMaxTotalElapsedExceeded,
         }
     }
 
@@ -772,11 +715,8 @@ impl<T, E> CasExecutor<T, E> {
     }
 
     /// Dispatches one lifecycle event if event streaming is enabled.
-    fn dispatch_event(
-        observability: &CasObservabilityConfig,
-        hook: &crate::event::CasEventHook,
-        event: CasEvent,
-    ) where
+    fn dispatch_event(observability: &CasObservabilityConfig, hook: &crate::event::CasEventHook, event: CasEvent)
+    where
         T: 'static,
         E: 'static,
     {
@@ -790,10 +730,7 @@ impl<T, E> CasExecutor<T, E> {
 
     /// Returns whether lifecycle event construction and dispatch are needed.
     #[inline]
-    fn should_emit_events(
-        observability: &CasObservabilityConfig,
-        hook: &Option<crate::event::CasEventHook>,
-    ) -> bool {
+    fn should_emit_events(observability: &CasObservabilityConfig, hook: &Option<crate::event::CasEventHook>) -> bool {
         observability.mode() != CasObservabilityMode::ReportOnly && hook.is_some()
     }
 

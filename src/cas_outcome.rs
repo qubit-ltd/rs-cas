@@ -37,10 +37,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// A new [`CasOutcome`] wrapping both values.
     #[inline]
-    pub(crate) fn new(
-        result: Result<CasSuccess<T, R>, CasError<T, E>>,
-        report: CasExecutionReport,
-    ) -> Self {
+    pub(crate) fn new(result: Result<CasSuccess<T, R>, CasError<T, E>>, report: CasExecutionReport) -> Self {
         Self { result, report }
     }
 
