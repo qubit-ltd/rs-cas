@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
@@ -39,12 +37,17 @@ fn test_cas_outcome_success_accessors_and_parts() {
         .build()
         .expect("executor should build");
 
-    let outcome = executor.execute(&state, |current: &usize| CasDecision::update(*current + 1, "updated"));
+    let outcome = executor.execute(&state, |current: &usize| {
+        CasDecision::update(*current + 1, "updated")
+    });
 
     assert!(outcome.is_ok());
     assert!(!outcome.is_err());
     assert!(outcome.result().is_ok());
-    assert_eq!(outcome.report().outcome(), CasExecutionOutcome::SuccessUpdated);
+    assert_eq!(
+        outcome.report().outcome(),
+        CasExecutionOutcome::SuccessUpdated
+    );
 
     let (result, report) = outcome.clone().into_parts();
     assert!(result.is_ok());
@@ -70,7 +73,10 @@ fn test_cas_outcome_error_accessors_and_result() {
     assert!(!outcome.is_ok());
     assert!(outcome.is_err());
     assert!(outcome.result().is_err());
-    assert_eq!(outcome.report().outcome(), CasExecutionOutcome::ErrorRetryExhausted);
+    assert_eq!(
+        outcome.report().outcome(),
+        CasExecutionOutcome::ErrorRetryExhausted
+    );
 
     let result = outcome.clone().into_result();
     assert!(result.is_err());

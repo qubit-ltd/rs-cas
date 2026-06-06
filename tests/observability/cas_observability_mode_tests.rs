@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_cas::CasObservabilityMode;
 
@@ -19,5 +17,8 @@ use qubit_cas::CasObservabilityMode;
 /// This test returns nothing.
 #[test]
 fn test_observability_mode_default_is_report_only() {
-    assert_eq!(CasObservabilityMode::default(), CasObservabilityMode::ReportOnly);
+    assert_eq!(
+        CasObservabilityMode::default(),
+        CasObservabilityMode::ReportOnly
+    );
 }

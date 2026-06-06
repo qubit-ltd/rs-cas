@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::sync::Arc;
 
@@ -62,7 +60,8 @@ fn test_attempt_failure_accessors_work() {
     assert_eq!(abort.error(), Some(&TestError("abort")));
     assert_eq!(abort.to_string(), "aborted CAS failure: abort");
 
-    let timeout = CasAttemptFailure::<usize, TestError>::Timeout { current: state };
+    let timeout =
+        CasAttemptFailure::<usize, TestError>::Timeout { current: state };
     assert!(!timeout.is_conflict());
     assert!(!timeout.is_retry());
     assert!(!timeout.is_abort());

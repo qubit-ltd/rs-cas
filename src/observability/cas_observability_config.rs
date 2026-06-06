@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use super::{
     CasObservabilityMode,
@@ -76,7 +74,8 @@ impl CasObservabilityConfig {
 
     /// Switches to report-only observability.
     ///
-    /// This disables lifecycle event streaming and clears contention thresholds.
+    /// This disables lifecycle event streaming and clears contention
+    /// thresholds.
     ///
     /// # Returns
     /// Updated builder-style config (consumes self).
@@ -108,7 +107,10 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config with alert mode enabled (consumes self).
     #[inline]
-    pub fn with_event_stream_with_alert(mut self, thresholds: ContentionThresholds) -> Self {
+    pub fn with_event_stream_with_alert(
+        mut self,
+        thresholds: ContentionThresholds,
+    ) -> Self {
         self.mode = CasObservabilityMode::EventStreamWithAlert;
         self.contention_thresholds = Some(thresholds);
         self
@@ -117,7 +119,8 @@ impl CasObservabilityConfig {
     /// Disables contention alerts while keeping lifecycle event streaming.
     ///
     /// # Returns
-    /// Updated builder-style config with event streaming and no alert thresholds.
+    /// Updated builder-style config with event streaming and no alert
+    /// thresholds.
     #[inline]
     pub fn without_contention_alerts(self) -> Self {
         self.with_event_stream()
@@ -140,7 +143,10 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config (consumes self).
     #[inline]
-    pub fn with_listener_panic_policy(mut self, policy: ListenerPanicPolicy) -> Self {
+    pub fn with_listener_panic_policy(
+        mut self,
+        policy: ListenerPanicPolicy,
+    ) -> Self {
         self.listener_panic_policy = policy;
         self
     }
@@ -162,7 +168,10 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config with alert mode enabled (consumes self).
     #[inline]
-    pub fn with_contention_thresholds(self, thresholds: ContentionThresholds) -> Self {
+    pub fn with_contention_thresholds(
+        self,
+        thresholds: ContentionThresholds,
+    ) -> Self {
         self.with_event_stream_with_alert(thresholds)
     }
 }

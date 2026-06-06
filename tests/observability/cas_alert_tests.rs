@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -42,17 +40,22 @@ fn test_cas_alert_exposes_report_and_thresholds() {
     let alerts = Arc::new(Mutex::new(Vec::new()));
     let alert_events = Arc::clone(&alerts);
     let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
-        alert_events.lock().expect("alert events should be lockable").push((
-            alert.report().attempts_total(),
-            alert.report().conflicts(),
-            alert.thresholds(),
-        ));
+        alert_events
+            .lock()
+            .expect("alert events should be lockable")
+            .push((
+                alert.report().attempts_total(),
+                alert.report().conflicts(),
+                alert.thresholds(),
+            ));
     });
 
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .observability(CasObservabilityConfig::event_stream_with_alert(
+            thresholds,
+        ))
         .build()
         .expect("executor should build");
 

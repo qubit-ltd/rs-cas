@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::time::Duration;
 
@@ -60,9 +58,13 @@ impl CasStrategy {
     #[inline]
     pub fn profile(self) -> CasStrategyProfile {
         match self {
-            Self::LatencyFirst => {
-                CasStrategyProfile::new(LATENCY_FIRST_MAX_ATTEMPTS, LATENCY_FIRST_MAX_ELAPSED, None, 0.0, false)
-            }
+            Self::LatencyFirst => CasStrategyProfile::new(
+                LATENCY_FIRST_MAX_ATTEMPTS,
+                LATENCY_FIRST_MAX_ELAPSED,
+                None,
+                0.0,
+                false,
+            ),
             Self::ContentionAdaptive => CasStrategyProfile::new(
                 CONTENTION_ADAPTIVE_MAX_ATTEMPTS,
                 CONTENTION_ADAPTIVE_MAX_ELAPSED,

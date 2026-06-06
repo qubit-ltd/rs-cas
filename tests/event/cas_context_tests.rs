@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
@@ -48,7 +46,10 @@ fn test_success_context_accessors_work() {
     assert_eq!(success.context().max_retries(), 2);
     assert_eq!(success.context().max_operation_elapsed(), None);
     assert_eq!(success.context().max_total_elapsed(), None);
-    assert!(success.context().total_elapsed() >= success.context().attempt_elapsed());
+    assert!(
+        success.context().total_elapsed()
+            >= success.context().attempt_elapsed()
+    );
     assert_eq!(success.context().attempt_timeout(), None);
     assert_eq!(success.context().next_delay(), None);
 }

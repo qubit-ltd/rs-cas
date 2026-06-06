@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Attempt-level CAS failures.
 
 use std::fmt;
@@ -133,7 +131,9 @@ impl<T, E> CasAttemptFailure<T, E> {
     #[inline]
     pub fn error(&self) -> Option<&E> {
         match self {
-            Self::Retry { error, .. } | Self::Abort { error, .. } => Some(error),
+            Self::Retry { error, .. } | Self::Abort { error, .. } => {
+                Some(error)
+            }
             Self::Conflict { .. } | Self::Timeout { .. } => None,
         }
     }
@@ -192,8 +192,12 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Conflict { .. } => write!(f, "compare-and-swap conflict"),
-            Self::Retry { error, .. } => write!(f, "retryable CAS failure: {error}"),
-            Self::Abort { error, .. } => write!(f, "aborted CAS failure: {error}"),
+            Self::Retry { error, .. } => {
+                write!(f, "retryable CAS failure: {error}")
+            }
+            Self::Abort { error, .. } => {
+                write!(f, "aborted CAS failure: {error}")
+            }
             Self::Timeout { .. } => write!(f, "CAS attempt timed out"),
         }
     }

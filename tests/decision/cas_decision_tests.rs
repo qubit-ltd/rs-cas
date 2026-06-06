@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::sync::Arc;
 
@@ -24,7 +22,10 @@ use crate::support::TestError;
 #[test]
 fn test_decision_constructors_create_expected_variants() {
     let next = Arc::new(7usize);
-    let update = CasDecision::<usize, &'static str, TestError>::update_arc(Arc::clone(&next), "ok");
+    let update = CasDecision::<usize, &'static str, TestError>::update_arc(
+        Arc::clone(&next),
+        "ok",
+    );
     match update {
         CasDecision::Update {
             next: actual_next,
@@ -39,9 +40,13 @@ fn test_decision_constructors_create_expected_variants() {
     let finish = CasDecision::<usize, &'static str, TestError>::finish("done");
     assert_eq!(finish, CasDecision::Finish { output: "done" });
 
-    let retry = CasDecision::<usize, &'static str, TestError>::retry(TestError("retry"));
+    let retry = CasDecision::<usize, &'static str, TestError>::retry(
+        TestError("retry"),
+    );
     assert_eq!(retry, CasDecision::Retry(TestError("retry")));
 
-    let abort = CasDecision::<usize, &'static str, TestError>::abort(TestError("abort"));
+    let abort = CasDecision::<usize, &'static str, TestError>::abort(
+        TestError("abort"),
+    );
     assert_eq!(abort, CasDecision::Abort(TestError("abort")));
 }

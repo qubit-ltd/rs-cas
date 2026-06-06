@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::sync::Arc;
 use std::sync::atomic::{
@@ -65,7 +63,10 @@ fn test_report_exposes_counts_ratios_and_limits() {
     assert_eq!(report.conflict_ratio(), 0.5);
     assert_eq!(report.retryable_failure_ratio(), 0.0);
     assert!(report.finished_at() >= report.started_at());
-    assert!(report.elapsed() <= report.finished_at().duration_since(report.started_at()));
+    assert!(
+        report.elapsed()
+            <= report.finished_at().duration_since(report.started_at())
+    );
 }
 
 /// Verifies contention thresholds are evaluated from report statistics.

@@ -1,17 +1,16 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Typed compare-and-swap executor for synchronous and asynchronous workflows.
 //!
 //! `CasExecutor<T, E>` binds the shared state type `T` and operation error type
 //! `E`. Each execution call introduces its own business output type `R`, so one
-//! executor configuration can serve multiple CAS operations over the same state.
+//! executor configuration can serve multiple CAS operations over the same
+//! state.
 
 #![deny(missing_docs)]
 #![deny(unsafe_op_in_unsafe_fn)]

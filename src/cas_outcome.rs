@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Combined CAS result and execution report.
 
 use std::fmt;
@@ -37,7 +35,10 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// A new [`CasOutcome`] wrapping both values.
     #[inline]
-    pub(crate) fn new(result: Result<CasSuccess<T, R>, CasError<T, E>>, report: CasExecutionReport) -> Self {
+    pub(crate) fn new(
+        result: Result<CasSuccess<T, R>, CasError<T, E>>,
+        report: CasExecutionReport,
+    ) -> Self {
         Self { result, report }
     }
 
@@ -91,14 +92,16 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// Tuple of the terminal result and the execution report.
     #[inline]
-    pub fn into_parts(self) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
+    pub fn into_parts(
+        self,
+    ) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
         (self.result, self.report)
     }
 
     /// Returns the success value or panics with the supplied message.
     ///
-    /// This mirrors [`Result::expect`] for call sites that only need the success
-    /// value during tests or examples.
+    /// This mirrors [`Result::expect`] for call sites that only need the
+    /// success value during tests or examples.
     ///
     /// # Parameters
     /// - `message`: Panic message used if the outcome is an error.

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
@@ -33,7 +31,9 @@ fn test_outcome_reports_success_updated() {
         .build()
         .expect("executor should build");
 
-    let outcome = executor.execute(&state, |current: &usize| CasDecision::update(*current + 1, ()));
+    let outcome = executor.execute(&state, |current: &usize| {
+        CasDecision::update(*current + 1, ())
+    });
     assert!(outcome.is_ok());
     assert!(!outcome.is_err());
     assert!(outcome.result().is_ok());
@@ -42,7 +42,10 @@ fn test_outcome_reports_success_updated() {
     let success = outcome.expect("execution should succeed");
 
     assert_eq!(report.outcome(), CasExecutionOutcome::SuccessUpdated);
-    assert_eq!(report_from_parts.outcome(), CasExecutionOutcome::SuccessUpdated);
+    assert_eq!(
+        report_from_parts.outcome(),
+        CasExecutionOutcome::SuccessUpdated
+    );
     assert!(result.is_ok());
     assert_eq!(success.into_output(), ());
 }

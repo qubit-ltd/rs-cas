@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::sync::atomic::{
     AtomicUsize,
@@ -87,7 +85,10 @@ fn test_execute_retries_conflict_and_calls_retry_hook() {
         .expect("second attempt should succeed");
 
     assert!(success.is_updated());
-    assert_eq!(**success.previous().expect("updated success has previous"), 1);
+    assert_eq!(
+        **success.previous().expect("updated success has previous"),
+        1
+    );
     assert_eq!(**success.current(), 2);
     assert_eq!(*success.output(), 11);
     assert_eq!(success.attempts(), 2);
@@ -146,16 +147,21 @@ fn test_execute_emits_contention_alert() {
     let alert_events = Arc::clone(&alerts);
     let thresholds = ContentionThresholds::new(2, 1, 0.5);
     let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
-        alert_events.lock().expect("alert events should be lockable").push((
-            alert.report().attempts_total(),
-            alert.report().conflicts(),
-            alert.thresholds(),
-        ));
+        alert_events
+            .lock()
+            .expect("alert events should be lockable")
+            .push((
+                alert.report().attempts_total(),
+                alert.report().conflicts(),
+                alert.thresholds(),
+            ));
     });
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .observability(CasObservabilityConfig::event_stream_with_alert(
+            thresholds,
+        ))
         .build()
         .expect("executor should build");
 
@@ -202,7 +208,9 @@ fn test_execute_isolates_event_listener_panics() {
     let success = executor
         .execute_with_hooks(
             &state,
-            |_current: &usize| CasDecision::<usize, &'static str, TestError>::finish("ok"),
+            |_current: &usize| {
+                CasDecision::<usize, &'static str, TestError>::finish("ok")
+            },
             hooks,
         )
         .expect("listener panic should be isolated");
@@ -266,7 +274,9 @@ fn test_execute_alert_mode_without_alert_hook_succeeds() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .observability(CasObservabilityConfig::event_stream_with_alert(
+            thresholds,
+        ))
         .build()
         .expect("executor should build");
 
@@ -299,7 +309,9 @@ fn test_execute_finish_returns_without_write() {
 
     let success = executor
         .execute(&state, |_current: &usize| {
-            CasDecision::<usize, NonCloneValue, TestError>::finish(NonCloneValue { value: "done" })
+            CasDecision::<usize, NonCloneValue, TestError>::finish(
+                NonCloneValue { value: "done" },
+            )
         })
         .expect("finish should succeed");
 
@@ -341,7 +353,11 @@ fn test_execute_abort_returns_error_and_calls_abort_hook() {
     let error = executor
         .execute_with_hooks(
             &state,
-            |_current: &usize| CasDecision::<usize, (), TestError>::abort(TestError("forbidden")),
+            |_current: &usize| {
+                CasDecision::<usize, (), TestError>::abort(TestError(
+                    "forbidden",
+                ))
+            },
             hooks,
         )
         .expect_err("abort should fail");
@@ -356,7 +372,8 @@ fn test_execute_abort_returns_error_and_calls_abort_hook() {
     );
 }
 
-/// Verifies retryable business failures exhaust attempts with the final error preserved.
+/// Verifies retryable business failures exhaust attempts with the final error
+/// preserved.
 ///
 /// # Parameters
 /// This test has no parameters.
@@ -381,7 +398,9 @@ fn test_execute_retry_exhausted_preserves_last_error() {
     assert_eq!(error.kind(), CasErrorKind::RetryExhausted);
     assert_eq!(error.attempts(), 2);
     assert_eq!(error.error(), Some(&TestError("busy")));
-    assert!(matches!(error.last_failure(), Some(failure) if failure.is_retry()));
+    assert!(
+        matches!(error.last_failure(), Some(failure) if failure.is_retry())
+    );
 }
 
 /// Verifies max-elapsed exhaustion preserves the last failure.
@@ -409,7 +428,10 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
         .expect_err("max elapsed should fail");
 
     assert_eq!(error.kind(), CasErrorKind::MaxOperationElapsedExceeded);
-    assert_eq!(error.last_failure().map(|failure| failure.is_retry()), Some(true));
+    assert_eq!(
+        error.last_failure().map(|failure| failure.is_retry()),
+        Some(true)
+    );
     assert_eq!(error.current().map(|current| **current), Some(11));
 }
 
@@ -469,7 +491,10 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
         .expect("second async attempt should succeed");
 
     assert_eq!(success.attempts(), 2);
-    assert_eq!(success.context().attempt_timeout(), Some(Duration::from_millis(10)));
+    assert_eq!(
+        success.context().attempt_timeout(),
+        Some(Duration::from_millis(10))
+    );
     assert_eq!(**success.current(), 1);
     assert_eq!(*success.output(), 100);
     assert_eq!(
@@ -519,7 +544,8 @@ async fn test_execute_async_timeout_abort_returns_attempt_timeout() {
 /// This test returns nothing.
 #[cfg(feature = "tokio")]
 #[tokio::test(start_paused = true)]
-async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout() {
+async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout()
+{
     let state = AtomicRef::from_value(8usize);
     let options = RetryOptions::new_with_attempt_timeout(
         3,
@@ -530,8 +556,8 @@ async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout()
         Some(AttemptTimeoutOption::abort(Duration::from_millis(10))),
     )
     .expect("retry options should be valid");
-    let executor =
-        CasExecutor::<usize, TestError>::from_options(options).expect("executor should build from retry options");
+    let executor = CasExecutor::<usize, TestError>::from_options(options)
+        .expect("executor should build from retry options");
 
     let error = executor
         .execute_async(&state, |_current: Arc<usize>| async move {
@@ -593,7 +619,9 @@ async fn test_execute_async_covers_decision_variants() {
     let conflict = executor
         .execute_async(&conflict_state, |current: Arc<usize>| {
             conflict_state.store(Arc::new(*current + 1));
-            async move { CasDecision::<usize, (), TestError>::update(*current + 2, ()) }
+            async move {
+                CasDecision::<usize, (), TestError>::update(*current + 2, ())
+            }
         })
         .await
         .expect_err("async conflict should exhaust attempts");

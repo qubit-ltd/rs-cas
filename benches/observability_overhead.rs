@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::hint::black_box;
 use std::sync::Arc;
@@ -31,7 +29,9 @@ const WARMUP_RUNS: usize = 2;
 const MEASURED_RUNS: usize = 9;
 
 fn main() {
-    println!("iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}");
+    println!(
+        "iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}"
+    );
 
     run_group("low_conflict", false);
     run_group("forced_conflict", true);
@@ -114,15 +114,27 @@ struct BenchResult {
     conflicts: u64,
 }
 
-fn measure_executor(executor: CasExecutor<usize, &'static str>, hooks: CasHooks, force_conflict: bool) -> BenchResult {
+fn measure_executor(
+    executor: CasExecutor<usize, &'static str>,
+    hooks: CasHooks,
+    force_conflict: bool,
+) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
-        let _ = run_executor_sample(executor.clone(), hooks.clone(), force_conflict);
+        let _ = run_executor_sample(
+            executor.clone(),
+            hooks.clone(),
+            force_conflict,
+        );
     }
 
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
     let mut last = None;
     for _ in 0..MEASURED_RUNS {
-        let result = run_executor_sample(executor.clone(), hooks.clone(), force_conflict);
+        let result = run_executor_sample(
+            executor.clone(),
+            hooks.clone(),
+            force_conflict,
+        );
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -151,7 +163,9 @@ fn run_executor_sample(
         let outcome = executor.execute_with_hooks(
             &state,
             |current: &usize| {
-                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
+                if force_conflict
+                    && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2)
+                {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
@@ -232,13 +246,23 @@ fn run_raw_sample(force_conflict: bool) -> BenchResult {
 }
 
 fn median(samples: &mut [f64]) -> f64 {
-    samples.sort_by(|left, right| left.partial_cmp(right).expect("benchmark samples should not be NaN"));
+    samples.sort_by(|left, right| {
+        left.partial_cmp(right)
+            .expect("benchmark samples should not be NaN")
+    });
     samples[samples.len() / 2]
 }
 
-fn print_row(name: &'static str, result: &BenchResult, raw_ops: Option<f64>, report_ops: Option<f64>) {
-    let raw_loss = raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
-    let report_loss = report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
+fn print_row(
+    name: &'static str,
+    result: &BenchResult,
+    raw_ops: Option<f64>,
+    report_ops: Option<f64>,
+) {
+    let raw_loss =
+        raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
+    let report_loss =
+        report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     println!(
         "{name:24} ops/s={:>10.0} ns/op={:>8.1} avg_attempts={:.3} conflicts={:<8} loss_vs_raw={} loss_vs_report_only={}",
         result.ops_per_sec,

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Ultra-light compare-and-swap primitives for hot `usize` state paths.
 //!
 //! This module provides [`FastCas`], a minimal executor over [`FastCasState`]
@@ -17,11 +15,11 @@
 //!
 //! ## Compared with [`CasExecutor`](crate::CasExecutor)
 //!
-//! [`CasExecutor`](crate::CasExecutor) carries typed state `T`, optional timeouts, observability,
-//! and richer outcomes. [`FastCas`] trades those features for predictable
-//! overhead: the operation closure returns [`FastCasDecision`] and may run
-//! **multiple times** after conflicts, so it must stay cheap and side-effect
-//! free except through the returned decision.
+//! [`CasExecutor`](crate::CasExecutor) carries typed state `T`, optional
+//! timeouts, observability, and richer outcomes. [`FastCas`] trades those
+//! features for predictable overhead: the operation closure returns
+//! [`FastCasDecision`] and may run **multiple times** after conflicts, so it
+//! must stay cheap and side-effect free except through the returned decision.
 //!
 //! ## Operation shapes
 //!

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::time::Duration;
 
@@ -53,7 +51,10 @@ fn test_builder_default_and_delay_helpers_work() {
         .expect("executor should build");
 
     assert_eq!(executor.options().max_attempts(), 3);
-    assert_eq!(executor.options().delay(), &RetryDelay::fixed(Duration::from_millis(1)));
+    assert_eq!(
+        executor.options().delay(),
+        &RetryDelay::fixed(Duration::from_millis(1))
+    );
     assert_eq!(executor.options().jitter(), RetryJitter::factor(0.0));
     assert_eq!(
         executor.options().attempt_timeout(),
@@ -79,7 +80,8 @@ fn test_builder_options_and_random_delay_work() {
     )
     .expect("retry options should be valid");
     let executor =
-        CasExecutor::<usize, TestError>::from_options(options.clone()).expect("executor should build from options");
+        CasExecutor::<usize, TestError>::from_options(options.clone())
+            .expect("executor should build from options");
 
     assert_eq!(executor.options(), &options);
 
@@ -115,7 +117,8 @@ fn test_builder_options_preserves_attempt_timeout_option() {
     .expect("retry options should be valid");
 
     let executor =
-        CasExecutor::<usize, TestError>::from_options(options.clone()).expect("executor should build from options");
+        CasExecutor::<usize, TestError>::from_options(options.clone())
+            .expect("executor should build from options");
 
     assert_eq!(executor.options(), &options);
     assert_eq!(
@@ -134,7 +137,9 @@ fn test_builder_options_preserves_attempt_timeout_option() {
 #[test]
 fn test_builder_attempt_timeout_option_work() {
     let executor = CasExecutor::<usize, TestError>::builder()
-        .attempt_timeout_option(Some(AttemptTimeoutOption::retry(Duration::from_millis(9))))
+        .attempt_timeout_option(Some(AttemptTimeoutOption::retry(
+            Duration::from_millis(9),
+        )))
         .build()
         .expect("executor should build");
 
@@ -153,16 +158,22 @@ fn test_builder_attempt_timeout_option_work() {
 /// This test returns nothing.
 #[test]
 fn test_builder_strategies_work() {
-    let contention_adaptive = CasExecutor::<usize, TestError>::contention_adaptive();
+    let contention_adaptive =
+        CasExecutor::<usize, TestError>::contention_adaptive();
     assert_eq!(
         contention_adaptive.options().max_attempts(),
         CONTENTION_ADAPTIVE_MAX_ATTEMPTS
     );
 
     let latency_first = CasExecutor::<usize, TestError>::latency_first();
-    assert_eq!(latency_first.options().max_attempts(), LATENCY_FIRST_MAX_ATTEMPTS);
+    assert_eq!(
+        latency_first.options().max_attempts(),
+        LATENCY_FIRST_MAX_ATTEMPTS
+    );
 
-    let reliability_first = CasExecutor::<usize, TestError>::with_strategy(CasStrategy::ReliabilityFirst);
+    let reliability_first = CasExecutor::<usize, TestError>::with_strategy(
+        CasStrategy::ReliabilityFirst,
+    );
     assert_eq!(
         reliability_first.options().max_attempts(),
         RELIABILITY_FIRST_MAX_ATTEMPTS
@@ -180,7 +191,10 @@ fn test_builder_strategies_work() {
 fn test_builder_observability_settings_work() {
     let thresholds = ContentionThresholds::new(3, 1, 0.5);
     let executor = CasExecutor::<usize, TestError>::builder()
-        .observability(CasObservabilityConfig::event_stream().with_listener_panic_policy(ListenerPanicPolicy::Isolate))
+        .observability(
+            CasObservabilityConfig::event_stream()
+                .with_listener_panic_policy(ListenerPanicPolicy::Isolate),
+        )
         .alert_on_contention(thresholds)
         .build()
         .expect("executor should build");
@@ -193,7 +207,10 @@ fn test_builder_observability_settings_work() {
         executor.observability().listener_panic_policy(),
         ListenerPanicPolicy::Isolate
     );
-    assert_eq!(executor.observability().contention_thresholds(), Some(thresholds));
+    assert_eq!(
+        executor.observability().contention_thresholds(),
+        Some(thresholds)
+    );
 }
 
 /// Verifies listener panic isolation is installed by builder helpers.
@@ -276,7 +293,10 @@ fn test_builder_default_and_reliability_first_work() {
     let default_executor = CasBuilder::<usize, TestError>::default()
         .build()
         .expect("default builder should build");
-    assert_eq!(default_executor.options().max_attempts(), DEFAULT_CAS_MAX_ATTEMPTS);
+    assert_eq!(
+        default_executor.options().max_attempts(),
+        DEFAULT_CAS_MAX_ATTEMPTS
+    );
 
     let reliability_executor = CasExecutor::<usize, TestError>::builder()
         .build_reliability_first()
@@ -287,5 +307,8 @@ fn test_builder_default_and_reliability_first_work() {
     );
 
     let convenience = CasExecutor::<usize, TestError>::reliability_first();
-    assert_eq!(convenience.options().max_attempts(), RELIABILITY_FIRST_MAX_ATTEMPTS);
+    assert_eq!(
+        convenience.options().max_attempts(),
+        RELIABILITY_FIRST_MAX_ATTEMPTS
+    );
 }

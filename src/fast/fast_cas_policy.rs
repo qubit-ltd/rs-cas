@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Retry policy for fast compare-and-swap operations.
 
 /// Retry policy used by [`crate::FastCas`] when compare-and-swap loses a race.
@@ -90,7 +88,9 @@ impl FastCasPolicy {
         match self {
             Self::Once => 1,
             Self::Spin { max_attempts } => normalize_attempts(max_attempts),
-            Self::SpinYield { max_attempts, .. } => normalize_attempts(max_attempts),
+            Self::SpinYield { max_attempts, .. } => {
+                normalize_attempts(max_attempts)
+            }
         }
     }
 
@@ -104,7 +104,9 @@ impl FastCasPolicy {
     #[inline]
     pub const fn should_yield_before(self, next_attempt: u32) -> bool {
         match self {
-            Self::SpinYield { spin_attempts, .. } => next_attempt > spin_attempts,
+            Self::SpinYield { spin_attempts, .. } => {
+                next_attempt > spin_attempts
+            }
             Self::Once | Self::Spin { .. } => false,
         }
     }

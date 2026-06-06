@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Builder for [`crate::CasExecutor`].
 
 use std::marker::PhantomData;
@@ -93,12 +91,16 @@ impl<T, E> CasBuilder<T, E> {
     /// Sets the maximum cumulative user operation elapsed-time budget.
     ///
     /// # Parameters
-    /// - `max_operation_elapsed`: Optional cumulative user operation time budget.
+    /// - `max_operation_elapsed`: Optional cumulative user operation time
+    ///   budget.
     ///
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn max_operation_elapsed(mut self, max_operation_elapsed: Option<Duration>) -> Self {
+    pub fn max_operation_elapsed(
+        mut self,
+        max_operation_elapsed: Option<Duration>,
+    ) -> Self {
         self.retry = self.retry.max_operation_elapsed(max_operation_elapsed);
         self
     }
@@ -111,7 +113,10 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn max_total_elapsed(mut self, max_total_elapsed: Option<Duration>) -> Self {
+    pub fn max_total_elapsed(
+        mut self,
+        max_total_elapsed: Option<Duration>,
+    ) -> Self {
         self.retry = self.retry.max_total_elapsed(max_total_elapsed);
         self
     }
@@ -186,7 +191,12 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn exponential_backoff_with_multiplier(self, initial: Duration, max: Duration, multiplier: f64) -> Self {
+    pub fn exponential_backoff_with_multiplier(
+        self,
+        initial: Duration,
+        max: Duration,
+        multiplier: f64,
+    ) -> Self {
         self.delay(RetryDelay::exponential(initial, max, multiplier))
     }
 
@@ -223,7 +233,10 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn attempt_timeout(mut self, attempt_timeout: Option<Duration>) -> Self {
+    pub fn attempt_timeout(
+        mut self,
+        attempt_timeout: Option<Duration>,
+    ) -> Self {
         self.retry = self.retry.attempt_timeout(attempt_timeout);
         self
     }
@@ -236,7 +249,10 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn attempt_timeout_option(mut self, attempt_timeout: Option<AttemptTimeoutOption>) -> Self {
+    pub fn attempt_timeout_option(
+        mut self,
+        attempt_timeout: Option<AttemptTimeoutOption>,
+    ) -> Self {
         self.retry = self.retry.attempt_timeout_option(attempt_timeout);
         self
     }
@@ -275,7 +291,9 @@ impl<T, E> CasBuilder<T, E> {
             .max_operation_elapsed(Some(profile.max_operation_elapsed()))
             .max_total_elapsed(profile.max_total_elapsed());
         if let Some((initial, max, jitter)) = strategy.backoff() {
-            builder.exponential_backoff(initial, max).jitter_factor(jitter)
+            builder
+                .exponential_backoff(initial, max)
+                .jitter_factor(jitter)
         } else {
             builder.no_delay()
         }
@@ -289,7 +307,10 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn observability(mut self, observability: CasObservabilityConfig) -> Self {
+    pub fn observability(
+        mut self,
+        observability: CasObservabilityConfig,
+    ) -> Self {
         self.observability = observability;
         self
     }
@@ -302,8 +323,12 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline]
-    pub fn alert_on_contention(mut self, thresholds: ContentionThresholds) -> Self {
-        self.observability = self.observability.with_contention_thresholds(thresholds);
+    pub fn alert_on_contention(
+        mut self,
+        thresholds: ContentionThresholds,
+    ) -> Self {
+        self.observability =
+            self.observability.with_contention_thresholds(thresholds);
         self
     }
 
@@ -329,14 +354,19 @@ impl<T, E> CasBuilder<T, E> {
     /// invalid.
     pub fn build(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
         let retry = self.retry.build()?;
-        Ok(CasExecutor::new(retry.options().clone(), self.observability))
+        Ok(CasExecutor::new(
+            retry.options().clone(),
+            self.observability,
+        ))
     }
 
     /// Builds one executor with the contention-adaptive strategy.
     ///
     /// # Returns
     /// A configured [`CasExecutor`] suitable for contended writers.
-    pub fn build_contention_adaptive(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
+    pub fn build_contention_adaptive(
+        self,
+    ) -> Result<CasExecutor<T, E>, RetryConfigError> {
         self.strategy(CasStrategy::ContentionAdaptive).build()
     }
 
@@ -344,7 +374,9 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for low latency.
-    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
+    pub fn build_latency_first(
+        self,
+    ) -> Result<CasExecutor<T, E>, RetryConfigError> {
         self.strategy(CasStrategy::LatencyFirst).build()
     }
 
@@ -352,7 +384,9 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for long retry windows.
-    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
+    pub fn build_reliability_first(
+        self,
+    ) -> Result<CasExecutor<T, E>, RetryConfigError> {
         self.strategy(CasStrategy::ReliabilityFirst).build()
     }
 }

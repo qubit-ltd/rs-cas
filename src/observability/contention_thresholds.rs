@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 /// Thresholds used to classify one execution as hotly contended.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,7 +30,11 @@ impl ContentionThresholds {
     /// # Returns
     /// A normalized [`ContentionThresholds`] value.
     #[inline]
-    pub fn new(min_attempts: u32, min_conflicts: u32, conflict_ratio: f64) -> Self {
+    pub fn new(
+        min_attempts: u32,
+        min_conflicts: u32,
+        conflict_ratio: f64,
+    ) -> Self {
         Self {
             min_attempts,
             min_conflicts,

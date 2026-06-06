@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
@@ -32,7 +30,9 @@ fn test_success_accessors_cover_updated_and_finished_variants() {
         .expect("executor should build");
 
     let updated = executor
-        .execute(&state, |current: &usize| CasDecision::update(*current + 1, "updated"))
+        .execute(&state, |current: &usize| {
+            CasDecision::update(*current + 1, "updated")
+        })
         .expect("update should succeed");
     assert!(updated.previous().is_some());
     assert_eq!(updated.clone().into_output(), "updated");

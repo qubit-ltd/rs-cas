@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::time::{
     Duration,
@@ -29,7 +27,8 @@ pub(crate) struct CasReportBuilder {
 }
 
 impl CasReportBuilder {
-    /// Starts one report accumulator with the current instant and zeroed counters.
+    /// Starts one report accumulator with the current instant and zeroed
+    /// counters.
     ///
     /// # Returns
     /// A fresh [`CasReportBuilder`] ready to record statistics during a CAS

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Terminal CAS errors.
 
 use std::error::Error;
@@ -50,13 +48,20 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// A [`CasError`] wrapper.
     #[inline]
-    pub(crate) fn new(inner: RetryError<CasAttemptFailure<T, E>>, timeout_current: Option<Arc<T>>) -> Self {
+    pub(crate) fn new(
+        inner: RetryError<CasAttemptFailure<T, E>>,
+        timeout_current: Option<Arc<T>>,
+    ) -> Self {
         let (reason, raw_last_failure, retry_context) = inner.into_parts();
         let context = CasContext::new(&retry_context);
         let last_failure = match raw_last_failure {
             Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout) => timeout_current.map(CasAttemptFailure::timeout),
-            Some(AttemptFailure::Panic(_)) | Some(AttemptFailure::Executor(_)) | None => None,
+            Some(AttemptFailure::Timeout) => {
+                timeout_current.map(CasAttemptFailure::timeout)
+            }
+            Some(AttemptFailure::Panic(_))
+            | Some(AttemptFailure::Executor(_))
+            | None => None,
         };
         let kind = Self::classify_kind(reason, last_failure.as_ref());
         Self {
@@ -75,21 +80,34 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Returns
     /// Derived high-level CAS error kind.
-    fn classify_kind(reason: RetryErrorReason, last_failure: Option<&CasAttemptFailure<T, E>>) -> CasErrorKind {
+    fn classify_kind(
+        reason: RetryErrorReason,
+        last_failure: Option<&CasAttemptFailure<T, E>>,
+    ) -> CasErrorKind {
         match reason {
             RetryErrorReason::Aborted => match last_failure {
-                Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
+                Some(CasAttemptFailure::Timeout { .. }) => {
+                    CasErrorKind::AttemptTimeout
+                }
                 _ => CasErrorKind::Abort,
             },
             RetryErrorReason::AttemptsExceeded
             | RetryErrorReason::UnsupportedOperation
             | RetryErrorReason::WorkerStillRunning => match last_failure {
-                Some(CasAttemptFailure::Conflict { .. }) => CasErrorKind::Conflict,
-                Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
+                Some(CasAttemptFailure::Conflict { .. }) => {
+                    CasErrorKind::Conflict
+                }
+                Some(CasAttemptFailure::Timeout { .. }) => {
+                    CasErrorKind::AttemptTimeout
+                }
                 _ => CasErrorKind::RetryExhausted,
             },
-            RetryErrorReason::MaxOperationElapsedExceeded => CasErrorKind::MaxOperationElapsedExceeded,
-            RetryErrorReason::MaxTotalElapsedExceeded => CasErrorKind::MaxTotalElapsedExceeded,
+            RetryErrorReason::MaxOperationElapsedExceeded => {
+                CasErrorKind::MaxOperationElapsedExceeded
+            }
+            RetryErrorReason::MaxTotalElapsedExceeded => {
+                CasErrorKind::MaxTotalElapsedExceeded
+            }
         }
     }
 
@@ -198,8 +216,12 @@ where
             CasErrorKind::Conflict => "CAS conflicts exhausted",
             CasErrorKind::RetryExhausted => "CAS retryable failures exhausted",
             CasErrorKind::AttemptTimeout => "CAS attempt timed out",
-            CasErrorKind::MaxOperationElapsedExceeded => "CAS max operation elapsed exceeded",
-            CasErrorKind::MaxTotalElapsedExceeded => "CAS max total elapsed exceeded",
+            CasErrorKind::MaxOperationElapsedExceeded => {
+                "CAS max operation elapsed exceeded"
+            }
+            CasErrorKind::MaxTotalElapsedExceeded => {
+                "CAS max total elapsed exceeded"
+            }
         };
         write!(f, "{message} after {} attempt(s)", self.attempts())?;
         if let Some(failure) = self.last_failure() {

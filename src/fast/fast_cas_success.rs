@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Successful fast compare-and-swap results.
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -42,7 +40,12 @@ impl<R> FastCasSuccess<R> {
     /// # Returns
     /// A successful update result value.
     #[inline]
-    pub(crate) const fn updated(previous: usize, current: usize, output: R, attempts: u32) -> Self {
+    pub(crate) const fn updated(
+        previous: usize,
+        current: usize,
+        output: R,
+        attempts: u32,
+    ) -> Self {
         Self {
             previous,
             current,
@@ -62,7 +65,11 @@ impl<R> FastCasSuccess<R> {
     /// # Returns
     /// A successful finish result value.
     #[inline]
-    pub(crate) const fn finished(current: usize, output: R, attempts: u32) -> Self {
+    pub(crate) const fn finished(
+        current: usize,
+        output: R,
+        attempts: u32,
+    ) -> Self {
         Self {
             previous: current,
             current,

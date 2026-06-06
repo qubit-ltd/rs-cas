@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::sync::{
     Arc,
@@ -68,10 +66,25 @@ fn test_hooks_accept_function_traits() {
         .expect("executor should build");
 
     let success = executor
-        .execute_with_hooks(&state, |_current: &usize| CasDecision::finish(9usize), hooks)
+        .execute_with_hooks(
+            &state,
+            |_current: &usize| CasDecision::finish(9usize),
+            hooks,
+        )
         .expect("finish should succeed");
 
     assert_eq!(*success.output(), 9);
-    assert_eq!(*attempts.lock().expect("success attempts should be lockable"), vec![1]);
-    assert!(attempts.lock().expect("success attempts should be lockable").len() == 1);
+    assert_eq!(
+        *attempts
+            .lock()
+            .expect("success attempts should be lockable"),
+        vec![1]
+    );
+    assert!(
+        attempts
+            .lock()
+            .expect("success attempts should be lockable")
+            .len()
+            == 1
+    );
 }

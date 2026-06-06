@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use std::error::Error;
 use std::sync::Arc;
@@ -53,7 +51,10 @@ fn test_cas_error_display_and_source_work() {
     assert!(error.to_string().contains("retryable failures exhausted"));
     assert_eq!(error.reason(), RetryErrorReason::AttemptsExceeded);
     assert!(format!("{error:?}").contains("CasError"));
-    assert_eq!(error.source().map(ToString::to_string), Some("still-busy".to_string()));
+    assert_eq!(
+        error.source().map(ToString::to_string),
+        Some("still-busy".to_string())
+    );
     assert_eq!(error.error(), Some(&TestError("still-busy")));
     assert_eq!(error.current().map(|current| **current), Some(3));
 }
@@ -80,7 +81,10 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
     assert_eq!(abort.kind(), CasErrorKind::Abort);
     assert_eq!(abort.reason(), RetryErrorReason::Aborted);
     assert!(abort.to_string().contains("CAS aborted"));
-    assert_eq!(abort.source().map(ToString::to_string), Some("blocked".to_string()));
+    assert_eq!(
+        abort.source().map(ToString::to_string),
+        Some("blocked".to_string())
+    );
 
     let conflict_state = AtomicRef::from_value(10usize);
     let conflicts = AtomicUsize::new(0);
@@ -108,10 +112,11 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .max_operation_elapsed(Some(Duration::from_millis(1)))
         .build()
         .expect("executor should build");
-    let op_outcome = elapsed_executor.execute(&elapsed_state, |_current: &usize| {
-        std::thread::sleep(Duration::from_millis(2));
-        CasDecision::<usize, (), TestError>::retry(TestError("slow"))
-    });
+    let op_outcome =
+        elapsed_executor.execute(&elapsed_state, |_current: &usize| {
+            std::thread::sleep(Duration::from_millis(2));
+            CasDecision::<usize, (), TestError>::retry(TestError("slow"))
+        });
     assert_eq!(
         op_outcome.report().outcome(),
         CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
@@ -120,8 +125,15 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .into_result()
         .expect_err("operation elapsed budget should fail");
     assert_eq!(elapsed.kind(), CasErrorKind::MaxOperationElapsedExceeded);
-    assert_eq!(elapsed.reason(), RetryErrorReason::MaxOperationElapsedExceeded);
-    assert!(elapsed.to_string().contains("max operation elapsed exceeded"));
+    assert_eq!(
+        elapsed.reason(),
+        RetryErrorReason::MaxOperationElapsedExceeded
+    );
+    assert!(
+        elapsed
+            .to_string()
+            .contains("max operation elapsed exceeded")
+    );
 
     let total_state = AtomicRef::from_value(13usize);
     let total_executor = CasExecutor::<usize, TestError>::builder()
@@ -131,9 +143,10 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .max_total_elapsed(Some(Duration::ZERO))
         .build()
         .expect("executor should build");
-    let total_outcome = total_executor.execute(&total_state, |_current: &usize| {
-        CasDecision::<usize, (), TestError>::retry(TestError("x"))
-    });
+    let total_outcome =
+        total_executor.execute(&total_state, |_current: &usize| {
+            CasDecision::<usize, (), TestError>::retry(TestError("x"))
+        });
     assert_eq!(
         total_outcome.report().outcome(),
         CasExecutionOutcome::ErrorMaxTotalElapsedExceeded

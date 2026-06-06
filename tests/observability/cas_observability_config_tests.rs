@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use qubit_cas::{
     CasObservabilityConfig,
@@ -24,7 +22,10 @@ use qubit_cas::{
 /// This test returns nothing.
 #[test]
 fn test_observability_config_report_only_equals_default() {
-    assert_eq!(CasObservabilityConfig::report_only(), CasObservabilityConfig::default());
+    assert_eq!(
+        CasObservabilityConfig::report_only(),
+        CasObservabilityConfig::default()
+    );
 }
 
 /// Verifies event-stream helpers and builder mutators.
@@ -77,12 +78,18 @@ fn test_observability_config_mode_switches_clear_alert_thresholds() {
 
     let event_stream = config.clone().with_event_stream();
     assert_eq!(event_stream.mode(), CasObservabilityMode::EventStream);
-    assert_eq!(event_stream.listener_panic_policy(), ListenerPanicPolicy::Isolate);
+    assert_eq!(
+        event_stream.listener_panic_policy(),
+        ListenerPanicPolicy::Isolate
+    );
     assert!(event_stream.contention_thresholds().is_none());
 
     let report_only = config.with_report_only();
     assert_eq!(report_only.mode(), CasObservabilityMode::ReportOnly);
-    assert_eq!(report_only.listener_panic_policy(), ListenerPanicPolicy::Isolate);
+    assert_eq!(
+        report_only.listener_panic_policy(),
+        ListenerPanicPolicy::Isolate
+    );
     assert!(report_only.contention_thresholds().is_none());
 }
 

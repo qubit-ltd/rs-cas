@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 
 use crate::report::CasExecutionReport;
 
@@ -31,7 +29,10 @@ impl CasAlert {
     /// # Returns
     /// A new [`CasAlert`] value.
     #[inline]
-    pub(crate) fn contention(report: CasExecutionReport, thresholds: ContentionThresholds) -> Self {
+    pub(crate) fn contention(
+        report: CasExecutionReport,
+        thresholds: ContentionThresholds,
+    ) -> Self {
         Self { report, thresholds }
     }
 

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2025 - 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Compare-and-swap executor for compact [`usize`] state codes.
 //!
 //! The main type is [`FastCas`]. See the [`crate::fast`] module documentation
@@ -35,8 +33,8 @@ use super::{
 ///   errors returned as [`FastCasDecision::Abort`] do **not** trigger retries.
 /// - Expects the operation closure passed to [`Self::execute`] /
 ///   [`Self::update_by`] to be safe to call again after conflicts: re-read the
-///   current code from the closure argument each time; avoid non-idempotent side
-///   effects inside the closure.
+///   current code from the closure argument each time; avoid non-idempotent
+///   side effects inside the closure.
 ///
 /// [`FastCas::compare_update`] and [`FastCas::compare_update_with`] perform a
 /// **single** CAS attempt per call and **ignore** the configured policy (no
@@ -218,7 +216,11 @@ impl FastCas {
     /// assert_eq!(*ok.output(), "first");
     /// ```
     #[inline(always)]
-    pub fn execute<R, E, F>(&self, state: &FastCasState, operation: F) -> Result<FastCasSuccess<R>, FastCasError<E>>
+    pub fn execute<R, E, F>(
+        &self,
+        state: &FastCasState,
+        operation: F,
+    ) -> Result<FastCasSuccess<R>, FastCasError<E>>
     where
         F: Fn(usize) -> FastCasDecision<R, E>,
     {
@@ -227,20 +229,26 @@ impl FastCas {
         loop {
             let current = state.load();
             match operation(current) {
-                FastCasDecision::Update { next, output } => match state.compare_set(current, next) {
-                    Ok(()) => {
-                        return Ok(FastCasSuccess::updated(current, next, output, attempts));
+                FastCasDecision::Update { next, output } => {
+                    match state.compare_set(current, next) {
+                        Ok(()) => {
+                            return Ok(FastCasSuccess::updated(
+                                current, next, output, attempts,
+                            ));
+                        }
+                        Err(actual) if attempts >= max_attempts => {
+                            return Err(FastCasError::Conflict {
+                                current: actual,
+                                attempts,
+                            });
+                        }
+                        Err(_) => {}
                     }
-                    Err(actual) if attempts >= max_attempts => {
-                        return Err(FastCasError::Conflict {
-                            current: actual,
-                            attempts,
-                        });
-                    }
-                    Err(_) => {}
-                },
+                }
                 FastCasDecision::Finish { output } => {
-                    return Ok(FastCasSuccess::finished(current, output, attempts));
+                    return Ok(FastCasSuccess::finished(
+                        current, output, attempts,
+                    ));
                 }
                 FastCasDecision::Abort { error } => {
                     return Err(FastCasError::Abort {
@@ -293,7 +301,11 @@ impl FastCas {
     /// assert_eq!(ok.into_output(), 3);
     /// ```
     #[inline(always)]
-    pub fn update_by<R, E, F>(&self, state: &FastCasState, operation: F) -> Result<FastCasSuccess<R>, FastCasError<E>>
+    pub fn update_by<R, E, F>(
+        &self,
+        state: &FastCasState,
+        operation: F,
+    ) -> Result<FastCasSuccess<R>, FastCasError<E>>
     where
         F: Fn(usize) -> Result<(usize, R), E>,
     {
