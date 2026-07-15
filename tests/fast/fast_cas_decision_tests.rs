@@ -22,7 +22,7 @@ fn test_fast_cas_decision_constructors_create_variants() {
         FastCasDecision::Finish { output: "done" }
     );
     assert_eq!(
-        FastCasDecision::<usize, _>::abort("error"),
+        FastCasDecision::<u64, _>::abort("error"),
         FastCasDecision::Abort { error: "error" }
     );
 }

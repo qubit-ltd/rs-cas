@@ -46,6 +46,7 @@ pub use executor::{
     CasExecutor,
 };
 pub use fast::{
+    CasCell,
     FastCas,
     FastCasDecision,
     FastCasError,

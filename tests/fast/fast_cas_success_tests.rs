@@ -12,14 +12,14 @@ use qubit_cas::{
     FastCasState,
 };
 
-type TestDecision = FastCasDecision<usize, &'static str>;
-type TestOperation = fn(usize) -> TestDecision;
+type TestDecision = FastCasDecision<u64, &'static str>;
+type TestOperation = fn(u64) -> TestDecision;
 
-fn increment(current: usize) -> TestDecision {
+fn increment(current: u64) -> TestDecision {
     FastCasDecision::update(current + 1, current + 1)
 }
 
-fn finish_current(current: usize) -> TestDecision {
+fn finish_current(current: u64) -> TestDecision {
     FastCasDecision::finish(current)
 }
 

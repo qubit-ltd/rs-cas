@@ -15,7 +15,10 @@ use std::time::Instant;
 
 use qubit_cas::CasEvent;
 use qubit_cas::event::CasEventHook;
-use qubit_function::Consumer;
+use qubit_function::{
+    ArcConsumer,
+    Consumer,
+};
 
 /// Accepts an event hook alias to validate public API typing.
 ///
@@ -37,12 +40,11 @@ fn accept_event_hook(_hook: CasEventHook) {}
 fn test_event_hook_alias_accepts_arc_consumer() {
     let observed = Arc::new(AtomicBool::new(false));
     let observed_flag = Arc::clone(&observed);
-    let hook: CasEventHook = (move |event: &CasEvent| {
+    let hook: CasEventHook = ArcConsumer::new(move |event: &CasEvent| {
         if matches!(event, CasEvent::ExecutionStarted { .. }) {
             observed_flag.store(true, Ordering::SeqCst);
         }
-    })
-    .into_arc();
+    });
     accept_event_hook(hook.clone());
 
     hook.accept(&CasEvent::ExecutionStarted {

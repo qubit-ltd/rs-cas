@@ -48,16 +48,17 @@ expressed as an explicit, typed decision.
   behavior.
 - **Structured results**: `CasSuccess`, `CasError`, and `CasAttemptFailure`
   expose the final state, previous state, output, error kind, and last failure.
-- **FastCas**: ultra-light CAS over compact `usize` state codes (`FastCasState`)
-  for hot paths: no allocation, hooks, or execution reports, and only
-  compare-and-swap conflicts are retried (`spin`, `spin-yield`, or
-  single-attempt policies).
+- **FastCas compatibility exports**: `CasCell`, `FastCas`, and related `u64`
+  types are implemented by the standalone
+  [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) crate and
+  re-exported for compatibility. New lightweight-only consumers should depend
+  on `qubit-fast-cas` directly.
 
 ## Installation
 
 ```toml
 [dependencies]
-qubit-cas = "0.8"
+qubit-cas = "0.9"
 ```
 
 `qubit-cas` expects the shared state to be held in `qubit_atomic::AtomicRef<T>`.
@@ -68,7 +69,7 @@ Enable asynchronous execution with:
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.8", features = ["tokio"] }
+qubit-cas = { version = "0.9", features = ["tokio"] }
 ```
 
 Optional features:
@@ -238,30 +239,47 @@ prioritizes "succeed eventually" over "return fast", use `reliability_first()`.
 ## Fast CAS for State Codes
 
 `FastCas` is the low-level CAS path for shared state that is already encoded as
-a compact `usize`. It is designed for state machines, executors, thread-pool
+a compact `u64`. It is designed for state machines, executors, thread-pool
 internals, and other hot paths where state is a numeric code and transitions
 must stay allocation-free.
 
 The regular `CasExecutor` works with immutable `Arc<T>` snapshots and provides
 business retry, hooks, reports, async execution, timeout handling, and contention
 observation. `FastCas` deliberately omits those facilities. Each attempt only
-loads the current `usize`, asks the caller for a transition decision, and tries
+loads the current `u64`, asks the caller for a transition decision, and tries
 one atomic compare-and-set for that observed value. The smaller surface keeps
 the fast path predictable and suitable for tight state-transition loops.
 
 | Need | Use |
 | --- | --- |
 | Rich snapshots, reports, hooks, async support, timeout handling, or business-level retry | `CasExecutor` |
-| Encoded `usize` state, allocation-free execution, no report construction, and only CAS-conflict retry | `FastCas` |
+| Encoded `u64` state, allocation-free execution, no report construction, and only CAS-conflict retry | `FastCas` |
 
 The core types are:
 
-- `FastCasState`: a semantic alias for `qubit_atomic::Atomic<usize>`.
+- `CasCell`: owns one atomic `u64` and provides primitive operations plus
+  unbounded `update` and `try_update` CAS loops.
+- `FastCasState`: a compatibility alias for `CasCell`.
 - `FastCas`: a reusable executor carrying only a `FastCasPolicy`.
 - `FastCasPolicy`: single attempt, bounded spin, or bounded spin-then-yield.
 - `FastCasDecision`: `Update`, `Finish`, or `Abort` for each observed state.
 - `FastCasSuccess`: previous state, current state, output, and attempt count.
 - `FastCasError`: either caller-requested `Abort` or retry-budget `Conflict`.
+
+When conflicts should remain an implementation detail, use `CasCell` directly:
+
+```rust
+use qubit_cas::CasCell;
+
+let state = CasCell::new(10);
+let previous = state.update(|current| (current + 1, current));
+
+assert_eq!(previous, 10);
+assert_eq!(state.load(), 11);
+```
+
+`CasCell` update closures can run more than once after concurrent conflicts.
+Keep them cheap and avoid non-idempotent side effects.
 
 ```rust
 use qubit_cas::{
@@ -294,9 +312,9 @@ use qubit_cas::{
     FastCasState,
 };
 
-const IDLE: usize = 0;
-const RUNNING: usize = 1;
-const DONE: usize = 2;
+const IDLE: u64 = 0;
+const RUNNING: u64 = 1;
+const DONE: u64 = 2;
 
 let state = FastCasState::new(IDLE);
 let cas = FastCas::spin(8);
@@ -329,6 +347,15 @@ recomputation from a different observed state.
 `FastCasPolicy::spin_yield(spin_attempts, max_attempts)` spins first and calls
 `thread::yield_now()` before later attempts. Zero attempt counts are normalized
 to one, so every policy can make progress from at least one observed state.
+
+### Migrating from qubit-cas 0.8
+
+Fast CAS state values changed from `usize` to `u64`. `FastCasState` also changed
+from an alias for `qubit_atomic::Atomic<usize>` to an alias for `CasCell`.
+Primitive `load`, `store`, `swap`, and `compare_set` calls remain available;
+code that used other `Atomic` methods such as `fetch_add`, `compare_set_weak`,
+or `inner` should migrate to `CasCell::update`/`try_update` or explicitly own a
+separate atomic type when those lower-level operations are required.
 
 ## Retry Configuration
 
@@ -452,8 +479,9 @@ async fn main() {
   event stream with contention alerts.
 - `ContentionThresholds`: classifies hot contention from attempts, conflicts,
   and conflict ratio.
-- `FastCas`: ultra-light CAS executor for `usize` state codes.
-- `FastCasState`: semantic alias for `Atomic<usize>` used with `FastCas`.
+- `CasCell`: atomic `u64` state with unbounded functional CAS updates.
+- `FastCas`: ultra-light CAS executor for `u64` state codes.
+- `FastCasState`: compatibility alias for `CasCell` used with `FastCas`.
 - `FastCasDecision`, `FastCasSuccess`, `FastCasError`, and `FastCasPolicy`:
   decision, result, failure, and retry-policy types for the fast path.
 
@@ -463,7 +491,8 @@ async fn main() {
 - `src/executor`: builder and synchronous/asynchronous CAS executor.
 - `src/event`: execution context and lifecycle hooks.
 - `src/error`: attempt-level and terminal CAS errors.
-- `src/fast`: ultra-light CAS primitives for compact `usize` state codes.
+- `src/fast`: compatibility re-exports from the standalone
+  `qubit-fast-cas` crate.
 - `src/observability`: observability modes, contention thresholds, and alerts.
 - `src/outcome` and `src/report`: execution result wrapper and observability
   reports.

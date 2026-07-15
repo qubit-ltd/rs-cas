@@ -15,27 +15,27 @@ use qubit_cas::{
 };
 use std::cell::Cell;
 
-type TestDecision = FastCasDecision<usize, &'static str>;
-type TestOperation = fn(usize) -> TestDecision;
-type TestUpdateOperation = fn(usize) -> Result<(usize, usize), &'static str>;
+type TestDecision = FastCasDecision<u64, &'static str>;
+type TestOperation = fn(u64) -> TestDecision;
+type TestUpdateOperation = fn(u64) -> Result<(u64, u64), &'static str>;
 
-fn increment(current: usize) -> TestDecision {
+fn increment(current: u64) -> TestDecision {
     FastCasDecision::update(current + 1, current + 1)
 }
 
-fn finish_current(current: usize) -> TestDecision {
+fn finish_current(current: u64) -> TestDecision {
     FastCasDecision::finish(current)
 }
 
-fn abort_state(_current: usize) -> TestDecision {
+fn abort_state(_current: u64) -> TestDecision {
     FastCasDecision::abort("state")
 }
 
-fn add_two(current: usize) -> Result<(usize, usize), &'static str> {
+fn add_two(current: u64) -> Result<(u64, u64), &'static str> {
     Ok((current + 2, current + 2))
 }
 
-fn reject_update(_current: usize) -> Result<(usize, usize), &'static str> {
+fn reject_update(_current: u64) -> Result<(u64, u64), &'static str> {
     Err("bad")
 }
 
@@ -155,7 +155,7 @@ fn test_fast_cas_compare_update_with_runs_output_after_success() {
 #[test]
 fn test_fast_cas_execute_contention_paths() {
     let state = FastCasState::new(0);
-    let mode = Cell::new(0usize);
+    let mode = Cell::new(0u64);
     let operation = |current| match mode.get() {
         0 => {
             if current == 0 {

@@ -93,6 +93,7 @@ impl<T, E> CasError<T, E> {
             },
             RetryErrorReason::AttemptsExceeded
             | RetryErrorReason::UnsupportedOperation
+            | RetryErrorReason::SleeperFailed
             | RetryErrorReason::WorkerStillRunning => match last_failure {
                 Some(CasAttemptFailure::Conflict { .. }) => {
                     CasErrorKind::Conflict

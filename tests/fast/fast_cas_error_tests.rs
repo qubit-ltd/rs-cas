@@ -13,10 +13,10 @@ use qubit_cas::{
     FastCasState,
 };
 
-type TestDecision = FastCasDecision<usize, &'static str>;
-type TestOperation = fn(usize) -> TestDecision;
+type TestDecision = FastCasDecision<u64, &'static str>;
+type TestOperation = fn(u64) -> TestDecision;
 
-fn abort_stop(_current: usize) -> TestDecision {
+fn abort_stop(_current: u64) -> TestDecision {
     FastCasDecision::abort("stop")
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "qubit-cas"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
@@ -43,8 +43,9 @@ tokio = { version = "1.52", features = ["time", "rt"], optional = true }
 
 qubit-atomic = "0.13"
 qubit-error = "0.2"
-qubit-function = "0.15"
-qubit-retry = "0.15"
+qubit-fast-cas = { version = "0.1", path = "../rs-fast-cas" }
+qubit-function = { version = "0.16.0", path = "../rs-function" }
+qubit-retry = { version = "0.16", path = "../rs-retry" }
 
 [dev-dependencies]
 tokio = { version = "1.52", features = ["full", "test-util"] }

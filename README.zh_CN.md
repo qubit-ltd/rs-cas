@@ -40,15 +40,16 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
   三种策略画像。
 - **结构化结果**：`CasSuccess`、`CasError` 与 `CasAttemptFailure` 暴露最终状态、旧状态、
   业务输出、错误分类和最后一次失败原因。
-- **FastCas**：面向紧凑 `usize` 状态码（`FastCasState`，即 `Atomic<usize>`）的超轻量
-  CAS，用于热点路径：无分配、无 hooks 与执行报告，并且只重试 compare-and-swap
-  冲突（spin、spin-yield 或单次尝试策略）。
+- **FastCas 兼容导出**：`CasCell`、`FastCas` 及相关 `u64` 类型由独立的
+  [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) crate 实现，
+  `qubit-cas` 为兼容现有调用方继续重导出。仅需要轻量 CAS 的新项目应直接依赖
+  `qubit-fast-cas`。
 
 ## 安装
 
 ```toml
 [dependencies]
-qubit-cas = "0.8"
+qubit-cas = "0.9"
 ```
 
 `qubit-cas` 使用 `qubit_atomic::AtomicRef<T>` 保存共享状态。应用代码如果需要构造或
@@ -58,7 +59,7 @@ qubit-cas = "0.8"
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.8", features = ["tokio"] }
+qubit-cas = { version = "0.9", features = ["tokio"] }
 ```
 
 可选 feature：
@@ -197,28 +198,45 @@ CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让�
 
 ## 面向状态码的 Fast CAS
 
-`FastCas` 是面向 `usize` 状态码的低层 CAS 路径，适合状态机、executor、
+`FastCas` 是面向 `u64` 状态码的低层 CAS 路径，适合状态机、executor、
 线程池内部状态和其他高频热路径。它假设共享状态已经被编码成紧凑数字，
 状态迁移必须保持无分配。
 
 常规 `CasExecutor` 基于不可变 `Arc<T>` 快照工作，提供业务重试、hooks、
 执行报告、异步执行、超时处理和争用观测。`FastCas` 刻意不包含这些能力：
-每次尝试只读取当前 `usize`，让调用方给出状态迁移决策，然后对刚才观测到的值
+每次尝试只读取当前 `u64`，让调用方给出状态迁移决策，然后对刚才观测到的值
 执行一次原子 compare-and-set。更小的接口让热路径更直接，也更适合紧凑状态机。
 
 | 需求 | 推荐选择 |
 | --- | --- |
 | 需要丰富快照、执行报告、hooks、异步支持、超时处理或业务级重试 | `CasExecutor` |
-| 状态已编码为 `usize`，需要无分配执行、无报告构造，并且只重试 CAS 冲突 | `FastCas` |
+| 状态已编码为 `u64`，需要无分配执行、无报告构造，并且只重试 CAS 冲突 | `FastCas` |
 
 核心类型包括：
 
-- `FastCasState`：`qubit_atomic::Atomic<usize>` 的语义别名。
+- `CasCell`：持有一个原子 `u64`，提供基础原子操作及无界的 `update`、
+  `try_update` CAS 循环。
+- `FastCasState`：`CasCell` 的兼容别名。
 - `FastCas`：只携带 `FastCasPolicy` 的可复用执行器。
 - `FastCasPolicy`：单次尝试、有界自旋或有界自旋后 yield。
 - `FastCasDecision`：每次观测状态后返回 `Update`、`Finish` 或 `Abort`。
 - `FastCasSuccess`：包含旧状态、当前状态、业务输出和尝试次数。
 - `FastCasError`：表示调用方主动 `Abort`，或重试预算耗尽后的 `Conflict`。
+
+如果希望把冲突作为内部并发细节，可以直接使用 `CasCell`：
+
+```rust
+use qubit_cas::CasCell;
+
+let state = CasCell::new(10);
+let previous = state.update(|current| (current + 1, current));
+
+assert_eq!(previous, 10);
+assert_eq!(state.load(), 11);
+```
+
+发生并发冲突后，`CasCell` 的更新闭包可能执行多次，因此闭包应保持轻量，
+并避免不可重复的副作用。
 
 ```rust
 use qubit_cas::{
@@ -251,9 +269,9 @@ use qubit_cas::{
     FastCasState,
 };
 
-const IDLE: usize = 0;
-const RUNNING: usize = 1;
-const DONE: usize = 2;
+const IDLE: u64 = 0;
+const RUNNING: u64 = 1;
+const DONE: u64 = 2;
 
 let state = FastCasState::new(IDLE);
 let cas = FastCas::spin(8);
@@ -284,6 +302,15 @@ assert_eq!(success.into_output(), DONE);
 `FastCasPolicy::spin_yield(spin_attempts, max_attempts)` 先自旋，超过自旋前缀后
 在后续尝试前调用 `thread::yield_now()`。尝试次数为 0 时会规范化为 1，
 因此每种策略都至少能基于一次观测状态尝试推进。
+
+### 从 qubit-cas 0.8 迁移
+
+Fast CAS 状态值从 `usize` 改为 `u64`。`FastCasState` 也从
+`qubit_atomic::Atomic<usize>` 的别名改为 `CasCell` 的别名。`load`、`store`、
+`swap` 和 `compare_set` 仍可直接使用；原先使用 `fetch_add`、
+`compare_set_weak`、`inner` 等其他 `Atomic` 方法的代码，应改用
+`CasCell::update`/`try_update`，或者在确实需要这些底层操作时自行持有独立的
+原子类型。
 
 ## 重试配置
 
@@ -395,8 +422,9 @@ async fn main() {
 - `CasHooks`：单次执行的生命周期事件 hook 和告警 hook。
 - `CasObservabilityConfig`：选择仅报告、事件流或带争用告警的事件流。
 - `ContentionThresholds`：基于 attempt 数、冲突数和冲突率识别热点争用。
-- `FastCas`：面向 `usize` 状态码的超轻量 CAS 执行器。
-- `FastCasState`：与 `FastCas` 搭配使用的 `Atomic<usize>` 语义别名。
+- `CasCell`：提供无界函数式 CAS 更新的原子 `u64` 状态。
+- `FastCas`：面向 `u64` 状态码的超轻量 CAS 执行器。
+- `FastCasState`：与 `FastCas` 搭配使用的 `CasCell` 兼容别名。
 - `FastCasDecision`、`FastCasSuccess`、`FastCasError` 和 `FastCasPolicy`：
   快速路径的决策、成功结果、失败结果和重试策略类型。
 
@@ -406,7 +434,7 @@ async fn main() {
 - `src/executor`：builder、同步 CAS 执行器与异步 CAS 执行器。
 - `src/event`：执行上下文与生命周期 hooks。
 - `src/error`：尝试级失败和终止级 CAS 错误。
-- `src/fast`：面向紧凑 `usize` 状态码的超轻量 CAS 原语。
+- `src/fast`：独立 `qubit-fast-cas` crate 的兼容重导出。
 - `src/observability`：可观测模式、争用阈值和告警类型。
 - `src/outcome` 与 `src/report`：执行结果包装与可观测报告。
 - `src/strategy`：内置执行策略和策略画像。

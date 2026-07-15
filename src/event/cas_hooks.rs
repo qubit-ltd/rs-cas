@@ -7,7 +7,10 @@
 // =============================================================================
 //! CAS event and hook registrations.
 
-use qubit_function::Consumer;
+use qubit_function::{
+    ArcConsumer,
+    Consumer,
+};
 
 use crate::observability::CasAlert;
 
@@ -61,7 +64,7 @@ impl CasHooks {
     where
         C: Consumer<CasEvent> + Send + Sync + 'static,
     {
-        self.on_event = Some(hook.into_arc());
+        self.on_event = Some(ArcConsumer::new(hook));
         self
     }
 
@@ -76,7 +79,7 @@ impl CasHooks {
     where
         C: Consumer<CasAlert> + Send + Sync + 'static,
     {
-        self.on_alert = Some(hook.into_arc());
+        self.on_alert = Some(ArcConsumer::new(hook));
         self
     }
 
