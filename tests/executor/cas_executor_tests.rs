@@ -503,6 +503,54 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
     );
 }
 
+/// Verifies an elapsed-budget timeout updates CAS reports and failure events
+/// without emitting a retry request.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_elapsed_timeout_updates_report_and_events() {
+    let state = AtomicRef::from_value(5usize);
+    let attempt_failures = Arc::new(AtomicUsize::new(0));
+    let retry_requests = Arc::new(AtomicUsize::new(0));
+    let listener_failures = Arc::clone(&attempt_failures);
+    let listener_retries = Arc::clone(&retry_requests);
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| match event {
+        CasEvent::AttemptFailed { kind, .. }
+            if *kind == CasAttemptFailureKind::Timeout =>
+        {
+            listener_failures.fetch_add(1, Ordering::SeqCst);
+        }
+        CasEvent::RetryRequested { .. } => {
+            listener_retries.fetch_add(1, Ordering::SeqCst);
+        }
+        _ => {}
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .max_operation_elapsed(Some(Duration::from_secs(30)))
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let outcome = executor
+        .execute_async_with_hooks(
+            &state,
+            |_current: Arc<usize>| async move {
+                std::future::pending::<CasDecision<usize, (), TestError>>()
+                    .await
+            },
+            hooks,
+        )
+        .await;
+
+    assert_eq!(outcome.report().timeouts(), 1);
+    assert_eq!(attempt_failures.load(Ordering::SeqCst), 1);
+    assert_eq!(retry_requests.load(Ordering::SeqCst), 0);
+    let error = outcome.expect_err("elapsed timeout should terminate CAS");
+    assert_eq!(error.kind(), CasErrorKind::MaxOperationElapsedExceeded);
+    assert_eq!(error.attempts(), 1);
+}
+
 /// Verifies async timeout abort policy surfaces `AttemptTimeout`.
 ///
 /// # Parameters
