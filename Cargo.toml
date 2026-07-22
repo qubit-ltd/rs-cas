@@ -20,6 +20,7 @@ include = [
     "/RUST_CODING_STYLE.md",
     "/RUST_CODING_STYLE.zh_CN.md",
     "/doc/**/user_guide*.md",
+    "/benches/**",
     "/examples/**",
     "/resources/**",
     "/src/**",
@@ -43,7 +44,6 @@ tokio = { version = "1.52", features = ["time", "rt"], optional = true }
 
 qubit-atomic = "0.13"
 qubit-error = "0.2"
-qubit-fast-cas = { version = "0.1", path = "../rs-fast-cas" }
 qubit-function = "0.16"
 qubit-retry = { version = "0.16", path = "../rs-retry" }
 

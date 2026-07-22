@@ -10,8 +10,6 @@ use std::sync::Arc;
 
 use qubit_cas::CasDecision;
 
-use crate::support::TestError;
-
 /// Verifies all CAS decision constructors create the expected variants.
 ///
 /// # Parameters
@@ -22,7 +20,7 @@ use crate::support::TestError;
 #[test]
 fn test_decision_constructors_create_expected_variants() {
     let next = Arc::new(7usize);
-    let update = CasDecision::<usize, &'static str, TestError>::update_arc(
+    let update = CasDecision::<usize, &'static str, &'static str>::update_arc(
         Arc::clone(&next),
         "ok",
     );
@@ -37,16 +35,15 @@ fn test_decision_constructors_create_expected_variants() {
         other => panic!("expected update decision, got {other:?}"),
     }
 
-    let finish = CasDecision::<usize, &'static str, TestError>::finish("done");
+    let finish =
+        CasDecision::<usize, &'static str, &'static str>::finish("done");
     assert_eq!(finish, CasDecision::Finish { output: "done" });
 
-    let retry = CasDecision::<usize, &'static str, TestError>::retry(
-        TestError("retry"),
-    );
-    assert_eq!(retry, CasDecision::Retry(TestError("retry")));
+    let retry =
+        CasDecision::<usize, &'static str, &'static str>::retry("retry");
+    assert_eq!(retry, CasDecision::Retry("retry"));
 
-    let abort = CasDecision::<usize, &'static str, TestError>::abort(
-        TestError("abort"),
-    );
-    assert_eq!(abort, CasDecision::Abort(TestError("abort")));
+    let abort =
+        CasDecision::<usize, &'static str, &'static str>::abort("abort");
+    assert_eq!(abort, CasDecision::Abort("abort"));
 }

@@ -290,7 +290,6 @@ version = "0.9.0"
 dependencies = [
  "qubit-atomic",
  "qubit-error",
- "qubit-fast-cas",
  "qubit-function",
  "qubit-retry",
  "tokio",
@@ -298,10 +297,19 @@ dependencies = [
 
 [[package]]
 name = "qubit-clock"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "qubit-datatype"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "strum",
+ "thiserror",
 ]
 
 [[package]]
@@ -309,10 +317,6 @@ name = "qubit-error"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da626589381bfcb778362b1a33268b471a40812c7d796f036a8864c1d43a4de2"
-
-[[package]]
-name = "qubit-fast-cas"
-version = "0.1.0"
 
 [[package]]
 name = "qubit-function"
@@ -337,12 +341,10 @@ dependencies = [
 
 [[package]]
 name = "qubit-serde"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96f0064338790690222e4a91641bf259a1438b5602be7c94b473678fba431bf8"
+version = "0.4.0"
 dependencies = [
+ "qubit-datatype",
  "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -520,6 +522,27 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "152a0b65a590ff6c3da95cabe2353ee04e6167c896b28e3b14478c2636c922fc"
 dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "strum"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9628de9b8791db39ceda2b119bbe13134770b56c138ec1d3af810d045c04f9bd"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab85eea0270ee17587ed4156089e10b9e6880ee688791d45a905f5b1ca36f664"
+dependencies = [
+ "heck",
  "proc-macro2",
  "quote",
  "syn",

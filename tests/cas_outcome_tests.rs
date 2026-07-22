@@ -12,8 +12,6 @@ use qubit_cas::{
     CasErrorKind,
     CasExecutionOutcome,
     CasExecutor,
-    FastCas,
-    FastCasState,
 };
 use std::error::Error;
 use std::fmt;
@@ -83,15 +81,4 @@ fn test_cas_outcome_error_accessors_and_result() {
 
     let error = outcome.expect_err("retry exhaustion should fail");
     assert_eq!(error.kind(), CasErrorKind::RetryExhausted);
-}
-
-#[test]
-fn test_fast_cas_smoke_for_outcome_test_target() {
-    let state = FastCasState::new(10);
-    let success = FastCas::once()
-        .compare_update(&state, 10, 11)
-        .expect("fast CAS should update");
-
-    assert_eq!(success.previous(), 10);
-    assert_eq!(success.current(), 11);
 }

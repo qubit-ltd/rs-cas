@@ -12,8 +12,6 @@ use qubit_cas::{
     CasExecutor,
 };
 
-use crate::support::TestError;
-
 /// Verifies success accessors for updated and finished outcomes.
 ///
 /// # Parameters
@@ -24,7 +22,7 @@ use crate::support::TestError;
 #[test]
 fn test_success_accessors_cover_updated_and_finished_variants() {
     let state = AtomicRef::from_value(1usize);
-    let executor = CasExecutor::<usize, TestError>::builder()
+    let executor = CasExecutor::<usize, &'static str>::builder()
         .no_delay()
         .build()
         .expect("executor should build");
@@ -39,7 +37,7 @@ fn test_success_accessors_cover_updated_and_finished_variants() {
 
     let finished = executor
         .execute(&state, |_current: &usize| {
-            CasDecision::<usize, &'static str, TestError>::finish("finished")
+            CasDecision::<usize, &'static str, &'static str>::finish("finished")
         })
         .expect("finish should succeed");
     assert!(finished.previous().is_none());

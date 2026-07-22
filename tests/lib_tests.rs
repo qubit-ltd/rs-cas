@@ -7,13 +7,10 @@
 // =============================================================================
 //! Integration tests for `qubit-cas`.
 
-mod decision;
 mod error;
 mod event;
 mod executor;
-mod fast;
 mod observability;
 mod report;
 mod strategy;
-mod success;
 mod support;
