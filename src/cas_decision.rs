@@ -18,6 +18,15 @@ use std::sync::Arc;
 /// - [`Finish`](Self::Finish): treat the attempt as successful without writing.
 /// - [`Retry`](Self::Retry): report a retryable business failure.
 /// - [`Abort`](Self::Abort): report a terminal business failure.
+///
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+///
+/// use qubit_cas::CasDecision;
+///
+/// CasDecision::<usize, (), ()>::finish(());
+/// ```
+#[must_use = "a CAS decision must be returned to the executor"]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CasDecision<T, R, E> {
     /// Writes a new state and returns a business output.

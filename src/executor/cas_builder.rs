@@ -30,6 +30,15 @@ use crate::strategy::CasStrategy;
 use super::cas_executor::CasExecutor;
 
 /// Builder for [`CasExecutor`](crate::CasExecutor).
+///
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+///
+/// use qubit_cas::CasExecutor;
+///
+/// CasExecutor::<usize, ()>::builder();
+/// ```
+#[must_use = "a CAS builder must be configured or built"]
 pub struct CasBuilder<T, E = BoxError> {
     /// Retry-layer builder that owns all retry-related settings.
     retry: RetryBuilder<BoxError>,
@@ -83,7 +92,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn max_retries(self, max_retries: u32) -> Self {
         self.max_attempts(max_retries.saturating_add(1))
     }
@@ -96,7 +105,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn max_operation_elapsed(
         mut self,
         max_operation_elapsed: Option<Duration>,
@@ -112,7 +121,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn max_total_elapsed(
         mut self,
         max_total_elapsed: Option<Duration>,
@@ -128,7 +137,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn delay(mut self, delay: RetryDelay) -> Self {
         self.retry = self.retry.delay(delay);
         self
@@ -138,7 +147,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn no_delay(self) -> Self {
         self.delay(RetryDelay::none())
     }
@@ -150,7 +159,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn fixed_delay(self, delay: Duration) -> Self {
         self.delay(RetryDelay::fixed(delay))
     }
@@ -163,7 +172,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn random_delay(self, min: Duration, max: Duration) -> Self {
         self.delay(RetryDelay::random(min, max))
     }
@@ -176,7 +185,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn exponential_backoff(self, initial: Duration, max: Duration) -> Self {
         self.exponential_backoff_with_multiplier(initial, max, 2.0)
     }
@@ -190,7 +199,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn exponential_backoff_with_multiplier(
         self,
         initial: Duration,
@@ -207,7 +216,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn jitter(mut self, jitter: RetryJitter) -> Self {
         self.retry = self.retry.jitter(jitter);
         self
@@ -220,7 +229,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn jitter_factor(self, factor: f64) -> Self {
         self.jitter(RetryJitter::factor(factor))
     }
@@ -232,7 +241,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn attempt_timeout(
         mut self,
         attempt_timeout: Option<Duration>,
@@ -248,7 +257,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn attempt_timeout_option(
         mut self,
         attempt_timeout: Option<AttemptTimeoutOption>,
@@ -261,7 +270,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn retry_on_timeout(mut self) -> Self {
         self.retry = self.retry.retry_on_timeout();
         self
@@ -271,7 +280,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn abort_on_timeout(mut self) -> Self {
         self.retry = self.retry.abort_on_timeout();
         self
@@ -306,7 +315,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn observability(
         mut self,
         observability: CasObservabilityConfig,
@@ -322,7 +331,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn alert_on_contention(
         mut self,
         thresholds: ContentionThresholds,
@@ -336,7 +345,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
-    #[inline]
+    #[inline(always)]
     pub fn isolate_listener_panics(mut self) -> Self {
         self.observability = self
             .observability
@@ -396,7 +405,7 @@ impl<T, E> Default for CasBuilder<T, E> {
     ///
     /// # Returns
     /// A builder equivalent to [`CasBuilder::new`].
-    #[inline]
+    #[inline(always)]
     fn default() -> Self {
         Self::new()
     }

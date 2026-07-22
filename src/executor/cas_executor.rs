@@ -16,7 +16,6 @@ use std::sync::{
     Arc,
     Mutex,
 };
-use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
 use qubit_error::BoxError;
@@ -62,6 +61,10 @@ use crate::report::{
 use crate::strategy::CasStrategy;
 
 use super::cas_builder::CasBuilder;
+use super::internal::{
+    AttemptSuccess,
+    CasReportFinishContext,
+};
 
 /// Executor for retry-aware compare-and-swap workflows.
 #[derive(Debug, Clone)]
@@ -74,54 +77,12 @@ pub struct CasExecutor<T, E = BoxError> {
     marker: PhantomData<fn() -> (T, E)>,
 }
 
-/// Success payload produced by one successful attempt before context
-/// enrichment.
-enum AttemptSuccess<T, R> {
-    /// One compare-and-swap write succeeded.
-    Updated {
-        previous: Arc<T>,
-        current: Arc<T>,
-        output: R,
-    },
-    /// The operation completed successfully without writing.
-    Finished { current: Arc<T>, output: R },
-}
-
-/// Snapshot of retry-layer limits plus terminal outcome for finalizing
-/// [`CasReportBuilder`].
-struct CasReportFinishContext {
-    attempts_total: u32,
-    max_attempts: u32,
-    max_operation_elapsed: Option<Duration>,
-    max_total_elapsed: Option<Duration>,
-    outcome: CasExecutionOutcome,
-}
-
-impl CasReportFinishContext {
-    #[inline]
-    fn new(
-        attempts_total: u32,
-        max_attempts: u32,
-        max_operation_elapsed: Option<Duration>,
-        max_total_elapsed: Option<Duration>,
-        outcome: CasExecutionOutcome,
-    ) -> Self {
-        Self {
-            attempts_total,
-            max_attempts,
-            max_operation_elapsed,
-            max_total_elapsed,
-            outcome,
-        }
-    }
-}
-
 impl<T, E> CasExecutor<T, E> {
     /// Creates a CAS builder.
     ///
     /// # Returns
     /// A builder configured with default retry settings.
-    #[inline]
+    #[inline(always)]
     pub fn builder() -> CasBuilder<T, E> {
         CasBuilder::new()
     }
@@ -210,7 +171,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// Shared retry options.
-    #[inline]
+    #[inline(always)]
     pub fn options(&self) -> &RetryOptions {
         &self.options
     }
@@ -219,7 +180,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// Shared observability configuration.
-    #[inline]
+    #[inline(always)]
     pub fn observability(&self) -> &CasObservabilityConfig {
         &self.observability
     }
@@ -246,6 +207,47 @@ impl<T, E> CasExecutor<T, E> {
         self.execute_with_hooks(state, operation, CasHooks::new())
     }
 
+    /// Executes one synchronous CAS operation without constructing a report.
+    ///
+    /// This path preserves retry, success, and terminal error semantics while
+    /// skipping report accumulation and lifecycle hook dispatch. Use
+    /// [`Self::execute`] when the caller needs execution metrics.
+    ///
+    /// # Parameters
+    /// - `state`: Shared atomic state container.
+    /// - `operation`: Pure operation that inspects the current state and
+    ///   returns a CAS decision.
+    ///
+    /// # Returns
+    /// The terminal CAS success or error without an execution report.
+    pub fn execute_result<R, O>(
+        &self,
+        state: &AtomicRef<T>,
+        operation: O,
+    ) -> Result<CasSuccess<T, R>, CasError<T, E>>
+    where
+        T: 'static,
+        E: 'static,
+        O: Function<T, CasDecision<T, R, E>>,
+    {
+        let success_context = Arc::new(Mutex::new(None));
+        let retry = self.build_result_retry(Arc::clone(&success_context));
+        let attempt = retry.run(|| self.run_sync_attempt(state, &operation));
+        match attempt {
+            Ok(success) => {
+                let context = success_context
+                    .lock()
+                    .expect("CAS success context slot should be lockable")
+                    .take()
+                    .expect(
+                        "retry success hook must capture CAS success context",
+                    );
+                Ok(self.enrich_success(success, context))
+            }
+            Err(error) => Err(CasError::new(error, None)),
+        }
+    }
+
     /// Executes one synchronous CAS operation with lifecycle hooks.
     ///
     /// # Parameters
@@ -256,6 +258,12 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Panics
+    /// Panics raised by event or alert listeners propagate when
+    /// [`ListenerPanicPolicy::Propagate`] is configured. Use
+    /// [`ListenerPanicPolicy::Isolate`] to keep listener panics from unwinding
+    /// through this call.
     pub fn execute_with_hooks<R, O>(
         &self,
         state: &AtomicRef<T>,
@@ -294,6 +302,12 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Panics
+    /// Panics raised by event or alert listeners propagate when
+    /// [`ListenerPanicPolicy::Propagate`] is configured. Use
+    /// [`ListenerPanicPolicy::Isolate`] to keep listener panics from unwinding
+    /// through this future.
     #[cfg(feature = "tokio")]
     pub async fn execute_async<R, O, Fut>(
         &self,
@@ -479,6 +493,58 @@ impl<T, E> CasExecutor<T, E> {
         builder.build().expect(
             "validated CAS executor configuration must build retry policy",
         )
+    }
+
+    /// Builds a retry policy for result-only synchronous execution.
+    ///
+    /// # Parameters
+    /// - `success_context`: Shared slot used to capture the retry success
+    ///   context.
+    ///
+    /// # Returns
+    /// A retry policy without report or event listeners.
+    fn build_result_retry(
+        &self,
+        success_context: Arc<Mutex<Option<RetryContext>>>,
+    ) -> Retry<CasAttemptFailure<T, E>>
+    where
+        T: 'static,
+        E: 'static,
+    {
+        Retry::<CasAttemptFailure<T, E>>::builder()
+            .options(self.options.clone())
+            .on_success(move |context: &RetryContext| {
+                *success_context
+                    .lock()
+                    .expect("CAS success context slot should be lockable") =
+                    Some(*context);
+            })
+            .on_failure(
+                |failure: &AttemptFailure<CasAttemptFailure<T, E>>,
+                 _context: &RetryContext| {
+                    match failure {
+                        AttemptFailure::Error(
+                            CasAttemptFailure::Conflict { .. }
+                            | CasAttemptFailure::Retry { .. },
+                        ) => AttemptFailureDecision::Retry,
+                        AttemptFailure::Error(CasAttemptFailure::Abort {
+                            ..
+                        }) => AttemptFailureDecision::Abort,
+                        AttemptFailure::Error(CasAttemptFailure::Timeout {
+                            ..
+                        })
+                        | AttemptFailure::Timeout
+                        | AttemptFailure::Panic(_)
+                        | AttemptFailure::Executor(_) => {
+                            AttemptFailureDecision::UseDefault
+                        }
+                    }
+                },
+            )
+            .build()
+            .expect(
+                "validated CAS executor configuration must build retry policy",
+            )
     }
 
     /// Runs one synchronous CAS attempt.
@@ -790,6 +856,12 @@ impl<T, E> CasExecutor<T, E> {
             CasErrorKind::AttemptTimeout => {
                 CasExecutionOutcome::ErrorAttemptTimeout
             }
+            CasErrorKind::UnsupportedOperation => {
+                CasExecutionOutcome::ErrorUnsupportedOperation
+            }
+            CasErrorKind::RetryInfrastructure => {
+                CasExecutionOutcome::ErrorRetryInfrastructure
+            }
             CasErrorKind::MaxOperationElapsedExceeded => {
                 CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
             }
@@ -813,7 +885,16 @@ impl<T, E> CasExecutor<T, E> {
         failure.kind()
     }
 
-    /// Dispatches one lifecycle event if event streaming is enabled.
+    /// Dispatches one lifecycle event to a registered hook.
+    ///
+    /// # Parameters
+    /// - `observability`: Configuration controlling listener panic behavior.
+    /// - `hook`: Listener that receives the event.
+    /// - `event`: Lifecycle event to dispatch.
+    ///
+    /// # Panics
+    /// Propagates listener panics when [`ListenerPanicPolicy::Propagate`] is
+    /// configured.
     fn dispatch_event(
         observability: &CasObservabilityConfig,
         hook: &crate::event::CasEventHook,
@@ -841,6 +922,15 @@ impl<T, E> CasExecutor<T, E> {
     }
 
     /// Dispatches one alert if an alert listener is registered.
+    ///
+    /// # Parameters
+    /// - `observability`: Configuration controlling listener panic behavior.
+    /// - `hook`: Optional listener that receives the alert.
+    /// - `alert`: Contention alert to dispatch.
+    ///
+    /// # Panics
+    /// Propagates listener panics when [`ListenerPanicPolicy::Propagate`] is
+    /// configured.
     fn dispatch_alert(
         observability: &CasObservabilityConfig,
         hook: &Option<crate::event::CasAlertHook>,

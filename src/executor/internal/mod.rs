@@ -5,11 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! CAS executor and builder modules and re-exports.
+//! Internal execution state shared by the CAS executor implementation.
 
-mod cas_builder;
-mod cas_executor;
-mod internal;
+mod attempt_success;
+mod cas_report_finish_context;
 
-pub use cas_builder::CasBuilder;
-pub use cas_executor::CasExecutor;
+pub(super) use attempt_success::AttemptSuccess;
+pub(super) use cas_report_finish_context::CasReportFinishContext;

@@ -17,6 +17,22 @@ use crate::report::CasExecutionReport;
 ///
 /// Combines the terminal [`Result`] (`CasSuccess` or [`CasError`]) with the
 /// full [`CasExecutionReport`] for observability.
+///
+/// # Examples
+///
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+///
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::{CasDecision, CasExecutor};
+///
+/// let state = AtomicRef::from_value(1usize);
+/// let executor = CasExecutor::<usize, ()>::latency_first();
+/// executor.execute(&state, |current: &usize| {
+///     CasDecision::update(*current + 1, ())
+/// });
+/// ```
+#[must_use = "a CAS outcome contains the terminal success or error"]
 #[derive(Debug, Clone)]
 pub struct CasOutcome<T, R, E> {
     /// Terminal success or error.
@@ -46,7 +62,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Reference to the inner [`Result<CasSuccess<T, R>, CasError<T, E>>`].
-    #[inline]
+    #[inline(always)]
     pub fn result(&self) -> &Result<CasSuccess<T, R>, CasError<T, E>> {
         &self.result
     }
@@ -55,7 +71,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Reference to the [`CasExecutionReport`] captured during execution.
-    #[inline]
+    #[inline(always)]
     pub fn report(&self) -> &CasExecutionReport {
         &self.report
     }
@@ -64,7 +80,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// `true` if the terminal result is [`Ok`].
-    #[inline]
+    #[inline(always)]
     pub fn is_ok(&self) -> bool {
         self.result.is_ok()
     }
@@ -73,7 +89,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// `true` if the terminal result is [`Err`].
-    #[inline]
+    #[inline(always)]
     pub fn is_err(&self) -> bool {
         self.result.is_err()
     }
@@ -82,7 +98,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The owned [`Result<CasSuccess<T, R>, CasError<T, E>>`].
-    #[inline]
+    #[inline(always)]
     pub fn into_result(self) -> Result<CasSuccess<T, R>, CasError<T, E>> {
         self.result
     }
@@ -91,7 +107,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Tuple of the terminal result and the execution report.
-    #[inline]
+    #[inline(always)]
     pub fn into_parts(
         self,
     ) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
@@ -111,7 +127,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Panics
     /// Panics with the given message if the outcome contains an error.
-    #[inline]
+    #[inline(always)]
     pub fn expect(self, message: &str) -> CasSuccess<T, R>
     where
         E: fmt::Debug,
@@ -132,7 +148,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Panics
     /// Panics with the given message if the outcome is successful.
-    #[inline]
+    #[inline(always)]
     pub fn expect_err(self, message: &str) -> CasError<T, E>
     where
         T: fmt::Debug,

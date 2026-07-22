@@ -72,6 +72,70 @@ impl<T, E> CasError<T, E> {
         }
     }
 
+    /// Returns the classified CAS error kind.
+    ///
+    /// # Returns
+    /// High-level CAS error kind derived from the retry-layer reason and last
+    /// attempt failure.
+    #[inline(always)]
+    pub fn kind(&self) -> CasErrorKind {
+        self.kind
+    }
+
+    /// Returns the retry-layer terminal reason.
+    ///
+    /// # Returns
+    /// Underlying [`RetryErrorReason`].
+    #[inline(always)]
+    pub fn reason(&self) -> RetryErrorReason {
+        self.reason
+    }
+
+    /// Returns the terminal CAS context.
+    ///
+    /// # Returns
+    /// Copied CAS context captured when execution stopped.
+    #[inline(always)]
+    pub fn context(&self) -> CasContext {
+        self.context
+    }
+
+    /// Returns the number of attempts that were executed.
+    ///
+    /// # Returns
+    /// One-based attempt count.
+    #[inline(always)]
+    pub fn attempts(&self) -> u32 {
+        self.context.attempt()
+    }
+
+    /// Returns the last CAS attempt failure when one exists.
+    ///
+    /// # Returns
+    /// `Some(&CasAttemptFailure<T, E>)` when at least one attempt failed.
+    #[inline(always)]
+    pub fn last_failure(&self) -> Option<&CasAttemptFailure<T, E>> {
+        self.last_failure.as_ref()
+    }
+
+    /// Returns the current state associated with the last failure.
+    ///
+    /// # Returns
+    /// `Some(&Arc<T>)` when the terminal error preserved a current state.
+    #[inline(always)]
+    pub fn current(&self) -> Option<&Arc<T>> {
+        self.last_failure().map(CasAttemptFailure::current)
+    }
+
+    /// Returns the business error associated with the last failure.
+    ///
+    /// # Returns
+    /// `Some(&E)` for retryable or aborting business failures.
+    #[inline(always)]
+    pub fn error(&self) -> Option<&E> {
+        self.last_failure().and_then(CasAttemptFailure::error)
+    }
+
     /// Classifies one terminal CAS error kind from retry reason and failure.
     ///
     /// # Parameters
@@ -91,10 +155,7 @@ impl<T, E> CasError<T, E> {
                 }
                 _ => CasErrorKind::Abort,
             },
-            RetryErrorReason::AttemptsExceeded
-            | RetryErrorReason::UnsupportedOperation
-            | RetryErrorReason::SleeperFailed
-            | RetryErrorReason::WorkerStillRunning => match last_failure {
+            RetryErrorReason::AttemptsExceeded => match last_failure {
                 Some(CasAttemptFailure::Conflict { .. }) => {
                     CasErrorKind::Conflict
                 }
@@ -103,6 +164,13 @@ impl<T, E> CasError<T, E> {
                 }
                 _ => CasErrorKind::RetryExhausted,
             },
+            RetryErrorReason::UnsupportedOperation => {
+                CasErrorKind::UnsupportedOperation
+            }
+            RetryErrorReason::SleeperFailed
+            | RetryErrorReason::WorkerStillRunning => {
+                CasErrorKind::RetryInfrastructure
+            }
             RetryErrorReason::MaxOperationElapsedExceeded => {
                 CasErrorKind::MaxOperationElapsedExceeded
             }
@@ -110,70 +178,6 @@ impl<T, E> CasError<T, E> {
                 CasErrorKind::MaxTotalElapsedExceeded
             }
         }
-    }
-
-    /// Returns the classified CAS error kind.
-    ///
-    /// # Returns
-    /// High-level CAS error kind derived from the retry-layer reason and last
-    /// attempt failure.
-    #[inline]
-    pub fn kind(&self) -> CasErrorKind {
-        self.kind
-    }
-
-    /// Returns the retry-layer terminal reason.
-    ///
-    /// # Returns
-    /// Underlying [`RetryErrorReason`].
-    #[inline]
-    pub fn reason(&self) -> RetryErrorReason {
-        self.reason
-    }
-
-    /// Returns the terminal CAS context.
-    ///
-    /// # Returns
-    /// Copied CAS context captured when execution stopped.
-    #[inline]
-    pub fn context(&self) -> CasContext {
-        self.context
-    }
-
-    /// Returns the number of attempts that were executed.
-    ///
-    /// # Returns
-    /// One-based attempt count.
-    #[inline]
-    pub fn attempts(&self) -> u32 {
-        self.context.attempt()
-    }
-
-    /// Returns the last CAS attempt failure when one exists.
-    ///
-    /// # Returns
-    /// `Some(&CasAttemptFailure<T, E>)` when at least one attempt failed.
-    #[inline]
-    pub fn last_failure(&self) -> Option<&CasAttemptFailure<T, E>> {
-        self.last_failure.as_ref()
-    }
-
-    /// Returns the current state associated with the last failure.
-    ///
-    /// # Returns
-    /// `Some(&Arc<T>)` when the terminal error preserved a current state.
-    #[inline]
-    pub fn current(&self) -> Option<&Arc<T>> {
-        self.last_failure().map(CasAttemptFailure::current)
-    }
-
-    /// Returns the business error associated with the last failure.
-    ///
-    /// # Returns
-    /// `Some(&E)` for retryable or aborting business failures.
-    #[inline]
-    pub fn error(&self) -> Option<&E> {
-        self.last_failure().and_then(CasAttemptFailure::error)
     }
 }
 
@@ -217,6 +221,12 @@ where
             CasErrorKind::Conflict => "CAS conflicts exhausted",
             CasErrorKind::RetryExhausted => "CAS retryable failures exhausted",
             CasErrorKind::AttemptTimeout => "CAS attempt timed out",
+            CasErrorKind::UnsupportedOperation => {
+                "CAS unsupported operation for this execution mode"
+            }
+            CasErrorKind::RetryInfrastructure => {
+                "CAS retry infrastructure failed"
+            }
             CasErrorKind::MaxOperationElapsedExceeded => {
                 "CAS max operation elapsed exceeded"
             }

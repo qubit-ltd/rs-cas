@@ -29,6 +29,7 @@ use qubit_cas::{
     ContentionThresholds,
     ListenerPanicPolicy,
 };
+#[cfg(feature = "tokio")]
 use qubit_retry::{
     AttemptTimeoutOption,
     RetryDelay,
@@ -40,6 +41,37 @@ use crate::support::{
     NonCloneValue,
     TestError,
 };
+
+/// Verifies result-only execution preserves CAS retry and success semantics.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_result_retries_conflict_and_returns_success() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_result(&state, |current: &usize| {
+            if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                state.store(Arc::new(*current + 1));
+            }
+            CasDecision::update(*current + 1, *current + 10)
+        })
+        .expect("second result-only attempt should succeed");
+
+    assert_eq!(success.attempts(), 2);
+    assert_eq!(*success.output(), 11);
+    assert_eq!(*state.load(), 2);
+}
 
 /// Verifies sync execution retries CAS conflicts and reports retry hooks.
 ///
@@ -216,6 +248,36 @@ fn test_execute_isolates_event_listener_panics() {
         .expect("listener panic should be isolated");
 
     assert_eq!(*success.output(), "ok");
+}
+
+/// Verifies the default listener policy propagates event listener panics.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_propagates_event_listener_panics_by_default() {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|_event: &CasEvent| {
+        panic!("event listener panic should propagate");
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _outcome = executor.execute_with_hooks(
+            &state,
+            |_current: &usize| CasDecision::<usize, (), TestError>::finish(()),
+            hooks,
+        );
+    }));
+
+    assert!(panic.is_err());
 }
 
 /// Verifies alert listener panics can be isolated.

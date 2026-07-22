@@ -159,6 +159,37 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
     assert!(total.to_string().contains("max total elapsed exceeded"));
 }
 
+/// Verifies synchronous execution reports configured attempt timeouts as an
+/// unsupported operation instead of retry exhaustion.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_sync_attempt_timeout_reports_unsupported_operation() {
+    let state = AtomicRef::from_value(21usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .attempt_timeout(Some(Duration::from_millis(10)))
+        .abort_on_timeout()
+        .build()
+        .expect("executor should build");
+
+    let outcome = executor.execute(&state, |_current: &usize| {
+        CasDecision::<usize, (), TestError>::finish(())
+    });
+
+    assert_eq!(
+        outcome.report().outcome(),
+        CasExecutionOutcome::ErrorUnsupportedOperation
+    );
+    let error = outcome.expect_err("sync attempt timeout is unsupported");
+    assert_eq!(error.kind(), CasErrorKind::UnsupportedOperation);
+    assert_eq!(error.reason(), RetryErrorReason::UnsupportedOperation);
+    assert!(error.to_string().contains("unsupported operation"));
+}
+
 /// Verifies async attempt timeouts use the timeout terminal error formatting.
 ///
 /// # Parameters

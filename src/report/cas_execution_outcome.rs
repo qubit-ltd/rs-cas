@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Terminal outcomes represented in CAS execution reports.
 
 /// Terminal outcome captured in a CAS execution report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +22,10 @@ pub enum CasExecutionOutcome {
     ErrorRetryExhausted,
     /// The flow stopped because an async attempt timed out.
     ErrorAttemptTimeout,
+    /// The execution mode does not support the configured behavior.
+    ErrorUnsupportedOperation,
+    /// Retry infrastructure failed while scheduling or stopping work.
+    ErrorRetryInfrastructure,
     /// The cumulative user operation elapsed-time budget was exceeded.
     ErrorMaxOperationElapsedExceeded,
     /// The monotonic total retry-flow elapsed-time budget was exceeded.
