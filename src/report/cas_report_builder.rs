@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Internal accumulator for one CAS execution report.
 
 use std::time::{
     Duration,
@@ -48,7 +49,7 @@ impl CasReportBuilder {
     ///
     /// # Returns
     /// The [`Instant`] when this report builder was started.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn started_at(&self) -> Instant {
         self.started_at
     }
@@ -57,7 +58,7 @@ impl CasReportBuilder {
     ///
     /// Increments the internal conflict counter using saturating arithmetic to
     /// prevent overflow.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn record_conflict(&mut self) {
         self.conflicts = self.conflicts.saturating_add(1);
     }
@@ -65,7 +66,7 @@ impl CasReportBuilder {
     /// Records one retryable business failure.
     ///
     /// Increments the internal retry error counter using saturating arithmetic.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn record_retry_error(&mut self) {
         self.retry_errors = self.retry_errors.saturating_add(1);
     }
@@ -73,7 +74,7 @@ impl CasReportBuilder {
     /// Records one aborting business failure.
     ///
     /// Increments the internal abort counter using saturating arithmetic.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn record_abort(&mut self) {
         self.aborts = self.aborts.saturating_add(1);
     }
@@ -81,7 +82,7 @@ impl CasReportBuilder {
     /// Records one async attempt timeout.
     ///
     /// Increments the internal timeout counter using saturating arithmetic.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn record_timeout(&mut self) {
         self.timeouts = self.timeouts.saturating_add(1);
     }

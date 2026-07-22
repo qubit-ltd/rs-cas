@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Available levels of CAS observability.
 
 /// Observability mode used by the executor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

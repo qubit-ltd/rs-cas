@@ -60,6 +60,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// The updated hook set.
+    #[inline(always)]
     pub fn on_event<C>(mut self, hook: C) -> Self
     where
         C: Consumer<CasEvent> + Send + Sync + 'static,
@@ -75,6 +76,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// The updated hook set.
+    #[inline(always)]
     pub fn on_alert<C>(mut self, hook: C) -> Self
     where
         C: Consumer<CasAlert> + Send + Sync + 'static,
@@ -87,7 +89,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// Optional shared event hook.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn event_hook(&self) -> Option<CasEventHook> {
         self.on_event.clone()
     }
@@ -96,7 +98,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// Optional shared alert hook.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn alert_hook(&self) -> Option<CasAlertHook> {
         self.on_alert.clone()
     }

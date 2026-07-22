@@ -48,11 +48,9 @@ expressed as an explicit, typed decision.
   behavior.
 - **Structured results**: `CasSuccess`, `CasError`, and `CasAttemptFailure`
   expose the final state, previous state, output, error kind, and last failure.
-- **FastCas compatibility exports**: `CasCell`, `FastCas`, and related `u64`
-  types are implemented by the standalone
-  [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) crate and
-  re-exported for compatibility. New lightweight-only consumers should depend
-  on `qubit-fast-cas` directly.
+- **Focused crate ownership**: lightweight `u64` CAS types live in the
+  standalone [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas)
+  crate and are intentionally not re-exported here.
 
 ## Installation
 
@@ -236,12 +234,12 @@ In practice, start with `latency_first()`. If reports show
 contended and should move to `contention_adaptive()`. If your operation
 prioritizes "succeed eventually" over "return fast", use `reliability_first()`.
 
-## Fast CAS for State Codes
+## Related Fast CAS Crate
 
-`FastCas` is the low-level CAS path for shared state that is already encoded as
-a compact `u64`. It is designed for state machines, executors, thread-pool
-internals, and other hot paths where state is a numeric code and transitions
-must stay allocation-free.
+The standalone `qubit-fast-cas` crate provides the low-level CAS path for
+shared state that is already encoded as a compact `u64`. It is designed for
+state machines, executors, thread-pool internals, and other hot paths where
+state is a numeric code and transitions must stay allocation-free.
 
 The regular `CasExecutor` works with immutable `Arc<T>` snapshots and provides
 business retry, hooks, reports, async execution, timeout handling, and contention
@@ -269,7 +267,7 @@ The core types are:
 When conflicts should remain an implementation detail, use `CasCell` directly:
 
 ```rust
-use qubit_cas::CasCell;
+use qubit_fast_cas::CasCell;
 
 let state = CasCell::new(10);
 let previous = state.update(|current| (current + 1, current));
@@ -282,7 +280,7 @@ assert_eq!(state.load(), 11);
 Keep them cheap and avoid non-idempotent side effects.
 
 ```rust
-use qubit_cas::{
+use qubit_fast_cas::{
     FastCas,
     FastCasState,
 };
@@ -306,7 +304,7 @@ assert_eq!(state.load(), 1);
 For explicit state machines, return a `FastCasDecision` directly:
 
 ```rust
-use qubit_cas::{
+use qubit_fast_cas::{
     FastCas,
     FastCasDecision,
     FastCasState,
@@ -348,7 +346,7 @@ recomputation from a different observed state.
 `thread::yield_now()` before later attempts. Zero attempt counts are normalized
 to one, so every policy can make progress from at least one observed state.
 
-### Migrating from qubit-cas 0.8
+### Migrating to qubit-fast-cas
 
 Fast CAS state values changed from `usize` to `u64`. `FastCasState` also changed
 from an alias for `qubit_atomic::Atomic<usize>` to an alias for `CasCell`.
@@ -479,11 +477,6 @@ async fn main() {
   event stream with contention alerts.
 - `ContentionThresholds`: classifies hot contention from attempts, conflicts,
   and conflict ratio.
-- `CasCell`: atomic `u64` state with unbounded functional CAS updates.
-- `FastCas`: ultra-light CAS executor for `u64` state codes.
-- `FastCasState`: compatibility alias for `CasCell` used with `FastCas`.
-- `FastCasDecision`, `FastCasSuccess`, `FastCasError`, and `FastCasPolicy`:
-  decision, result, failure, and retry-policy types for the fast path.
 
 ## Project Layout
 
@@ -491,8 +484,6 @@ async fn main() {
 - `src/executor`: builder and synchronous/asynchronous CAS executor.
 - `src/event`: execution context and lifecycle hooks.
 - `src/error`: attempt-level and terminal CAS errors.
-- `src/fast`: compatibility re-exports from the standalone
-  `qubit-fast-cas` crate.
 - `src/observability`: observability modes, contention thresholds, and alerts.
 - `src/outcome` and `src/report`: execution result wrapper and observability
   reports.
@@ -500,49 +491,37 @@ async fn main() {
 - `benches`: observability overhead benchmarks.
 - `tests`: behavior tests for executor, builder, hooks, errors, and options.
 
-## Testing and CI
-
-Run the fast local checks from the crate root:
+## Testing
 
 ```bash
+# Run tests with the default feature set
 cargo test
-cargo clippy --all-targets --all-features -- -D warnings
-```
 
-To match the repository CI environment, run:
+# Run tests with all declared features
+cargo test --all-features
 
-```bash
-./align-ci.sh
+# Project CI checks
 ./ci-check.sh
-./coverage.sh json
+
+# Check code coverage
+./coverage.sh
 ```
 
-`./align-ci.sh` aligns the local toolchain and CI-related configuration before
-`./ci-check.sh` runs the same checks used by the pipeline. Use `./coverage.sh`
-when changing behavior that should be reflected in coverage reports.
+## License
+
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
+full license text.
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep changes focused, add or update
-tests when behavior changes, and update this README or rustdoc when public API
-or user-visible behavior changes.
+Contributions are welcome. Please follow the Rust API guidelines, keep public
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
 
-By contributing, you agree that your contribution is licensed under the same
-[Apache License, Version 2.0](LICENSE) as this project.
+## Author
 
-## License and Copyright
+**Haixing Hu** - *Qubit Co. Ltd.*
 
-Copyright (c) 2026. Haixing Hu.
-
-This software is licensed under the [Apache License, Version 2.0](LICENSE);
-the full license text is available in the repository root.
-
-## Author and Maintenance
-
-**Haixing Hu** — Qubit Co. Ltd.
-
-| | |
-| --- | --- |
-| **Repository** | [github.com/qubit-ltd/rs-cas](https://github.com/qubit-ltd/rs-cas) |
-| **API documentation** | [docs.rs/qubit-cas](https://docs.rs/qubit-cas) |
-| **Crate** | [crates.io/crates/qubit-cas](https://crates.io/crates/qubit-cas) |
+Repository: [https://github.com/qubit-ltd/rs-cas](https://github.com/qubit-ltd/rs-cas)

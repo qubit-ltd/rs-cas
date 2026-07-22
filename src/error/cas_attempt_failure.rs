@@ -99,7 +99,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// Shared reference to the current state.
-    #[inline]
+    #[inline(always)]
     pub fn current(&self) -> &Arc<T> {
         match self {
             Self::Conflict { current }
@@ -113,7 +113,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// The [`CasAttemptFailureKind`] matching this failure variant.
-    #[inline]
+    #[inline(always)]
     pub fn kind(&self) -> CasAttemptFailureKind {
         match self {
             Self::Conflict { .. } => CasAttemptFailureKind::Conflict,
@@ -128,7 +128,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     /// # Returns
     /// `Some(&E)` for [`CasAttemptFailure::Retry`] and
     /// [`CasAttemptFailure::Abort`], or `None` otherwise.
-    #[inline]
+    #[inline(always)]
     pub fn error(&self) -> Option<&E> {
         match self {
             Self::Retry { error, .. } | Self::Abort { error, .. } => {
@@ -142,7 +142,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Conflict`].
-    #[inline]
+    #[inline(always)]
     pub fn is_conflict(&self) -> bool {
         matches!(self, Self::Conflict { .. })
     }
@@ -151,7 +151,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Retry`].
-    #[inline]
+    #[inline(always)]
     pub fn is_retry(&self) -> bool {
         matches!(self, Self::Retry { .. })
     }
@@ -160,7 +160,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Abort`].
-    #[inline]
+    #[inline(always)]
     pub fn is_abort(&self) -> bool {
         matches!(self, Self::Abort { .. })
     }
@@ -169,7 +169,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Timeout`].
-    #[inline]
+    #[inline(always)]
     pub fn is_timeout(&self) -> bool {
         matches!(self, Self::Timeout { .. })
     }

@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Thresholds for classifying CAS contention.
 
 /// Thresholds used to classify one execution as hotly contended.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,7 +47,7 @@ impl ContentionThresholds {
     ///
     /// # Returns
     /// Minimum number of attempts before a ratio is considered meaningful.
-    #[inline]
+    #[inline(always)]
     pub fn min_attempts(&self) -> u32 {
         self.min_attempts
     }
@@ -55,7 +56,7 @@ impl ContentionThresholds {
     ///
     /// # Returns
     /// Minimum raw number of conflicts required to be considered hot.
-    #[inline]
+    #[inline(always)]
     pub fn min_conflicts(&self) -> u32 {
         self.min_conflicts
     }
@@ -64,7 +65,7 @@ impl ContentionThresholds {
     ///
     /// # Returns
     /// Minimum ratio of conflicts to total attempts.
-    #[inline]
+    #[inline(always)]
     pub fn conflict_ratio(&self) -> f64 {
         self.conflict_ratio
     }

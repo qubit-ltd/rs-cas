@@ -90,7 +90,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// `true` for [`CasSuccess::Updated`], `false` for
     /// [`CasSuccess::Finished`].
-    #[inline]
+    #[inline(always)]
     pub fn is_updated(&self) -> bool {
         matches!(self, Self::Updated { .. })
     }
@@ -100,7 +100,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// `Some(&Arc<T>)` for [`CasSuccess::Updated`], or `None` when no write
     /// occurred.
-    #[inline]
+    #[inline(always)]
     pub fn previous(&self) -> Option<&Arc<T>> {
         match self {
             Self::Updated { previous, .. } => Some(previous),
@@ -112,7 +112,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// Shared reference to the current state.
-    #[inline]
+    #[inline(always)]
     pub fn current(&self) -> &Arc<T> {
         match self {
             Self::Updated { current, .. } | Self::Finished { current, .. } => {
@@ -125,7 +125,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// Shared reference to the business output.
-    #[inline]
+    #[inline(always)]
     pub fn output(&self) -> &R {
         match self {
             Self::Updated { output, .. } | Self::Finished { output, .. } => {
@@ -138,7 +138,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// The owned business output.
-    #[inline]
+    #[inline(always)]
     pub fn into_output(self) -> R {
         match self {
             Self::Updated { output, .. } | Self::Finished { output, .. } => {
@@ -151,7 +151,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// Retry context for the completed flow.
-    #[inline]
+    #[inline(always)]
     pub fn context(&self) -> CasContext {
         match self {
             Self::Updated { context, .. } | Self::Finished { context, .. } => {
@@ -164,7 +164,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// One-based attempt count.
-    #[inline]
+    #[inline(always)]
     pub fn attempts(&self) -> u32 {
         self.context().attempt()
     }

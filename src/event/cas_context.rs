@@ -58,7 +58,7 @@ impl CasContext {
     ///
     /// # Returns
     /// A one-based attempt number, or zero if no attempt ran.
-    #[inline]
+    #[inline(always)]
     pub fn attempt(&self) -> u32 {
         self.attempt
     }
@@ -67,7 +67,7 @@ impl CasContext {
     ///
     /// # Returns
     /// Maximum attempts, including the initial attempt.
-    #[inline]
+    #[inline(always)]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -76,7 +76,7 @@ impl CasContext {
     ///
     /// # Returns
     /// Maximum retries after the first attempt.
-    #[inline]
+    #[inline(always)]
     pub fn max_retries(&self) -> u32 {
         self.max_attempts.saturating_sub(1)
     }
@@ -85,7 +85,7 @@ impl CasContext {
     ///
     /// # Returns
     /// `Some(Duration)` for bounded executions, or `None` for unlimited.
-    #[inline]
+    #[inline(always)]
     pub fn max_operation_elapsed(&self) -> Option<Duration> {
         self.max_operation_elapsed
     }
@@ -94,7 +94,7 @@ impl CasContext {
     ///
     /// # Returns
     /// `Some(Duration)` for bounded executions, or `None` for unlimited.
-    #[inline]
+    #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -103,7 +103,7 @@ impl CasContext {
     ///
     /// # Returns
     /// Total elapsed time observed at this event.
-    #[inline]
+    #[inline(always)]
     pub fn total_elapsed(&self) -> Duration {
         self.total_elapsed
     }
@@ -112,7 +112,7 @@ impl CasContext {
     ///
     /// # Returns
     /// Attempt elapsed time.
-    #[inline]
+    #[inline(always)]
     pub fn attempt_elapsed(&self) -> Duration {
         self.attempt_elapsed
     }
@@ -121,7 +121,7 @@ impl CasContext {
     ///
     /// # Returns
     /// `Some(Duration)` when an attempt timeout is configured.
-    #[inline]
+    #[inline(always)]
     pub fn attempt_timeout(&self) -> Option<Duration> {
         self.attempt_timeout
     }
@@ -130,7 +130,7 @@ impl CasContext {
     ///
     /// # Returns
     /// `Some(Duration)` when retry scheduling selected a delay.
-    #[inline]
+    #[inline(always)]
     pub fn next_delay(&self) -> Option<Duration> {
         self.next_delay
     }

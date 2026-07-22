@@ -5,8 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Panic handling policy for event and alert listeners.
 
 /// Policy for panics raised by event or alert listeners.
+///
+/// The default is [`Self::Propagate`], so a listener panic unwinds through the
+/// synchronous or asynchronous execution call. Select [`Self::Isolate`] to
+/// catch listener panics and allow the CAS flow to continue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListenerPanicPolicy {
     /// Listener panics propagate to the caller.

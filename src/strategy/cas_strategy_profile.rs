@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Descriptive values exposed by a built-in CAS strategy.
 
 use std::time::Duration;
 
@@ -46,7 +47,7 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// Maximum number of attempts (including initial) for this strategy.
-    #[inline]
+    #[inline(always)]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -55,7 +56,7 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// User operation time budget for the entire CAS flow.
-    #[inline]
+    #[inline(always)]
     pub fn max_operation_elapsed(&self) -> Duration {
         self.max_operation_elapsed
     }
@@ -65,7 +66,7 @@ impl CasStrategyProfile {
     /// # Returns
     /// `Some(Duration)` when the strategy caps whole-flow time (including retry
     /// sleeps), or `None` when only the operation-time budget applies.
-    #[inline]
+    #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -74,7 +75,7 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// The conflict ratio at which this strategy is recommended.
-    #[inline]
+    #[inline(always)]
     pub fn target_conflict_ratio(&self) -> f64 {
         self.target_conflict_ratio
     }
@@ -83,7 +84,7 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// `true` for strategies that insert delays between retries.
-    #[inline]
+    #[inline(always)]
     pub fn uses_backoff(&self) -> bool {
         self.uses_backoff
     }

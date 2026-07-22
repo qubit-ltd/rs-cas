@@ -42,6 +42,10 @@ fn run_group(group: &'static str, force_conflict: bool) {
     println!("## {group}");
 
     let raw = measure_raw(force_conflict);
+    let result_only = measure_result_executor(
+        CasExecutor::<usize, &'static str>::latency_first(),
+        force_conflict,
+    );
     let report_only = measure_executor(
         CasExecutor::<usize, &'static str>::latency_first(),
         CasHooks::new(),
@@ -75,6 +79,7 @@ fn run_group(group: &'static str, force_conflict: bool) {
     );
 
     print_row("raw_cas_floor", &raw, None, None);
+    print_row("result_only", &result_only, Some(raw.ops_per_sec), None);
     print_row("report_only", &report_only, Some(raw.ops_per_sec), None);
     print_row(
         "event_stream_empty",
@@ -94,6 +99,66 @@ fn run_group(group: &'static str, force_conflict: bool) {
         Some(raw.ops_per_sec),
         Some(report_only.ops_per_sec),
     );
+}
+
+fn measure_result_executor(
+    executor: CasExecutor<usize, &'static str>,
+    force_conflict: bool,
+) -> BenchResult {
+    for _ in 0..WARMUP_RUNS {
+        let _ = run_result_executor_sample(executor.clone(), force_conflict);
+    }
+
+    let mut samples = Vec::with_capacity(MEASURED_RUNS);
+    let mut last = None;
+    for _ in 0..MEASURED_RUNS {
+        let result =
+            run_result_executor_sample(executor.clone(), force_conflict);
+        samples.push(result.ops_per_sec);
+        last = Some(result);
+    }
+
+    let ops_per_sec = median(&mut samples);
+    let mut result = last.expect("at least one benchmark sample should run");
+    result.ops_per_sec = ops_per_sec;
+    result.ns_per_op = 1_000_000_000.0 / ops_per_sec;
+    result
+}
+
+fn run_result_executor_sample(
+    executor: CasExecutor<usize, &'static str>,
+    force_conflict: bool,
+) -> BenchResult {
+    let state = AtomicRef::from_value(0usize);
+    let forced = AtomicUsize::new(0);
+    let start = Instant::now();
+    let mut attempts = 0u64;
+    let mut conflicts = 0u64;
+
+    for _ in 0..ITERATIONS {
+        let success = executor
+            .execute_result(&state, |current: &usize| {
+                if force_conflict
+                    && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2)
+                {
+                    state.store(Arc::new(*current + 1));
+                }
+                CasDecision::update(*current + 1, *current + 1)
+            })
+            .expect("benchmark CAS execution should succeed");
+        attempts += u64::from(success.attempts());
+        conflicts += u64::from(success.attempts().saturating_sub(1));
+        black_box(success);
+    }
+
+    let elapsed = start.elapsed();
+    let ops_per_sec = ITERATIONS as f64 / elapsed.as_secs_f64();
+    BenchResult {
+        ops_per_sec,
+        ns_per_op: elapsed.as_nanos() as f64 / ITERATIONS as f64,
+        avg_attempts: attempts as f64 / ITERATIONS as f64,
+        conflicts,
+    }
 }
 
 fn light_event_hook() -> CasHooks {

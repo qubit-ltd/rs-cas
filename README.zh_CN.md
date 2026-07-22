@@ -5,7 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/v/qubit-cas.svg?color=blue)](https://crates.io/crates/qubit-cas)
 [![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![English Doc](https://img.shields.io/badge/docs-English-blue.svg)](README.md)
+[![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
 ## 概览
 
@@ -40,10 +40,9 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
   三种策略画像。
 - **结构化结果**：`CasSuccess`、`CasError` 与 `CasAttemptFailure` 暴露最终状态、旧状态、
   业务输出、错误分类和最后一次失败原因。
-- **FastCas 兼容导出**：`CasCell`、`FastCas` 及相关 `u64` 类型由独立的
-  [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) crate 实现，
-  `qubit-cas` 为兼容现有调用方继续重导出。仅需要轻量 CAS 的新项目应直接依赖
-  `qubit-fast-cas`。
+- **清晰的 crate 所有权**：轻量 `u64` CAS 类型位于独立的
+  [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) crate，
+  `qubit-cas` 不再重导出这些外部类型。
 
 ## 安装
 
@@ -196,11 +195,11 @@ CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让�
 可以切到 `contention_adaptive()`；如果业务更看重“尽量成功”而非“尽快返回”，
 可选 `reliability_first()`。
 
-## 面向状态码的 Fast CAS
+## 相关的 Fast CAS Crate
 
-`FastCas` 是面向 `u64` 状态码的低层 CAS 路径，适合状态机、executor、
-线程池内部状态和其他高频热路径。它假设共享状态已经被编码成紧凑数字，
-状态迁移必须保持无分配。
+独立的 `qubit-fast-cas` crate 提供面向 `u64` 状态码的低层 CAS 路径，
+适合状态机、executor、线程池内部状态和其他高频热路径。它假设共享状态
+已经被编码成紧凑数字，状态迁移必须保持无分配。
 
 常规 `CasExecutor` 基于不可变 `Arc<T>` 快照工作，提供业务重试、hooks、
 执行报告、异步执行、超时处理和争用观测。`FastCas` 刻意不包含这些能力：
@@ -226,7 +225,7 @@ CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让�
 如果希望把冲突作为内部并发细节，可以直接使用 `CasCell`：
 
 ```rust
-use qubit_cas::CasCell;
+use qubit_fast_cas::CasCell;
 
 let state = CasCell::new(10);
 let previous = state.update(|current| (current + 1, current));
@@ -239,7 +238,7 @@ assert_eq!(state.load(), 11);
 并避免不可重复的副作用。
 
 ```rust
-use qubit_cas::{
+use qubit_fast_cas::{
     FastCas,
     FastCasState,
 };
@@ -263,7 +262,7 @@ assert_eq!(state.load(), 1);
 显式状态机可以直接返回 `FastCasDecision`：
 
 ```rust
-use qubit_cas::{
+use qubit_fast_cas::{
     FastCas,
     FastCasDecision,
     FastCasState,
@@ -303,7 +302,7 @@ assert_eq!(success.into_output(), DONE);
 在后续尝试前调用 `thread::yield_now()`。尝试次数为 0 时会规范化为 1，
 因此每种策略都至少能基于一次观测状态尝试推进。
 
-### 从 qubit-cas 0.8 迁移
+### 迁移到 qubit-fast-cas
 
 Fast CAS 状态值从 `usize` 改为 `u64`。`FastCasState` 也从
 `qubit_atomic::Atomic<usize>` 的别名改为 `CasCell` 的别名。`load`、`store`、
@@ -422,11 +421,6 @@ async fn main() {
 - `CasHooks`：单次执行的生命周期事件 hook 和告警 hook。
 - `CasObservabilityConfig`：选择仅报告、事件流或带争用告警的事件流。
 - `ContentionThresholds`：基于 attempt 数、冲突数和冲突率识别热点争用。
-- `CasCell`：提供无界函数式 CAS 更新的原子 `u64` 状态。
-- `FastCas`：面向 `u64` 状态码的超轻量 CAS 执行器。
-- `FastCasState`：与 `FastCas` 搭配使用的 `CasCell` 兼容别名。
-- `FastCasDecision`、`FastCasSuccess`、`FastCasError` 和 `FastCasPolicy`：
-  快速路径的决策、成功结果、失败结果和重试策略类型。
 
 ## 项目结构
 
@@ -434,54 +428,42 @@ async fn main() {
 - `src/executor`：builder、同步 CAS 执行器与异步 CAS 执行器。
 - `src/event`：执行上下文与生命周期 hooks。
 - `src/error`：尝试级失败和终止级 CAS 错误。
-- `src/fast`：独立 `qubit-fast-cas` crate 的兼容重导出。
 - `src/observability`：可观测模式、争用阈值和告警类型。
 - `src/outcome` 与 `src/report`：执行结果包装与可观测报告。
 - `src/strategy`：内置执行策略和策略画像。
 - `benches`：观测模式开销基准测试。
 - `tests`：executor、builder、hooks、错误与选项的行为测试。
 
-## 测试与 CI
-
-在 crate 根目录快速执行本地检查：
+## 测试
 
 ```bash
+# 使用默认 feature 集运行测试
 cargo test
-cargo clippy --all-targets --all-features -- -D warnings
-```
 
-若要与仓库 CI 环境保持一致，请运行：
+# 使用项目声明的全部 feature 运行测试
+cargo test --all-features
 
-```bash
-./align-ci.sh
+# 运行项目 CI 检查
 ./ci-check.sh
-./coverage.sh json
+
+# 检查代码覆盖率
+./coverage.sh
 ```
 
-`./align-ci.sh` 会先对齐本地工具链和 CI 相关配置；`./ci-check.sh` 复现流水线检查。
-修改运行期行为并需要关注覆盖率时，可配合使用 `./coverage.sh`。
+## 许可证
 
-## 参与贡献
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 
-欢迎通过 Issue 与 Pull Request 参与本仓库。建议单次变更聚焦一个主题；修改行为时补充或更新测试；
-影响公开 API 或用户可见行为时，同步更新本文档或 rustdoc。
+本项目基于 Apache License 2.0 授权。完整许可证文本请参阅
+[LICENSE](LICENSE)。
 
-向本仓库贡献内容即表示您同意以 [Apache License, Version 2.0](LICENSE)（与本项目相同）
-授权您的贡献。
+## 贡献
 
-## 许可证与版权
+欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
+Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
 
-Copyright (c) 2026. Haixing Hu.
+## 作者
 
-本软件依据 [Apache License, Version 2.0](LICENSE) 授权；完整许可文本见仓库根目录的
-`LICENSE` 文件。
+**Haixing Hu** - *Qubit Co. Ltd.*
 
-## 作者与维护
-
-**Haixing Hu** — Qubit Co. Ltd.
-
-| | |
-| --- | --- |
-| **源码仓库** | [github.com/qubit-ltd/rs-cas](https://github.com/qubit-ltd/rs-cas) |
-| **API 文档** | [docs.rs/qubit-cas](https://docs.rs/qubit-cas) |
-| **Crate 发布** | [crates.io/crates/qubit-cas](https://crates.io/crates/qubit-cas) |
+仓库地址：[https://github.com/qubit-ltd/rs-cas](https://github.com/qubit-ltd/rs-cas)
