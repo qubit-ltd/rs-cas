@@ -7,11 +7,19 @@
 // =============================================================================
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutionOutcome, CasExecutor, ContentionThresholds};
+use qubit_cas::{
+    CasDecision,
+    CasExecutionOutcome,
+    CasExecutor,
+    ContentionThresholds,
+};
 
 use crate::support::TestError;
 
@@ -55,7 +63,10 @@ fn test_report_exposes_counts_ratios_and_limits() {
     assert_eq!(report.conflict_ratio(), 0.5);
     assert_eq!(report.retryable_failure_ratio(), 0.0);
     assert!(report.finished_at() >= report.started_at());
-    assert!(report.elapsed() <= report.finished_at().duration_since(report.started_at()));
+    assert!(
+        report.elapsed()
+            <= report.finished_at().duration_since(report.started_at())
+    );
 }
 
 /// Verifies contention thresholds are evaluated from report statistics.

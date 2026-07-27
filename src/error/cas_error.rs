@@ -11,11 +11,18 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
-use qubit_retry::{AttemptFailure, RetryError, RetryErrorReason};
+use qubit_retry::{
+    AttemptFailure,
+    RetryError,
+    RetryErrorReason,
+};
 
 use crate::event::CasContext;
 
-use super::{CasAttemptFailure, CasErrorKind};
+use super::{
+    CasAttemptFailure,
+    CasErrorKind,
+};
 
 /// Terminal CAS error returned by [`crate::CasExecutor`].
 #[derive(Clone)]
@@ -49,8 +56,12 @@ impl<T, E> CasError<T, E> {
         let context = CasContext::new(&retry_context);
         let last_failure = match raw_last_failure {
             Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout) => timeout_current.map(CasAttemptFailure::timeout),
-            Some(AttemptFailure::Panic(_)) | Some(AttemptFailure::Executor(_)) | None => None,
+            Some(AttemptFailure::Timeout) => {
+                timeout_current.map(CasAttemptFailure::timeout)
+            }
+            Some(AttemptFailure::Panic(_))
+            | Some(AttemptFailure::Executor(_))
+            | None => None,
         };
         let kind = Self::classify_kind(reason, last_failure.as_ref());
         Self {
@@ -139,22 +150,33 @@ impl<T, E> CasError<T, E> {
     ) -> CasErrorKind {
         match reason {
             RetryErrorReason::Aborted => match last_failure {
-                Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
+                Some(CasAttemptFailure::Timeout { .. }) => {
+                    CasErrorKind::AttemptTimeout
+                }
                 _ => CasErrorKind::Abort,
             },
             RetryErrorReason::AttemptsExceeded => match last_failure {
-                Some(CasAttemptFailure::Conflict { .. }) => CasErrorKind::Conflict,
-                Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
+                Some(CasAttemptFailure::Conflict { .. }) => {
+                    CasErrorKind::Conflict
+                }
+                Some(CasAttemptFailure::Timeout { .. }) => {
+                    CasErrorKind::AttemptTimeout
+                }
                 _ => CasErrorKind::RetryExhausted,
             },
-            RetryErrorReason::UnsupportedOperation => CasErrorKind::UnsupportedOperation,
-            RetryErrorReason::SleeperFailed | RetryErrorReason::WorkerStillRunning => {
+            RetryErrorReason::UnsupportedOperation => {
+                CasErrorKind::UnsupportedOperation
+            }
+            RetryErrorReason::SleeperFailed
+            | RetryErrorReason::WorkerStillRunning => {
                 CasErrorKind::RetryInfrastructure
             }
             RetryErrorReason::MaxOperationElapsedExceeded => {
                 CasErrorKind::MaxOperationElapsedExceeded
             }
-            RetryErrorReason::MaxTotalElapsedExceeded => CasErrorKind::MaxTotalElapsedExceeded,
+            RetryErrorReason::MaxTotalElapsedExceeded => {
+                CasErrorKind::MaxTotalElapsedExceeded
+            }
         }
     }
 }
@@ -202,9 +224,15 @@ where
             CasErrorKind::UnsupportedOperation => {
                 "CAS unsupported operation for this execution mode"
             }
-            CasErrorKind::RetryInfrastructure => "CAS retry infrastructure failed",
-            CasErrorKind::MaxOperationElapsedExceeded => "CAS max operation elapsed exceeded",
-            CasErrorKind::MaxTotalElapsedExceeded => "CAS max total elapsed exceeded",
+            CasErrorKind::RetryInfrastructure => {
+                "CAS retry infrastructure failed"
+            }
+            CasErrorKind::MaxOperationElapsedExceeded => {
+                "CAS max operation elapsed exceeded"
+            }
+            CasErrorKind::MaxTotalElapsedExceeded => {
+                "CAS max total elapsed exceeded"
+            }
         };
         write!(f, "{message} after {} attempt(s)", self.attempts())?;
         if let Some(failure) = self.last_failure() {

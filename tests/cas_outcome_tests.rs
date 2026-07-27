@@ -7,7 +7,12 @@
 // =============================================================================
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasErrorKind, CasExecutionOutcome, CasExecutor};
+use qubit_cas::{
+    CasDecision,
+    CasErrorKind,
+    CasExecutionOutcome,
+    CasExecutor,
+};
 use std::error::Error;
 use std::fmt;
 

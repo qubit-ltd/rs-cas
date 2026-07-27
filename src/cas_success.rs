@@ -73,7 +73,11 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// A [`CasSuccess::Finished`] value.
     #[inline]
-    pub(crate) fn finished(current: Arc<T>, output: R, context: CasContext) -> Self {
+    pub(crate) fn finished(
+        current: Arc<T>,
+        output: R,
+        context: CasContext,
+    ) -> Self {
         Self::Finished {
             current,
             output,
@@ -111,7 +115,9 @@ impl<T, R> CasSuccess<T, R> {
     #[inline(always)]
     pub fn current(&self) -> &Arc<T> {
         match self {
-            Self::Updated { current, .. } | Self::Finished { current, .. } => current,
+            Self::Updated { current, .. } | Self::Finished { current, .. } => {
+                current
+            }
         }
     }
 
@@ -122,7 +128,9 @@ impl<T, R> CasSuccess<T, R> {
     #[inline(always)]
     pub fn output(&self) -> &R {
         match self {
-            Self::Updated { output, .. } | Self::Finished { output, .. } => output,
+            Self::Updated { output, .. } | Self::Finished { output, .. } => {
+                output
+            }
         }
     }
 
@@ -133,7 +141,9 @@ impl<T, R> CasSuccess<T, R> {
     #[inline(always)]
     pub fn into_output(self) -> R {
         match self {
-            Self::Updated { output, .. } | Self::Finished { output, .. } => output,
+            Self::Updated { output, .. } | Self::Finished { output, .. } => {
+                output
+            }
         }
     }
 
@@ -144,7 +154,9 @@ impl<T, R> CasSuccess<T, R> {
     #[inline(always)]
     pub fn context(&self) -> CasContext {
         match self {
-            Self::Updated { context, .. } | Self::Finished { context, .. } => *context,
+            Self::Updated { context, .. } | Self::Finished { context, .. } => {
+                *context
+            }
         }
     }
 

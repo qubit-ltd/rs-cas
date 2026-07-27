@@ -31,7 +31,11 @@ impl ContentionThresholds {
     /// # Returns
     /// A normalized [`ContentionThresholds`] value.
     #[inline]
-    pub fn new(min_attempts: u32, min_conflicts: u32, conflict_ratio: f64) -> Self {
+    pub fn new(
+        min_attempts: u32,
+        min_conflicts: u32,
+        conflict_ratio: f64,
+    ) -> Self {
         Self {
             min_attempts,
             min_conflicts,

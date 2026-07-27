@@ -7,7 +7,10 @@
 // =============================================================================
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutor};
+use qubit_cas::{
+    CasDecision,
+    CasExecutor,
+};
 
 use crate::support::NonCloneValue;
 
@@ -43,7 +46,10 @@ fn test_success_context_accessors_work() {
     assert_eq!(success.context().max_retries(), 2);
     assert_eq!(success.context().max_operation_elapsed(), None);
     assert_eq!(success.context().max_total_elapsed(), None);
-    assert!(success.context().total_elapsed() >= success.context().attempt_elapsed());
+    assert!(
+        success.context().total_elapsed()
+            >= success.context().attempt_elapsed()
+    );
     assert_eq!(success.context().attempt_timeout(), None);
     assert_eq!(success.context().next_delay(), None);
 }

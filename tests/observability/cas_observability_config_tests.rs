@@ -7,7 +7,10 @@
 // =============================================================================
 
 use qubit_cas::{
-    CasObservabilityConfig, CasObservabilityMode, ContentionThresholds, ListenerPanicPolicy,
+    CasObservabilityConfig,
+    CasObservabilityMode,
+    ContentionThresholds,
+    ListenerPanicPolicy,
 };
 
 /// Verifies report-only helper matches the default configuration.

@@ -6,11 +6,23 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasEvent, CasExecutor, CasHooks, CasObservabilityConfig};
+use qubit_cas::{
+    CasDecision,
+    CasEvent,
+    CasExecutor,
+    CasHooks,
+    CasObservabilityConfig,
+};
 
 use crate::support::TestError;
 

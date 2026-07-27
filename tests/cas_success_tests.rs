@@ -7,7 +7,10 @@
 // =============================================================================
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutor};
+use qubit_cas::{
+    CasDecision,
+    CasExecutor,
+};
 
 /// Verifies success accessors for updated and finished outcomes.
 ///

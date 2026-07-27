@@ -8,7 +8,10 @@
 
 use std::sync::Arc;
 
-use qubit_cas::{CasAttemptFailure, CasAttemptFailureKind};
+use qubit_cas::{
+    CasAttemptFailure,
+    CasAttemptFailureKind,
+};
 
 use crate::support::TestError;
 
@@ -57,7 +60,8 @@ fn test_attempt_failure_accessors_work() {
     assert_eq!(abort.error(), Some(&TestError("abort")));
     assert_eq!(abort.to_string(), "aborted CAS failure: abort");
 
-    let timeout = CasAttemptFailure::<usize, TestError>::Timeout { current: state };
+    let timeout =
+        CasAttemptFailure::<usize, TestError>::Timeout { current: state };
     assert!(!timeout.is_conflict());
     assert!(!timeout.is_retry());
     assert!(!timeout.is_abort());
