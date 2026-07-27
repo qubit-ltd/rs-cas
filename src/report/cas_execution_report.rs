@@ -7,10 +7,7 @@
 // =============================================================================
 //! Immutable observability report for a completed CAS execution.
 
-use std::time::{
-    Duration,
-    Instant,
-};
+use std::time::{Duration, Instant};
 
 use crate::observability::ContentionThresholds;
 

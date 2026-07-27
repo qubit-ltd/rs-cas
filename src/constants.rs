@@ -18,8 +18,7 @@ pub const DEFAULT_CAS_MAX_ATTEMPTS: u32 = DEFAULT_RETRY_MAX_ATTEMPTS;
 pub const CONTENTION_ADAPTIVE_MAX_ATTEMPTS: u32 = 1000;
 
 /// Initial retry delay for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_INITIAL_DELAY: Duration =
-    Duration::from_millis(50);
+pub const CONTENTION_ADAPTIVE_INITIAL_DELAY: Duration = Duration::from_millis(50);
 
 /// Maximum retry delay for the contention-adaptive strategy.
 pub const CONTENTION_ADAPTIVE_MAX_DELAY: Duration = Duration::from_secs(30);
@@ -34,8 +33,7 @@ pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_secs(60);
 /// Includes user operation time, retry sleeps, and control-path listener work.
 /// The value is above [`CONTENTION_ADAPTIVE_MAX_ELAPSED`]
 /// so exponential backoff can use part of the wall-time budget.
-pub const CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED: Duration =
-    Duration::from_secs(180);
+pub const CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED: Duration = Duration::from_secs(180);
 
 /// Jitter factor for the contention-adaptive strategy.
 pub const CONTENTION_ADAPTIVE_JITTER_FACTOR: f64 = 0.25;
@@ -65,8 +63,7 @@ pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(600);
 ///
 /// Set above [`RELIABILITY_FIRST_MAX_ELAPSED`] so long
 /// exponential backoff windows can still fit under a hard end-to-end cap.
-pub const RELIABILITY_FIRST_MAX_TOTAL_ELAPSED: Duration =
-    Duration::from_secs(900);
+pub const RELIABILITY_FIRST_MAX_TOTAL_ELAPSED: Duration = Duration::from_secs(900);
 
 /// Jitter factor for the reliability-first strategy.
 pub const RELIABILITY_FIRST_JITTER_FACTOR: f64 = 0.1;

@@ -7,18 +7,11 @@
 // =============================================================================
 //! CAS event and hook registrations.
 
-use qubit_function::{
-    ArcConsumer,
-    Consumer,
-};
+use qubit_function::{ArcConsumer, Consumer};
 
 use crate::observability::CasAlert;
 
-use super::{
-    CasAlertHook,
-    CasEvent,
-    CasEventHook,
-};
+use super::{CasAlertHook, CasEvent, CasEventHook};
 
 /// Per-execution hooks for observing CAS lifecycle events.
 #[derive(Clone)]

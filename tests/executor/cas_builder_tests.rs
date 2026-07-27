@@ -9,26 +9,14 @@
 use std::time::Duration;
 
 use qubit_cas::constants::{
-    CONTENTION_ADAPTIVE_MAX_ATTEMPTS,
-    DEFAULT_CAS_MAX_ATTEMPTS,
-    LATENCY_FIRST_MAX_ATTEMPTS,
+    CONTENTION_ADAPTIVE_MAX_ATTEMPTS, DEFAULT_CAS_MAX_ATTEMPTS, LATENCY_FIRST_MAX_ATTEMPTS,
     RELIABILITY_FIRST_MAX_ATTEMPTS,
 };
 use qubit_cas::{
-    CasBuilder,
-    CasExecutor,
-    CasObservabilityConfig,
-    CasObservabilityMode,
-    CasStrategy,
-    ContentionThresholds,
-    ListenerPanicPolicy,
+    CasBuilder, CasExecutor, CasObservabilityConfig, CasObservabilityMode, CasStrategy,
+    ContentionThresholds, ListenerPanicPolicy,
 };
-use qubit_retry::{
-    AttemptTimeoutOption,
-    RetryDelay,
-    RetryJitter,
-    RetryOptions,
-};
+use qubit_retry::{AttemptTimeoutOption, RetryDelay, RetryJitter, RetryOptions};
 
 use crate::support::TestError;
 
@@ -79,9 +67,8 @@ fn test_builder_options_and_random_delay_work() {
         RetryJitter::factor(0.25),
     )
     .expect("retry options should be valid");
-    let executor =
-        CasExecutor::<usize, TestError>::from_options(options.clone())
-            .expect("executor should build from options");
+    let executor = CasExecutor::<usize, TestError>::from_options(options.clone())
+        .expect("executor should build from options");
 
     assert_eq!(executor.options(), &options);
 
@@ -116,9 +103,8 @@ fn test_builder_options_preserves_attempt_timeout_option() {
     )
     .expect("retry options should be valid");
 
-    let executor =
-        CasExecutor::<usize, TestError>::from_options(options.clone())
-            .expect("executor should build from options");
+    let executor = CasExecutor::<usize, TestError>::from_options(options.clone())
+        .expect("executor should build from options");
 
     assert_eq!(executor.options(), &options);
     assert_eq!(
@@ -137,9 +123,7 @@ fn test_builder_options_preserves_attempt_timeout_option() {
 #[test]
 fn test_builder_attempt_timeout_option_work() {
     let executor = CasExecutor::<usize, TestError>::builder()
-        .attempt_timeout_option(Some(AttemptTimeoutOption::retry(
-            Duration::from_millis(9),
-        )))
+        .attempt_timeout_option(Some(AttemptTimeoutOption::retry(Duration::from_millis(9))))
         .build()
         .expect("executor should build");
 
@@ -158,8 +142,7 @@ fn test_builder_attempt_timeout_option_work() {
 /// This test returns nothing.
 #[test]
 fn test_builder_strategies_work() {
-    let contention_adaptive =
-        CasExecutor::<usize, TestError>::contention_adaptive();
+    let contention_adaptive = CasExecutor::<usize, TestError>::contention_adaptive();
     assert_eq!(
         contention_adaptive.options().max_attempts(),
         CONTENTION_ADAPTIVE_MAX_ATTEMPTS
@@ -171,9 +154,8 @@ fn test_builder_strategies_work() {
         LATENCY_FIRST_MAX_ATTEMPTS
     );
 
-    let reliability_first = CasExecutor::<usize, TestError>::with_strategy(
-        CasStrategy::ReliabilityFirst,
-    );
+    let reliability_first =
+        CasExecutor::<usize, TestError>::with_strategy(CasStrategy::ReliabilityFirst);
     assert_eq!(
         reliability_first.options().max_attempts(),
         RELIABILITY_FIRST_MAX_ATTEMPTS
