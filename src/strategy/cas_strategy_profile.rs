@@ -18,8 +18,6 @@ pub struct CasStrategyProfile {
     max_operation_elapsed: Duration,
     /// Optional monotonic total retry-flow elapsed-time budget.
     max_total_elapsed: Option<Duration>,
-    /// Conflict ratio at which callers should consider this profile suitable.
-    target_conflict_ratio: f64,
     /// Whether the strategy uses retry backoff.
     uses_backoff: bool,
 }
@@ -31,14 +29,12 @@ impl CasStrategyProfile {
         max_attempts: u32,
         max_operation_elapsed: Duration,
         max_total_elapsed: Option<Duration>,
-        target_conflict_ratio: f64,
         uses_backoff: bool,
     ) -> Self {
         Self {
             max_attempts,
             max_operation_elapsed,
             max_total_elapsed,
-            target_conflict_ratio,
             uses_backoff,
         }
     }
@@ -69,15 +65,6 @@ impl CasStrategyProfile {
     #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
-    }
-
-    /// Returns the target conflict ratio for this strategy profile.
-    ///
-    /// # Returns
-    /// The conflict ratio at which this strategy is recommended.
-    #[inline(always)]
-    pub fn target_conflict_ratio(&self) -> f64 {
-        self.target_conflict_ratio
     }
 
     /// Returns whether this profile uses retry backoff.

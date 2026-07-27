@@ -19,9 +19,11 @@ use qubit_cas::ContentionThresholds;
 fn test_contention_thresholds_new_clamps_ratio() {
     let high = ContentionThresholds::new(3, 1, 1.8);
     let low = ContentionThresholds::new(3, 1, -0.2);
+    let nan = ContentionThresholds::new(3, 1, f64::NAN);
 
     assert_eq!(high.conflict_ratio(), 1.0);
     assert_eq!(low.conflict_ratio(), 0.0);
+    assert_eq!(nan.conflict_ratio(), 0.0);
 }
 
 /// Verifies contention threshold default values.

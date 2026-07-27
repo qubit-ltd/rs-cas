@@ -194,6 +194,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Blocking
+    /// Configured retry delays block the calling thread until execution ends.
     pub fn execute<R, O>(
         &self,
         state: &AtomicRef<T>,
@@ -220,6 +223,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// The terminal CAS success or error without an execution report.
+    ///
+    /// # Blocking
+    /// Configured retry delays block the calling thread until execution ends.
     pub fn execute_result<R, O>(
         &self,
         state: &AtomicRef<T>,
@@ -230,19 +236,11 @@ impl<T, E> CasExecutor<T, E> {
         E: 'static,
         O: Function<T, CasDecision<T, R, E>>,
     {
-        let success_context = Arc::new(Mutex::new(None));
-        let retry = self.build_result_retry(Arc::clone(&success_context));
+        let retry = self.build_result_retry();
         let attempt = retry.run(|| self.run_sync_attempt(state, &operation));
         match attempt {
             Ok(success) => {
                 let (success, context) = success.into_parts();
-                let _ = success_context
-                    .lock()
-                    .expect("CAS success context slot should be lockable")
-                    .take()
-                    .expect(
-                        "retry success hook must capture CAS success context",
-                    );
                 Ok(self.enrich_success(success, context))
             }
             Err(error) => Err(CasError::new(error, None)),
@@ -260,6 +258,9 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// A terminal result together with the execution report.
     ///
+    /// # Blocking
+    /// Configured retry delays block the calling thread until execution ends.
+    ///
     /// # Panics
     /// Panics raised by event or alert listeners propagate when
     /// [`ListenerPanicPolicy::Propagate`] is configured. Use
@@ -276,23 +277,11 @@ impl<T, E> CasExecutor<T, E> {
         E: 'static,
         O: Function<T, CasDecision<T, R, E>>,
     {
-        let success_context = Arc::new(Mutex::new(None));
-        let attempt_snapshot = Arc::new(Mutex::new(None));
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
-        let retry = self.build_retry(
-            &hooks,
-            Arc::clone(&success_context),
-            Arc::clone(&report_builder),
-        );
+        let retry = self.build_retry(&hooks, Arc::clone(&report_builder));
         let attempt = retry.run(|| self.run_sync_attempt(state, &operation));
-        self.finish_execution(
-            attempt,
-            hooks,
-            success_context,
-            attempt_snapshot,
-            report_builder,
-        )
+        self.finish_execution(attempt, hooks, None, report_builder)
     }
 
     /// Executes one asynchronous CAS operation.
@@ -303,12 +292,6 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
-    ///
-    /// # Panics
-    /// Panics raised by event or alert listeners propagate when
-    /// [`ListenerPanicPolicy::Propagate`] is configured. Use
-    /// [`ListenerPanicPolicy::Isolate`] to keep listener panics from unwinding
-    /// through this future.
     #[cfg(feature = "tokio")]
     pub async fn execute_async<R, O, Fut>(
         &self,
@@ -325,6 +308,62 @@ impl<T, E> CasExecutor<T, E> {
             .await
     }
 
+    /// Executes one asynchronous CAS operation without constructing a report.
+    ///
+    /// This path preserves retry, success, timeout, and terminal error
+    /// semantics while skipping report accumulation and lifecycle hook
+    /// dispatch. Use [`Self::execute_async`] when the caller needs execution
+    /// metrics.
+    ///
+    /// # Parameters
+    /// - `state`: Shared atomic state container.
+    /// - `operation`: Async operation factory receiving one state snapshot.
+    ///
+    /// # Returns
+    /// The terminal CAS success or error without an execution report.
+    ///
+    /// # Cancellation
+    /// Cancelling the returned future cancels the in-flight operation future.
+    /// Operations must therefore remain safe to retry or cancel.
+    #[cfg(feature = "tokio")]
+    pub async fn execute_async_result<R, O, Fut>(
+        &self,
+        state: &AtomicRef<T>,
+        operation: O,
+    ) -> Result<CasSuccess<T, R>, CasError<T, E>>
+    where
+        T: 'static,
+        E: 'static,
+        O: Fn(Arc<T>) -> Fut,
+        Fut: std::future::Future<Output = CasDecision<T, R, E>>,
+    {
+        let attempt_snapshot = Arc::new(Mutex::new(None));
+        let retry = self.build_result_retry();
+        let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
+        let attempt = retry
+            .run_async(|| {
+                self.run_async_attempt(
+                    state,
+                    &operation,
+                    Arc::clone(&attempt_snapshot_for_attempt),
+                )
+            })
+            .await;
+        match attempt {
+            Ok(success) => {
+                let (success, context) = success.into_parts();
+                Ok(self.enrich_success(success, context))
+            }
+            Err(error) => {
+                let timeout_current = attempt_snapshot
+                    .lock()
+                    .expect("CAS attempt snapshot slot should be lockable")
+                    .clone();
+                Err(CasError::new(error, timeout_current))
+            }
+        }
+    }
+
     /// Executes one asynchronous CAS operation with lifecycle hooks.
     ///
     /// # Parameters
@@ -334,6 +373,12 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Panics
+    /// Panics raised by event or alert listeners propagate when
+    /// [`ListenerPanicPolicy::Propagate`] is configured. Use
+    /// [`ListenerPanicPolicy::Isolate`] to keep listener panics from unwinding
+    /// through this future.
     #[cfg(feature = "tokio")]
     pub async fn execute_async_with_hooks<R, O, Fut>(
         &self,
@@ -347,15 +392,10 @@ impl<T, E> CasExecutor<T, E> {
         O: Fn(Arc<T>) -> Fut,
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
-        let success_context = Arc::new(Mutex::new(None));
         let attempt_snapshot = Arc::new(Mutex::new(None));
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
-        let retry = self.build_retry(
-            &hooks,
-            Arc::clone(&success_context),
-            Arc::clone(&report_builder),
-        );
+        let retry = self.build_retry(&hooks, Arc::clone(&report_builder));
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let attempt = retry
             .run_async(|| {
@@ -369,8 +409,7 @@ impl<T, E> CasExecutor<T, E> {
         self.finish_execution(
             attempt,
             hooks,
-            success_context,
-            attempt_snapshot,
+            Some(attempt_snapshot),
             report_builder,
         )
     }
@@ -379,14 +418,11 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Parameters
     /// - `hooks`: Hook registrations for the current execution.
-    /// - `success_context`: Shared slot used to capture the retry success
-    ///   context.
     /// # Returns
     /// A retry policy configured for one CAS execution.
     fn build_retry(
         &self,
         hooks: &CasHooks,
-        success_context: Arc<Mutex<Option<RetryContext>>>,
         report_builder: Arc<Mutex<CasReportBuilder>>,
     ) -> Retry<CasAttemptFailure<T, E>>
     where
@@ -402,11 +438,6 @@ impl<T, E> CasExecutor<T, E> {
 
         let mut builder = Retry::<CasAttemptFailure<T, E>>::builder()
             .options(self.options.clone())
-            .on_success(move |context: &RetryContext| {
-                *success_context
-                    .lock()
-                    .expect("CAS success context slot should be lockable") = Some(*context);
-            })
             .on_failure(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
                     let failure = match failure {
@@ -503,30 +534,17 @@ impl<T, E> CasExecutor<T, E> {
         )
     }
 
-    /// Builds a retry policy for result-only synchronous execution.
-    ///
-    /// # Parameters
-    /// - `success_context`: Shared slot used to capture the retry success
-    ///   context.
+    /// Builds a retry policy for result-only execution.
     ///
     /// # Returns
     /// A retry policy without report or event listeners.
-    fn build_result_retry(
-        &self,
-        success_context: Arc<Mutex<Option<RetryContext>>>,
-    ) -> Retry<CasAttemptFailure<T, E>>
+    fn build_result_retry(&self) -> Retry<CasAttemptFailure<T, E>>
     where
         T: 'static,
         E: 'static,
     {
         Retry::<CasAttemptFailure<T, E>>::builder()
             .options(self.options.clone())
-            .on_success(move |context: &RetryContext| {
-                *success_context
-                    .lock()
-                    .expect("CAS success context slot should be lockable") =
-                    Some(*context);
-            })
             .on_failure(
                 |failure: &AttemptFailure<CasAttemptFailure<T, E>>,
                  _context: &RetryContext| {
@@ -649,7 +667,8 @@ impl<T, E> CasExecutor<T, E> {
     /// # Parameters
     /// - `attempt`: Retry-layer terminal success or error.
     /// - `hooks`: Hook registrations for the current execution.
-    /// - `success_context`: Shared slot storing the success context.
+    /// - `attempt_snapshot`: Last async operation snapshot, when an async
+    ///   execution needs to preserve it for a timeout error.
     ///
     /// # Returns
     /// Public CAS success or error.
@@ -660,8 +679,7 @@ impl<T, E> CasExecutor<T, E> {
             RetryError<CasAttemptFailure<T, E>>,
         >,
         hooks: CasHooks,
-        _success_context: Arc<Mutex<Option<RetryContext>>>,
-        attempt_snapshot: Arc<Mutex<Option<Arc<T>>>>,
+        attempt_snapshot: Option<Arc<Mutex<Option<Arc<T>>>>>,
         report_builder: Arc<Mutex<CasReportBuilder>>,
     ) -> CasOutcome<T, R, E>
     where
@@ -698,10 +716,12 @@ impl<T, E> CasExecutor<T, E> {
                 CasOutcome::new(Ok(success), report)
             }
             Err(error) => {
-                let timeout_current = attempt_snapshot
-                    .lock()
-                    .expect("CAS attempt snapshot slot should be lockable")
-                    .clone();
+                let timeout_current = attempt_snapshot.and_then(|snapshot| {
+                    snapshot
+                        .lock()
+                        .expect("CAS attempt snapshot slot should be lockable")
+                        .clone()
+                });
                 let error = CasError::new(error, timeout_current);
                 let context = error.context();
                 let outcome = Self::error_outcome(error.kind());

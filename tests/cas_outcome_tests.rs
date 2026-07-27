@@ -27,6 +27,8 @@ impl fmt::Display for TestError {
 
 impl Error for TestError {}
 
+struct NonDebugError;
+
 #[test]
 fn test_cas_outcome_success_accessors_and_parts() {
     let state = AtomicRef::from_value(1usize);
@@ -81,4 +83,27 @@ fn test_cas_outcome_error_accessors_and_result() {
 
     let error = outcome.expect_err("retry exhaustion should fail");
     assert_eq!(error.kind(), CasErrorKind::RetryExhausted);
+}
+
+/// Verifies `expect` does not require the business error to implement `Debug`.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+#[should_panic(expected = "non-debug error should still support expect")]
+fn test_cas_outcome_expect_accepts_non_debug_error() {
+    let state = AtomicRef::from_value(1usize);
+    let executor = CasExecutor::<usize, NonDebugError>::builder()
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let outcome = executor.execute(&state, |_current: &usize| {
+        CasDecision::<usize, (), NonDebugError>::retry(NonDebugError)
+    });
+
+    let _ = outcome.expect("non-debug error should still support expect");
 }

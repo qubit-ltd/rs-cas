@@ -34,13 +34,14 @@ expressed as an explicit, typed decision.
 - **Retry-aware CAS loop**: compare-and-swap conflicts and business-level
   retry decisions are retried through `qubit-retry` with configurable attempts,
   elapsed-time budgets, delays, and jitter.
-- **Synchronous and asynchronous APIs**: `execute` works without an async
-  runtime; `execute_async` is available with the `tokio` feature.
+- **Synchronous and asynchronous APIs**: `execute` and `execute_result` work
+  without an async runtime; `execute_async` and `execute_async_result` are
+  available with the `tokio` feature.
 - **Async timeout control**: per-attempt timeouts can be retried or converted
   into immediate aborts through `qubit-retry`'s retry options.
-- **Observable execution reports**: every execution returns a `CasOutcome`
-  containing a `CasExecutionReport` with attempts, conflicts, conflict ratio,
-  elapsed time, and terminal outcome.
+- **Observable execution reports**: report-producing executions return a
+  `CasOutcome` containing a `CasExecutionReport` with attempts, conflicts,
+  conflict ratio, elapsed time, and terminal outcome.
 - **Lifecycle event stream**: per-execution `CasHooks` can observe unified
   `CasEvent` values without changing the business operation.
 - **Strategy-based executors**: built-in `LatencyFirst`,
@@ -63,6 +64,9 @@ qubit-cas = "0.9"
 Add `qubit-atomic` as a direct dependency when your application constructs or
 stores that state.
 
+Advanced builder methods expose `qubit-retry` option types. Add
+`qubit-retry` as a direct dependency when configuring those methods.
+
 Enable asynchronous execution with:
 
 ```toml
@@ -72,8 +76,9 @@ qubit-cas = { version = "0.9", features = ["tokio"] }
 
 Optional features:
 
-- `tokio`: enables `CasExecutor::execute_async` and per-attempt async timeout
-  handling through Tokio.
+- `tokio`: enables `CasExecutor::execute_async`,
+  `CasExecutor::execute_async_result`, and per-attempt async timeout handling
+  through Tokio.
 
 The default feature set is empty. Synchronous CAS execution does not pull in an
 async runtime.
@@ -184,9 +189,12 @@ Every operation receives the current state snapshot and returns a
 - `CasDecision::abort(error)` stops the flow immediately and returns
   `CasErrorKind::Abort`.
 
-`execute*` returns `CasOutcome<T, R, E>`. It contains the business
-`Result<CasSuccess<T, R>, CasError<T, E>>` plus the `CasExecutionReport`, so
-callers can read conflict counts and ratios without registering hooks.
+`execute`, `execute_with_hooks`, `execute_async`, and
+`execute_async_with_hooks` return `CasOutcome<T, R, E>`. It contains the
+business `Result<CasSuccess<T, R>, CasError<T, E>>` plus the
+`CasExecutionReport`, so callers can read conflict counts and ratios without
+registering hooks. `execute_result` and `execute_async_result` skip report and
+hook construction when callers only need the terminal result.
 
 ## State and Operation Guidelines
 
@@ -199,6 +207,10 @@ idempotent and tied to an external operation id.
 The shared value should be cheap enough to clone into a replacement `Arc<T>`.
 For large states, prefer persistent data structures, internal `Arc` fields, or a
 smaller state object that points to larger immutable data.
+
+`CasSuccess` contains the snapshot installed or observed at the operation's
+linearization point. It is not a guarantee that the same value remains current
+when the method returns.
 
 ## Error Handling
 
@@ -223,16 +235,20 @@ state snapshot observed by the last attempt.
 
 `qubit-cas` ships with three common strategies you can choose directly:
 
-- `CasExecutor::latency_first()` retries immediately with a small attempt budget.
-- `CasExecutor::contention_adaptive()` uses exponential backoff and jitter for
-  contended writers.
-- `CasExecutor::reliability_first()` uses a longer retry window for operations
-  where eventual success matters more than latency.
+- `CasExecutor::latency_first()` retries immediately within a short total-time
+  budget.
+- `CasExecutor::contention_adaptive()` uses bounded microsecond-to-millisecond
+  exponential backoff and jitter for contended writers.
+- `CasExecutor::reliability_first()` uses a bounded millisecond backoff window
+  for operations where a modest retry window matters more than latency.
 
-In practice, start with `latency_first()`. If reports show
-`conflict_ratio >= 0.30` and `attempts_total >= 3`, the workload is visibly
-contended and should move to `contention_adaptive()`. If your operation
-prioritizes "succeed eventually" over "return fast", use `reliability_first()`.
+Start with `latency_first()` and choose another preset only after measuring the
+workload. The same retry delay applies to CAS conflicts and explicit business
+`CasDecision::retry` failures; use the builder to set a workload-specific
+policy when those two failure classes need different timing.
+
+Synchronous retry delays block the calling thread. Use the async APIs when an
+operation must yield while waiting between retries.
 
 ## Related Fast CAS Crate
 
@@ -465,6 +481,8 @@ async fn main() {
 
 - `CasExecutor<T, E>`: reusable CAS executor bound to a state type `T` and
   business error type `E`.
+- `CasExecutor::execute_result` and `CasExecutor::execute_async_result`:
+  result-only execution paths that skip report and hook construction.
 - `CasBuilder<T, E>`: configures retry attempts, elapsed budgets, delay,
   jitter, async timeout options, observability, and strategy presets.
 - `CasDecision<T, R, E>`: per-attempt decision returned by user logic.
@@ -480,13 +498,13 @@ async fn main() {
 
 ## Project Layout
 
-- `src/decision`: typed CAS decision values.
+- `src/cas_decision.rs`: typed CAS decision values.
 - `src/executor`: builder and synchronous/asynchronous CAS executor.
 - `src/event`: execution context and lifecycle hooks.
 - `src/error`: attempt-level and terminal CAS errors.
 - `src/observability`: observability modes, contention thresholds, and alerts.
-- `src/outcome` and `src/report`: execution result wrapper and observability
-  reports.
+- `src/cas_outcome.rs`, `src/cas_success.rs`, and `src/report`: execution
+  result wrappers and observability reports.
 - `src/strategy`: built-in execution strategies and strategy profiles.
 - `benches`: observability overhead benchmarks.
 - `tests`: behavior tests for executor, builder, hooks, errors, and options.

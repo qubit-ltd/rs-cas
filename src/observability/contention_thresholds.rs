@@ -21,12 +21,13 @@ pub struct ContentionThresholds {
 impl ContentionThresholds {
     /// Creates contention thresholds from raw values.
     ///
-    /// The conflict ratio is clamped to `[0.0, 1.0]`.
+    /// The conflict ratio is normalized to `[0.0, 1.0]`. `NaN` is normalized
+    /// to `0.0` so threshold comparisons remain deterministic.
     ///
     /// # Parameters
     /// - `min_attempts`: Minimum attempts before ratio check is meaningful.
     /// - `min_conflicts`: Minimum absolute conflicts required.
-    /// - `conflict_ratio`: Minimum conflict ratio (clamped to [0.0, 1.0]).
+    /// - `conflict_ratio`: Minimum conflict ratio normalized to `[0.0, 1.0]`.
     ///
     /// # Returns
     /// A normalized [`ContentionThresholds`] value.
@@ -39,7 +40,11 @@ impl ContentionThresholds {
         Self {
             min_attempts,
             min_conflicts,
-            conflict_ratio: conflict_ratio.clamp(0.0, 1.0),
+            conflict_ratio: if conflict_ratio.is_nan() {
+                0.0
+            } else {
+                conflict_ratio.clamp(0.0, 1.0)
+            },
         }
     }
 

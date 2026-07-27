@@ -18,7 +18,11 @@ pub enum CasSuccess<T, R> {
     Updated {
         /// Previous state observed by the successful attempt.
         previous: Arc<T>,
-        /// Current state after the successful update.
+        /// State installed by the successful update at its linearization
+        /// point.
+        ///
+        /// Another writer may replace this state before the caller receives
+        /// the result.
         current: Arc<T>,
         /// Business output returned by the operation.
         output: R,
@@ -28,7 +32,10 @@ pub enum CasSuccess<T, R> {
 
     /// The executor finished successfully without writing a new state.
     Finished {
-        /// Current state that remained installed.
+        /// State observed by the no-write completion.
+        ///
+        /// Another writer may replace this state before the caller receives
+        /// the result.
         current: Arc<T>,
         /// Business output returned by the operation.
         output: R,

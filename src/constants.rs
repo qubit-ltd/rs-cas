@@ -15,18 +15,18 @@ use qubit_retry::constants::DEFAULT_RETRY_MAX_ATTEMPTS;
 pub const DEFAULT_CAS_MAX_ATTEMPTS: u32 = DEFAULT_RETRY_MAX_ATTEMPTS;
 
 /// Maximum attempts for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_MAX_ATTEMPTS: u32 = 1000;
+pub const CONTENTION_ADAPTIVE_MAX_ATTEMPTS: u32 = 64;
 
 /// Initial retry delay for the contention-adaptive strategy.
 pub const CONTENTION_ADAPTIVE_INITIAL_DELAY: Duration =
-    Duration::from_millis(50);
+    Duration::from_micros(50);
 
 /// Maximum retry delay for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_MAX_DELAY: Duration = Duration::from_secs(30);
+pub const CONTENTION_ADAPTIVE_MAX_DELAY: Duration = Duration::from_millis(5);
 
 /// Cumulative user operation elapsed-time budget for the contention-adaptive
 /// strategy.
-pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_secs(60);
+pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_millis(50);
 
 /// Monotonic total retry-flow elapsed-time ceiling for the contention-adaptive
 /// strategy.
@@ -35,7 +35,7 @@ pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_secs(60);
 /// The value is above [`CONTENTION_ADAPTIVE_MAX_ELAPSED`]
 /// so exponential backoff can use part of the wall-time budget.
 pub const CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED: Duration =
-    Duration::from_secs(180);
+    Duration::from_millis(250);
 
 /// Jitter factor for the contention-adaptive strategy.
 pub const CONTENTION_ADAPTIVE_JITTER_FACTOR: f64 = 0.25;
@@ -45,20 +45,24 @@ pub const LATENCY_FIRST_MAX_ATTEMPTS: u32 = 100;
 
 /// Cumulative user operation elapsed-time budget for the latency-first
 /// strategy.
-pub const LATENCY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(5);
+pub const LATENCY_FIRST_MAX_ELAPSED: Duration = Duration::from_millis(5);
+
+/// Monotonic total retry-flow elapsed-time ceiling for the latency-first
+/// strategy.
+pub const LATENCY_FIRST_MAX_TOTAL_ELAPSED: Duration = Duration::from_millis(20);
 
 /// Maximum attempts for the reliability-first strategy.
-pub const RELIABILITY_FIRST_MAX_ATTEMPTS: u32 = 5000;
+pub const RELIABILITY_FIRST_MAX_ATTEMPTS: u32 = 128;
 
 /// Initial retry delay for the reliability-first strategy.
-pub const RELIABILITY_FIRST_INITIAL_DELAY: Duration = Duration::from_secs(1);
+pub const RELIABILITY_FIRST_INITIAL_DELAY: Duration = Duration::from_millis(1);
 
 /// Maximum retry delay for the reliability-first strategy.
-pub const RELIABILITY_FIRST_MAX_DELAY: Duration = Duration::from_secs(300);
+pub const RELIABILITY_FIRST_MAX_DELAY: Duration = Duration::from_millis(100);
 
 /// Cumulative user operation elapsed-time budget for the reliability-first
 /// strategy.
-pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(600);
+pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(5);
 
 /// Monotonic total retry-flow elapsed-time ceiling for the reliability-first
 /// strategy.
@@ -66,7 +70,7 @@ pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(600);
 /// Set above [`RELIABILITY_FIRST_MAX_ELAPSED`] so long
 /// exponential backoff windows can still fit under a hard end-to-end cap.
 pub const RELIABILITY_FIRST_MAX_TOTAL_ELAPSED: Duration =
-    Duration::from_secs(900);
+    Duration::from_secs(10);
 
 /// Jitter factor for the reliability-first strategy.
 pub const RELIABILITY_FIRST_JITTER_FACTOR: f64 = 0.1;

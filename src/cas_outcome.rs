@@ -128,10 +128,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Panics
     /// Panics with the given message if the outcome contains an error.
     #[inline(always)]
-    pub fn expect(self, message: &str) -> CasSuccess<T, R>
-    where
-        E: fmt::Debug,
-    {
+    pub fn expect(self, message: &str) -> CasSuccess<T, R> {
         self.result.expect(message)
     }
 

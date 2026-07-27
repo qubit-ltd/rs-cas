@@ -18,6 +18,7 @@ use crate::constants::{
     CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED,
     LATENCY_FIRST_MAX_ATTEMPTS,
     LATENCY_FIRST_MAX_ELAPSED,
+    LATENCY_FIRST_MAX_TOTAL_ELAPSED,
     RELIABILITY_FIRST_INITIAL_DELAY,
     RELIABILITY_FIRST_JITTER_FACTOR,
     RELIABILITY_FIRST_MAX_ATTEMPTS,
@@ -55,29 +56,26 @@ impl CasStrategy {
     ///
     /// # Returns
     /// A [`CasStrategyProfile`] containing the parameters used by this
-    /// strategy (max attempts, elapsed budget, target ratio, backoff usage).
+    /// strategy (max attempts, elapsed budgets, and backoff usage).
     #[inline]
     pub fn profile(self) -> CasStrategyProfile {
         match self {
             Self::LatencyFirst => CasStrategyProfile::new(
                 LATENCY_FIRST_MAX_ATTEMPTS,
                 LATENCY_FIRST_MAX_ELAPSED,
-                None,
-                0.0,
+                Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED),
                 false,
             ),
             Self::ContentionAdaptive => CasStrategyProfile::new(
                 CONTENTION_ADAPTIVE_MAX_ATTEMPTS,
                 CONTENTION_ADAPTIVE_MAX_ELAPSED,
                 Some(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED),
-                0.30,
                 true,
             ),
             Self::ReliabilityFirst => CasStrategyProfile::new(
                 RELIABILITY_FIRST_MAX_ATTEMPTS,
                 RELIABILITY_FIRST_MAX_ELAPSED,
                 Some(RELIABILITY_FIRST_MAX_TOTAL_ELAPSED),
-                0.50,
                 true,
             ),
         }

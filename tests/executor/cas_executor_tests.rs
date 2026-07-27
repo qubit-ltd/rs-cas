@@ -12,8 +12,10 @@ use std::sync::atomic::{
 };
 use std::sync::{
     Arc,
+    Barrier,
     Mutex,
 };
+use std::thread;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
@@ -71,6 +73,52 @@ fn test_execute_result_retries_conflict_and_returns_success() {
     assert_eq!(success.attempts(), 2);
     assert_eq!(*success.output(), 11);
     assert_eq!(*state.load(), 2);
+}
+
+/// Verifies result-only execution preserves all concurrent state updates.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_result_concurrent_updates_preserve_increment_count() {
+    const WORKERS: usize = 4;
+    const UPDATES_PER_WORKER: usize = 100;
+
+    let state = Arc::new(AtomicRef::from_value(0usize));
+    let executor = Arc::new(
+        CasExecutor::<usize, TestError>::builder()
+            .max_attempts(1_000)
+            .no_delay()
+            .build()
+            .expect("concurrent executor should build"),
+    );
+    let barrier = Arc::new(Barrier::new(WORKERS));
+    let mut workers = Vec::with_capacity(WORKERS);
+
+    for _ in 0..WORKERS {
+        let state = Arc::clone(&state);
+        let executor = Arc::clone(&executor);
+        let barrier = Arc::clone(&barrier);
+        workers.push(thread::spawn(move || {
+            barrier.wait();
+            for _ in 0..UPDATES_PER_WORKER {
+                executor
+                    .execute_result(&state, |current: &usize| {
+                        CasDecision::update(*current + 1, ())
+                    })
+                    .expect("concurrent increment should succeed");
+            }
+        }));
+    }
+
+    for worker in workers {
+        worker.join().expect("worker should not panic");
+    }
+
+    assert_eq!(*state.load(), WORKERS * UPDATES_PER_WORKER);
 }
 
 /// Verifies sync execution retries CAS conflicts and reports retry hooks.
@@ -495,6 +543,51 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
         Some(true)
     );
     assert_eq!(error.current().map(|current| **current), Some(11));
+}
+
+/// Verifies async execution can retry timed-out attempts and then succeed.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+/// Verifies async result-only execution retries conflicts and returns success.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+async fn test_execute_async_result_retries_conflict_and_returns_success() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .build()
+        .expect("async result-only executor should build");
+    let conflict_state = &state;
+
+    let success = executor
+        .execute_async_result(&state, {
+            let attempts = Arc::clone(&attempts);
+            move |current: Arc<usize>| {
+                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                if attempt == 0 {
+                    conflict_state.store(Arc::new(*current + 1));
+                }
+                async move { CasDecision::update(*current + 1, *current + 10) }
+            }
+        })
+        .await
+        .expect("second async result-only attempt should succeed");
+
+    assert_eq!(success.attempts(), 2);
+    assert_eq!(*success.output(), 11);
+    assert_eq!(*state.load(), 2);
 }
 
 /// Verifies async execution can retry timed-out attempts and then succeed.

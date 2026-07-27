@@ -30,10 +30,10 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
   继续重试或立即终止。
 - **带重试语义的 CAS 循环**：compare-and-swap 冲突与业务层 `retry`
   决策会交给 `qubit-retry` 处理，可配置尝试次数、总耗时、延迟和抖动。
-- **同步与异步 API**：`execute` 不依赖异步运行时；启用 `tokio` feature 后可使用
-  `execute_async`。
+- **同步与异步 API**：`execute` 与 `execute_result` 不依赖异步运行时；启用
+  `tokio` feature 后可使用 `execute_async` 与 `execute_async_result`。
 - **异步超时控制**：可为每次异步尝试设置超时时间，并选择超时后继续重试或立即中止。
-- **可观测执行报告**：每次执行都会返回 `CasOutcome`，其中的
+- **可观测执行报告**：生成报告的执行会返回 `CasOutcome`，其中的
   `CasExecutionReport` 汇总尝试次数、冲突次数、冲突率、耗时和终止结果。
 - **生命周期事件流**：`CasHooks` 可在单次执行中观察统一的 `CasEvent`，不需要污染业务逻辑。
 - **策略化执行器**：内置 `LatencyFirst`、`ContentionAdaptive`、`ReliabilityFirst`
@@ -54,6 +54,9 @@ qubit-cas = "0.9"
 `qubit-cas` 使用 `qubit_atomic::AtomicRef<T>` 保存共享状态。应用代码如果需要构造或
 持有该状态，应直接依赖 `qubit-atomic`。
 
+高级 builder 方法会暴露 `qubit-retry` 的选项类型；使用这些方法时应直接依赖
+`qubit-retry`。
+
 启用异步执行：
 
 ```toml
@@ -63,7 +66,8 @@ qubit-cas = { version = "0.9", features = ["tokio"] }
 
 可选 feature：
 
-- `tokio`：启用 `CasExecutor::execute_async`，并通过 Tokio 支持异步单次 attempt 超时处理。
+- `tokio`：启用 `CasExecutor::execute_async` 与
+  `CasExecutor::execute_async_result`，并通过 Tokio 支持异步单次 attempt 超时处理。
 
 默认 feature 为空，因此同步 CAS 执行不会引入异步运行时。
 
@@ -156,8 +160,10 @@ fn main() {
   `CasErrorKind::RetryExhausted`。
 - `CasDecision::abort(error)`：立即终止流程，并返回 `CasErrorKind::Abort`。
 
-`execute*` 返回 `CasOutcome<T, R, E>`。它包含业务层 `Result<CasSuccess<T, R>, CasError<T, E>>`
-以及本次执行的 `CasExecutionReport`，调用方可以在不注册 Hook 的情况下读取冲突次数和冲突率。
+`execute`、`execute_with_hooks`、`execute_async` 与 `execute_async_with_hooks` 返回
+`CasOutcome<T, R, E>`。它包含业务层 `Result<CasSuccess<T, R>, CasError<T, E>>` 与本次执行的
+`CasExecutionReport`，调用方可以在不注册 Hook 的情况下读取冲突次数和冲突率。
+`execute_result` 与 `execute_async_result` 会跳过报告和 Hook 构造，适合只需要终态结果的调用方。
 
 ## 状态与操作建议
 
@@ -167,6 +173,8 @@ CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让�
 
 共享值应当足够轻量，便于克隆为新的 `Arc<T>` 替换值。对于较大的状态，可以考虑持久化数据结构、
 内部 `Arc` 字段，或只把指向大型不可变数据的小型状态对象放入 CAS。
+
+`CasSuccess` 保存的是操作线性化时刻安装或观察到的快照，不保证方法返回时该值仍是全局最新状态。
 
 ## 错误处理
 
@@ -186,14 +194,14 @@ CAS 操作可能被调用多次，因为冲突和可重试业务失败都会让�
 
 `qubit-cas` 提供三种常见策略，方便按场景直接选用：
 
-- `CasExecutor::latency_first()`：立即重试 + 较小尝试次数，适合延迟敏感场景。
-- `CasExecutor::contention_adaptive()`：指数退避 + 抖动，适合写竞争较高的场景。
-- `CasExecutor::reliability_first()`：更长重试窗口，适合更看重最终成功率的操作。
+- `CasExecutor::latency_first()`：在很短总时间预算内立即重试，适合延迟敏感场景。
+- `CasExecutor::contention_adaptive()`：使用微秒到毫秒级、有上界的指数退避与抖动，适合写竞争场景。
+- `CasExecutor::reliability_first()`：使用毫秒级、有上界的退避窗口，适合允许适度等待的操作。
 
-通常可以先用 `latency_first()` 起步；如果报告中
-`conflict_ratio >= 0.30` 且 `attempts_total >= 3`，说明出现明显热点争用，
-可以切到 `contention_adaptive()`；如果业务更看重“尽量成功”而非“尽快返回”，
-可选 `reliability_first()`。
+通常先用 `latency_first()`，再根据真实工作负载的测量结果选择其他预设。CAS 冲突与
+显式业务 `CasDecision::retry` 共享同一 retry delay；如果二者需要不同时间策略，应通过
+builder 配置与工作负载匹配的策略。同步 retry delay 会阻塞调用线程；需要在等待期间让出
+执行权时应使用异步 API。
 
 ## 相关的 Fast CAS Crate
 
@@ -400,7 +408,7 @@ async fn main() {
         .expect("valid CAS settings");
 
     let success = executor
-        .execute_async(&state, |current| async move {
+        .execute_async_result(&state, |current| async move {
             CasDecision::update(*current + 1, *current + 1)
         })
         .await
@@ -413,6 +421,8 @@ async fn main() {
 ## 公共 API 速览
 
 - `CasExecutor<T, E>`：可复用的 CAS 执行器，绑定状态类型 `T` 和业务错误类型 `E`。
+- `CasExecutor::execute_result` 与 `CasExecutor::execute_async_result`：跳过报告和 Hook 构造的
+  result-only 执行路径。
 - `CasBuilder<T, E>`：配置重试次数、elapsed 预算、延迟、抖动、异步超时选项、可观测能力和策略预设。
 - `CasDecision<T, R, E>`：用户逻辑在每次 attempt 中返回的决策。
 - `CasOutcome<T, R, E>`：终态结果与 `CasExecutionReport` 的组合。
@@ -424,12 +434,12 @@ async fn main() {
 
 ## 项目结构
 
-- `src/decision`：强类型 CAS 决策值。
+- `src/cas_decision.rs`：强类型 CAS 决策值。
 - `src/executor`：builder、同步 CAS 执行器与异步 CAS 执行器。
 - `src/event`：执行上下文与生命周期 hooks。
 - `src/error`：尝试级失败和终止级 CAS 错误。
 - `src/observability`：可观测模式、争用阈值和告警类型。
-- `src/outcome` 与 `src/report`：执行结果包装与可观测报告。
+- `src/cas_outcome.rs`、`src/cas_success.rs` 与 `src/report`：执行结果包装与可观测报告。
 - `src/strategy`：内置执行策略和策略画像。
 - `benches`：观测模式开销基准测试。
 - `tests`：executor、builder、hooks、错误与选项的行为测试。
