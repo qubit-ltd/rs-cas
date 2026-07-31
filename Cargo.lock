@@ -297,9 +297,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-clock"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "936d7d12df99b080bccf6999a2e16d5ef44874d897a18b42a85551861e7f393e"
+checksum = "44724c36c9518bcff289afc2c2cb86b9f4a202552817be0ffe549f918de76c86"
 dependencies = [
  "pin-project-lite",
  "qubit-collections",
@@ -309,9 +309,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-collections"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e52fb7b0bbadb0b5ab1227d527c8ab46922338fbc9cdd71480dbdb83cfd472af"
+checksum = "fcb596d37e055a48800f0381926881152612b9171cad3be8e91dee97daee6f5b"
 dependencies = [
  "hashbrown 0.17.1",
 ]
@@ -566,9 +566,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.52.3"
+version = "1.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
+checksum = "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
 dependencies = [
  "bytes",
  "libc",
