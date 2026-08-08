@@ -9,11 +9,7 @@
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{
-    CasDecision,
-    CasExecutionOutcome,
-    CasExecutor,
-};
+use qubit_cas::{CasDecision, CasExecutionOutcome, CasExecutor};
 
 use crate::support::TestError;
 

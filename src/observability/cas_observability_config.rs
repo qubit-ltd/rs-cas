@@ -7,11 +7,7 @@
 // =============================================================================
 //! Observability configuration shared by CAS executions.
 
-use super::{
-    CasObservabilityMode,
-    ContentionThresholds,
-    ListenerPanicPolicy,
-};
+use super::{CasObservabilityMode, ContentionThresholds, ListenerPanicPolicy};
 
 /// Observability settings shared by every execution of an executor.
 #[derive(Debug, Clone, PartialEq)]
@@ -108,10 +104,7 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config with alert mode enabled (consumes self).
     #[inline(always)]
-    pub fn with_event_stream_with_alert(
-        mut self,
-        thresholds: ContentionThresholds,
-    ) -> Self {
+    pub fn with_event_stream_with_alert(mut self, thresholds: ContentionThresholds) -> Self {
         self.mode = CasObservabilityMode::EventStreamWithAlert;
         self.contention_thresholds = Some(thresholds);
         self
@@ -144,10 +137,7 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config (consumes self).
     #[inline(always)]
-    pub fn with_listener_panic_policy(
-        mut self,
-        policy: ListenerPanicPolicy,
-    ) -> Self {
+    pub fn with_listener_panic_policy(mut self, policy: ListenerPanicPolicy) -> Self {
         self.listener_panic_policy = policy;
         self
     }
@@ -169,10 +159,7 @@ impl CasObservabilityConfig {
     /// # Returns
     /// Updated builder-style config with alert mode enabled (consumes self).
     #[inline(always)]
-    pub fn with_contention_thresholds(
-        self,
-        thresholds: ContentionThresholds,
-    ) -> Self {
+    pub fn with_contention_thresholds(self, thresholds: ContentionThresholds) -> Self {
         self.with_event_stream_with_alert(thresholds)
     }
 }

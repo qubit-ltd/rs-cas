@@ -20,10 +20,8 @@ use qubit_cas::CasDecision;
 #[test]
 fn test_decision_constructors_create_expected_variants() {
     let next = Arc::new(7usize);
-    let update = CasDecision::<usize, &'static str, &'static str>::update_arc(
-        Arc::clone(&next),
-        "ok",
-    );
+    let update =
+        CasDecision::<usize, &'static str, &'static str>::update_arc(Arc::clone(&next), "ok");
     match update {
         CasDecision::Update {
             next: actual_next,
@@ -35,15 +33,12 @@ fn test_decision_constructors_create_expected_variants() {
         other => panic!("expected update decision, got {other:?}"),
     }
 
-    let finish =
-        CasDecision::<usize, &'static str, &'static str>::finish("done");
+    let finish = CasDecision::<usize, &'static str, &'static str>::finish("done");
     assert_eq!(finish, CasDecision::Finish { output: "done" });
 
-    let retry =
-        CasDecision::<usize, &'static str, &'static str>::retry("retry");
+    let retry = CasDecision::<usize, &'static str, &'static str>::retry("retry");
     assert_eq!(retry, CasDecision::Retry("retry"));
 
-    let abort =
-        CasDecision::<usize, &'static str, &'static str>::abort("abort");
+    let abort = CasDecision::<usize, &'static str, &'static str>::abort("abort");
     assert_eq!(abort, CasDecision::Abort("abort"));
 }

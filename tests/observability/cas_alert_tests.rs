@@ -8,18 +8,11 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{
-    AtomicUsize,
-    Ordering,
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::{
-    CasDecision,
-    CasExecutor,
-    CasHooks,
-    CasObservabilityConfig,
-    CasObservabilityMode,
+    CasDecision, CasExecutor, CasHooks, CasObservabilityConfig, CasObservabilityMode,
     ContentionThresholds,
 };
 
@@ -53,9 +46,7 @@ fn test_cas_alert_exposes_report_and_thresholds() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(
-            thresholds,
-        ))
+        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
         .build()
         .expect("executor should build");
 

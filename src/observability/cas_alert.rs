@@ -30,10 +30,7 @@ impl CasAlert {
     /// # Returns
     /// A new [`CasAlert`] value.
     #[inline]
-    pub(crate) fn contention(
-        report: CasExecutionReport,
-        thresholds: ContentionThresholds,
-    ) -> Self {
+    pub(crate) fn contention(report: CasExecutionReport, thresholds: ContentionThresholds) -> Self {
         Self { report, thresholds }
     }
 
