@@ -318,9 +318,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-datatype"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9dd16b80a75460ac639b745af90ef486a7544574c63d0949994678afe05dd83"
+checksum = "91da5d9714623ff8d561d2230a81dc5c6e38b55aa4f2488c3a0ff0c21e3ff693"
 dependencies = [
  "serde",
  "thiserror",
