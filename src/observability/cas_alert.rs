@@ -7,9 +7,8 @@
 // =============================================================================
 //! Contention alert emitted from an observed CAS execution.
 
-use crate::report::CasExecutionReport;
-
 use super::ContentionThresholds;
+use crate::report::CasExecutionReport;
 
 /// Alert emitted when an execution crosses configured contention thresholds.
 #[derive(Debug, Clone)]
@@ -30,7 +29,10 @@ impl CasAlert {
     /// # Returns
     /// A new [`CasAlert`] value.
     #[inline]
-    pub(crate) fn contention(report: CasExecutionReport, thresholds: ContentionThresholds) -> Self {
+    pub(crate) fn contention(
+        report: CasExecutionReport,
+        thresholds: ContentionThresholds,
+    ) -> Self {
         Self { report, thresholds }
     }
 

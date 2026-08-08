@@ -6,9 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_cas::{
-    CasObservabilityConfig, CasObservabilityMode, ContentionThresholds, ListenerPanicPolicy,
-};
+use qubit_cas::CasObservabilityConfig;
+use qubit_cas::CasObservabilityMode;
+use qubit_cas::ContentionThresholds;
+use qubit_cas::ListenerPanicPolicy;
 
 /// Verifies report-only helper matches the default configuration.
 ///

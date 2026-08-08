@@ -7,9 +7,11 @@
 // =============================================================================
 //! Internal accumulator for one CAS execution report.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use super::{CasExecutionOutcome, CasExecutionReport};
+use super::CasExecutionOutcome;
+use super::CasExecutionReport;
 
 /// Mutable accumulator used internally while one CAS flow is running.
 #[derive(Debug, Clone)]

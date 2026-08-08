@@ -29,12 +29,21 @@ pub mod strategy;
 pub use cas_decision::CasDecision;
 pub use cas_outcome::CasOutcome;
 pub use cas_success::CasSuccess;
-pub use error::{CasAttemptFailure, CasAttemptFailureKind, CasError, CasErrorKind};
-pub use event::{CasContext, CasEvent, CasHooks};
-pub use executor::{CasBuilder, CasExecutor};
-pub use observability::{
-    CasAlert, CasObservabilityConfig, CasObservabilityMode, ContentionThresholds,
-    ListenerPanicPolicy,
-};
-pub use report::{CasExecutionOutcome, CasExecutionReport};
-pub use strategy::{CasStrategy, CasStrategyProfile};
+pub use error::CasAttemptFailure;
+pub use error::CasAttemptFailureKind;
+pub use error::CasError;
+pub use error::CasErrorKind;
+pub use event::CasContext;
+pub use event::CasEvent;
+pub use event::CasHooks;
+pub use executor::CasBuilder;
+pub use executor::CasExecutor;
+pub use observability::CasAlert;
+pub use observability::CasObservabilityConfig;
+pub use observability::CasObservabilityMode;
+pub use observability::ContentionThresholds;
+pub use observability::ListenerPanicPolicy;
+pub use report::CasExecutionOutcome;
+pub use report::CasExecutionReport;
+pub use strategy::CasStrategy;
+pub use strategy::CasStrategyProfile;

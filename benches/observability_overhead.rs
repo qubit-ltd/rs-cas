@@ -8,20 +8,26 @@
 
 use std::hint::black_box;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{
-    CasDecision, CasEvent, CasExecutor, CasHooks, CasObservabilityConfig, ContentionThresholds,
-};
+use qubit_cas::CasDecision;
+use qubit_cas::CasEvent;
+use qubit_cas::CasExecutor;
+use qubit_cas::CasHooks;
+use qubit_cas::CasObservabilityConfig;
+use qubit_cas::ContentionThresholds;
 
 const ITERATIONS: usize = 200_000;
 const WARMUP_RUNS: usize = 2;
 const MEASURED_RUNS: usize = 9;
 
 fn main() {
-    println!("iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}");
+    println!(
+        "iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}"
+    );
 
     run_group("low_conflict", false);
     run_group("forced_conflict", true);
@@ -102,7 +108,8 @@ fn measure_result_executor(
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
     let mut last = None;
     for _ in 0..MEASURED_RUNS {
-        let result = run_result_executor_sample(executor.clone(), force_conflict);
+        let result =
+            run_result_executor_sample(executor.clone(), force_conflict);
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -127,7 +134,9 @@ fn run_result_executor_sample(
     for _ in 0..ITERATIONS {
         let success = executor
             .execute_result(&state, |current: &usize| {
-                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
+                if force_conflict
+                    && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2)
+                {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
@@ -172,13 +181,21 @@ fn measure_executor(
     force_conflict: bool,
 ) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
-        let _ = run_executor_sample(executor.clone(), hooks.clone(), force_conflict);
+        let _ = run_executor_sample(
+            executor.clone(),
+            hooks.clone(),
+            force_conflict,
+        );
     }
 
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
     let mut last = None;
     for _ in 0..MEASURED_RUNS {
-        let result = run_executor_sample(executor.clone(), hooks.clone(), force_conflict);
+        let result = run_executor_sample(
+            executor.clone(),
+            hooks.clone(),
+            force_conflict,
+        );
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -207,7 +224,9 @@ fn run_executor_sample(
         let outcome = executor.execute_with_hooks(
             &state,
             |current: &usize| {
-                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
+                if force_conflict
+                    && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2)
+                {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
@@ -301,8 +320,10 @@ fn print_row(
     raw_ops: Option<f64>,
     report_ops: Option<f64>,
 ) {
-    let raw_loss = raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
-    let report_loss = report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
+    let raw_loss =
+        raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
+    let report_loss =
+        report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     println!(
         "{name:24} ops/s={:>10.0} ns/op={:>8.1} avg_attempts={:.3} conflicts={:<8} loss_vs_raw={} loss_vs_report_only={}",
         result.ops_per_sec,

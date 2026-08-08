@@ -6,10 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasErrorKind, CasExecutionOutcome, CasExecutor};
 use std::error::Error;
 use std::fmt;
+
+use qubit_atomic::AtomicRef;
+use qubit_cas::CasDecision;
+use qubit_cas::CasErrorKind;
+use qubit_cas::CasExecutionOutcome;
+use qubit_cas::CasExecutor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TestError(&'static str);

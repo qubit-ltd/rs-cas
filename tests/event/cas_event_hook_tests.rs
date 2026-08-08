@@ -7,12 +7,14 @@
 // =============================================================================
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use qubit_cas::CasEvent;
 use qubit_cas::event::CasEventHook;
-use qubit_function::{ArcConsumer, Consumer};
+use qubit_function::ArcConsumer;
+use qubit_function::Consumer;
 
 /// Accepts an event hook alias to validate public API typing.
 ///

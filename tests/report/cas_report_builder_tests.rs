@@ -7,10 +7,13 @@
 // =============================================================================
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutionOutcome, CasExecutor};
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutionOutcome;
+use qubit_cas::CasExecutor;
 
 use crate::support::TestError;
 

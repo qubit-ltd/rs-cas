@@ -7,11 +7,13 @@
 // =============================================================================
 
 use qubit_cas::CasStrategy;
-use qubit_cas::constants::{
-    CONTENTION_ADAPTIVE_MAX_ELAPSED, CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED,
-    LATENCY_FIRST_MAX_ATTEMPTS, LATENCY_FIRST_MAX_ELAPSED, LATENCY_FIRST_MAX_TOTAL_ELAPSED,
-    RELIABILITY_FIRST_MAX_ELAPSED, RELIABILITY_FIRST_MAX_TOTAL_ELAPSED,
-};
+use qubit_cas::constants::CONTENTION_ADAPTIVE_MAX_ELAPSED;
+use qubit_cas::constants::CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED;
+use qubit_cas::constants::LATENCY_FIRST_MAX_ATTEMPTS;
+use qubit_cas::constants::LATENCY_FIRST_MAX_ELAPSED;
+use qubit_cas::constants::LATENCY_FIRST_MAX_TOTAL_ELAPSED;
+use qubit_cas::constants::RELIABILITY_FIRST_MAX_ELAPSED;
+use qubit_cas::constants::RELIABILITY_FIRST_MAX_TOTAL_ELAPSED;
 
 #[test]
 fn test_cas_strategy_profile_accessors() {

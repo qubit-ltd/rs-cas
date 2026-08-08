@@ -8,11 +8,15 @@
 
 use std::error::Error;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasErrorKind, CasExecutionOutcome, CasExecutor};
+use qubit_cas::CasDecision;
+use qubit_cas::CasErrorKind;
+use qubit_cas::CasExecutionOutcome;
+use qubit_cas::CasExecutor;
 use qubit_retry::RetryErrorReason;
 
 use crate::support::TestError;
@@ -104,10 +108,11 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .max_operation_elapsed(Some(Duration::from_millis(1)))
         .build()
         .expect("executor should build");
-    let op_outcome = elapsed_executor.execute(&elapsed_state, |_current: &usize| {
-        std::thread::sleep(Duration::from_millis(2));
-        CasDecision::<usize, (), TestError>::retry(TestError("slow"))
-    });
+    let op_outcome =
+        elapsed_executor.execute(&elapsed_state, |_current: &usize| {
+            std::thread::sleep(Duration::from_millis(2));
+            CasDecision::<usize, (), TestError>::retry(TestError("slow"))
+        });
     assert_eq!(
         op_outcome.report().outcome(),
         CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
@@ -134,9 +139,10 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .max_total_elapsed(Some(Duration::ZERO))
         .build()
         .expect("executor should build");
-    let total_outcome = total_executor.execute(&total_state, |_current: &usize| {
-        CasDecision::<usize, (), TestError>::retry(TestError("x"))
-    });
+    let total_outcome =
+        total_executor.execute(&total_state, |_current: &usize| {
+            CasDecision::<usize, (), TestError>::retry(TestError("x"))
+        });
     assert_eq!(
         total_outcome.report().outcome(),
         CasExecutionOutcome::ErrorMaxTotalElapsedExceeded

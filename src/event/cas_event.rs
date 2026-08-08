@@ -9,10 +9,9 @@
 
 use std::time::Instant;
 
+use super::CasContext;
 use crate::error::CasAttemptFailureKind;
 use crate::report::CasExecutionReport;
-
-use super::CasContext;
 
 /// Lifecycle event emitted by a CAS execution.
 #[derive(Debug, Clone)]

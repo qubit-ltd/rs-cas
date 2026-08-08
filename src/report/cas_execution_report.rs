@@ -7,11 +7,11 @@
 // =============================================================================
 //! Immutable observability report for a completed CAS execution.
 
-use std::time::{Duration, Instant};
-
-use crate::observability::ContentionThresholds;
+use std::time::Duration;
+use std::time::Instant;
 
 use super::CasExecutionOutcome;
+use crate::observability::ContentionThresholds;
 
 /// Immutable report describing one completed CAS execution.
 #[derive(Debug, Clone)]

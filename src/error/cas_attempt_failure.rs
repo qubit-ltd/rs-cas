@@ -131,7 +131,9 @@ impl<T, E> CasAttemptFailure<T, E> {
     #[inline(always)]
     pub fn error(&self) -> Option<&E> {
         match self {
-            Self::Retry { error, .. } | Self::Abort { error, .. } => Some(error),
+            Self::Retry { error, .. } | Self::Abort { error, .. } => {
+                Some(error)
+            }
             Self::Conflict { .. } | Self::Timeout { .. } => None,
         }
     }

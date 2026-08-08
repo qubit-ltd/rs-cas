@@ -6,20 +6,36 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier, Mutex};
+use std::sync::Arc;
+use std::sync::Barrier;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::{
-    CasAttemptFailureKind, CasDecision, CasErrorKind, CasEvent, CasExecutionOutcome, CasExecutor,
-    CasHooks, CasObservabilityConfig, ContentionThresholds, ListenerPanicPolicy,
-};
+use qubit_cas::CasAttemptFailureKind;
+use qubit_cas::CasDecision;
+use qubit_cas::CasErrorKind;
+use qubit_cas::CasEvent;
+use qubit_cas::CasExecutionOutcome;
+use qubit_cas::CasExecutor;
+use qubit_cas::CasHooks;
+use qubit_cas::CasObservabilityConfig;
+use qubit_cas::ContentionThresholds;
+use qubit_cas::ListenerPanicPolicy;
 #[cfg(feature = "tokio")]
-use qubit_retry::{AttemptTimeoutOption, RetryDelay, RetryJitter, RetryOptions};
+use qubit_retry::AttemptTimeoutOption;
+#[cfg(feature = "tokio")]
+use qubit_retry::RetryDelay;
+#[cfg(feature = "tokio")]
+use qubit_retry::RetryJitter;
+#[cfg(feature = "tokio")]
+use qubit_retry::RetryOptions;
 
-use crate::support::{NonCloneValue, TestError};
+use crate::support::NonCloneValue;
+use crate::support::TestError;
 
 /// Verifies result-only execution preserves CAS retry and success semantics.
 ///
@@ -216,7 +232,9 @@ fn test_execute_emits_contention_alert() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .observability(CasObservabilityConfig::event_stream_with_alert(
+            thresholds,
+        ))
         .build()
         .expect("executor should build");
 
@@ -263,7 +281,9 @@ fn test_execute_isolates_event_listener_panics() {
     let success = executor
         .execute_with_hooks(
             &state,
-            |_current: &usize| CasDecision::<usize, &'static str, TestError>::finish("ok"),
+            |_current: &usize| {
+                CasDecision::<usize, &'static str, TestError>::finish("ok")
+            },
             hooks,
         )
         .expect("listener panic should be isolated");
@@ -357,7 +377,9 @@ fn test_execute_alert_mode_without_alert_hook_succeeds() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
+        .observability(CasObservabilityConfig::event_stream_with_alert(
+            thresholds,
+        ))
         .build()
         .expect("executor should build");
 
@@ -390,7 +412,9 @@ fn test_execute_finish_returns_without_write() {
 
     let success = executor
         .execute(&state, |_current: &usize| {
-            CasDecision::<usize, NonCloneValue, TestError>::finish(NonCloneValue { value: "done" })
+            CasDecision::<usize, NonCloneValue, TestError>::finish(
+                NonCloneValue { value: "done" },
+            )
         })
         .expect("finish should succeed");
 
@@ -432,7 +456,11 @@ fn test_execute_abort_returns_error_and_calls_abort_hook() {
     let error = executor
         .execute_with_hooks(
             &state,
-            |_current: &usize| CasDecision::<usize, (), TestError>::abort(TestError("forbidden")),
+            |_current: &usize| {
+                CasDecision::<usize, (), TestError>::abort(TestError(
+                    "forbidden",
+                ))
+            },
             hooks,
         )
         .expect_err("abort should fail");
@@ -473,7 +501,9 @@ fn test_execute_retry_exhausted_preserves_last_error() {
     assert_eq!(error.kind(), CasErrorKind::RetryExhausted);
     assert_eq!(error.attempts(), 2);
     assert_eq!(error.error(), Some(&TestError("busy")));
-    assert!(matches!(error.last_failure(), Some(failure) if failure.is_retry()));
+    assert!(
+        matches!(error.last_failure(), Some(failure) if failure.is_retry())
+    );
 }
 
 /// Verifies max-elapsed exhaustion preserves the last failure.
@@ -632,7 +662,9 @@ async fn test_execute_async_elapsed_timeout_updates_report_and_events() {
     let listener_failures = Arc::clone(&attempt_failures);
     let listener_retries = Arc::clone(&retry_requests);
     let hooks = CasHooks::new().on_event(move |event: &CasEvent| match event {
-        CasEvent::AttemptFailed { kind, .. } if *kind == CasAttemptFailureKind::Timeout => {
+        CasEvent::AttemptFailed { kind, .. }
+            if *kind == CasAttemptFailureKind::Timeout =>
+        {
             listener_failures.fetch_add(1, Ordering::SeqCst);
         }
         CasEvent::RetryRequested { .. } => {
@@ -652,7 +684,8 @@ async fn test_execute_async_elapsed_timeout_updates_report_and_events() {
         .execute_async_with_hooks(
             &state,
             |_current: Arc<usize>| async move {
-                std::future::pending::<CasDecision<usize, (), TestError>>().await
+                std::future::pending::<CasDecision<usize, (), TestError>>()
+                    .await
             },
             hooks,
         )
@@ -707,7 +740,8 @@ async fn test_execute_async_timeout_abort_returns_attempt_timeout() {
 /// This test returns nothing.
 #[cfg(feature = "tokio")]
 #[tokio::test(start_paused = true)]
-async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout() {
+async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout()
+{
     let state = AtomicRef::from_value(8usize);
     let options = RetryOptions::new_with_attempt_timeout(
         3,
@@ -781,7 +815,9 @@ async fn test_execute_async_covers_decision_variants() {
     let conflict = executor
         .execute_async(&conflict_state, |current: Arc<usize>| {
             conflict_state.store(Arc::new(*current + 1));
-            async move { CasDecision::<usize, (), TestError>::update(*current + 2, ()) }
+            async move {
+                CasDecision::<usize, (), TestError>::update(*current + 2, ())
+            }
         })
         .await
         .expect_err("async conflict should exhaust attempts");
