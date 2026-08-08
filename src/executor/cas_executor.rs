@@ -22,9 +22,11 @@ use qubit_retry::AttemptFailureDecision;
 use qubit_retry::AttemptTimeoutPolicy;
 use qubit_retry::AttemptTimeoutSource;
 use qubit_retry::Retry;
+use qubit_retry::RetryConfigError;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryError;
 use qubit_retry::RetryOptions;
+use qubit_retry::RetrySuccess;
 
 use super::cas_builder::CasBuilder;
 use super::internal::AttemptSuccess;
@@ -80,7 +82,7 @@ impl<T, E> CasExecutor<T, E> {
     /// Returns the retry-layer validation error when `options` are invalid.
     pub fn from_options(
         options: RetryOptions,
-    ) -> Result<Self, qubit_retry::RetryConfigError> {
+    ) -> Result<Self, RetryConfigError> {
         Self::builder().options(options).build()
     }
 
@@ -656,7 +658,7 @@ impl<T, E> CasExecutor<T, E> {
     fn finish_execution<R>(
         &self,
         attempt: Result<
-            qubit_retry::RetrySuccess<AttemptSuccess<T, R>>,
+            RetrySuccess<AttemptSuccess<T, R>>,
             RetryError<CasAttemptFailure<T, E>>,
         >,
         hooks: CasHooks,

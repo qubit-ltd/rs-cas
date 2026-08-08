@@ -12,6 +12,7 @@ use std::sync::Mutex;
 use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
 use qubit_cas::CasEvent;
+use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
 use qubit_cas::CasObservabilityConfig;
 use qubit_function::Consumer;
@@ -54,7 +55,7 @@ fn test_hooks_accept_function_traits() {
         attempts: Arc::clone(&recorded_attempts),
     });
 
-    let executor = qubit_cas::CasExecutor::<usize, TestError>::builder()
+    let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(2)
         .no_delay()
         .observability(CasObservabilityConfig::event_stream())

@@ -15,6 +15,7 @@ use std::thread;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
+use qubit_cas::CasAlert;
 use qubit_cas::CasAttemptFailureKind;
 use qubit_cas::CasDecision;
 use qubit_cas::CasErrorKind;
@@ -219,7 +220,7 @@ fn test_execute_emits_contention_alert() {
     let alerts = Arc::new(Mutex::new(Vec::new()));
     let alert_events = Arc::clone(&alerts);
     let thresholds = ContentionThresholds::new(2, 1, 0.5);
-    let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
+    let hooks = CasHooks::new().on_alert(move |alert: &CasAlert| {
         alert_events
             .lock()
             .expect("alert events should be lockable")
@@ -333,7 +334,7 @@ fn test_execute_isolates_alert_listener_panics() {
     let state = AtomicRef::from_value(0usize);
     let attempts = AtomicUsize::new(0);
     let thresholds = ContentionThresholds::new(2, 1, 0.5);
-    let hooks = CasHooks::new().on_alert(|_alert: &qubit_cas::CasAlert| {
+    let hooks = CasHooks::new().on_alert(|_alert: &CasAlert| {
         panic!("alert listener panic should be isolated");
     });
     let executor = CasExecutor::<usize, TestError>::builder()
@@ -545,8 +546,6 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
 ///
 /// # Returns
 /// This test returns nothing.
-#[cfg(feature = "tokio")]
-#[tokio::test(start_paused = true)]
 /// Verifies async result-only execution retries conflicts and returns success.
 ///
 /// # Parameters
@@ -554,6 +553,8 @@ fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
 ///
 /// # Returns
 /// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
 async fn test_execute_async_result_retries_conflict_and_returns_success() {
     let state = AtomicRef::from_value(0usize);
     let attempts = Arc::new(AtomicUsize::new(0));

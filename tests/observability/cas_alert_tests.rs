@@ -12,6 +12,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use qubit_atomic::AtomicRef;
+use qubit_cas::CasAlert;
 use qubit_cas::CasDecision;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
@@ -35,7 +36,7 @@ fn test_cas_alert_exposes_report_and_thresholds() {
     let thresholds = ContentionThresholds::new(2, 1, 0.5);
     let alerts = Arc::new(Mutex::new(Vec::new()));
     let alert_events = Arc::clone(&alerts);
-    let hooks = CasHooks::new().on_alert(move |alert: &qubit_cas::CasAlert| {
+    let hooks = CasHooks::new().on_alert(move |alert: &CasAlert| {
         alert_events
             .lock()
             .expect("alert events should be lockable")

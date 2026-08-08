@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_cas::CasAlert;
 use qubit_cas::event::CasAlertHook;
 use qubit_function::ArcConsumer;
 
@@ -27,7 +28,6 @@ fn accept_alert_hook(_hook: CasAlertHook) {}
 /// This test returns nothing.
 #[test]
 fn test_alert_hook_alias_accepts_arc_consumer() {
-    let hook: CasAlertHook =
-        ArcConsumer::new(|_alert: &qubit_cas::CasAlert| {});
+    let hook: CasAlertHook = ArcConsumer::new(|_alert: &CasAlert| {});
     accept_alert_hook(hook);
 }
