@@ -12,11 +12,11 @@ use std::time::Duration;
 
 use qubit_error::BoxError;
 use qubit_retry::AttemptTimeoutOption;
-use qubit_retry::RetryBuilder;
 use qubit_retry::RetryConfigError;
 use qubit_retry::RetryDelay;
 use qubit_retry::RetryJitter;
 use qubit_retry::RetryOptions;
+use qubit_retry::RetryOptionsBuilder;
 
 use super::cas_executor::CasExecutor;
 use crate::observability::CasObservabilityConfig;
@@ -36,7 +36,7 @@ use crate::strategy::CasStrategy;
 #[must_use = "a CAS builder must be configured or built"]
 pub struct CasBuilder<T, E = BoxError> {
     /// Retry-layer builder that owns all retry-related settings.
-    retry: RetryBuilder<BoxError>,
+    retry: RetryOptionsBuilder,
     /// Observability settings.
     observability: CasObservabilityConfig,
     /// Marker preserving the executor type parameters.
@@ -50,7 +50,7 @@ impl<T, E> CasBuilder<T, E> {
     /// A [`CasBuilder`] using [`RetryOptions::default`].
     pub fn new() -> Self {
         Self {
-            retry: RetryBuilder::new(),
+            retry: RetryOptionsBuilder::new(),
             observability: CasObservabilityConfig::default(),
             marker: PhantomData,
         }
@@ -357,11 +357,11 @@ impl<T, E> CasBuilder<T, E> {
     /// Returns [`RetryConfigError`] when the configured retry settings are
     /// invalid.
     pub fn build(self) -> Result<CasExecutor<T, E>, RetryConfigError> {
-        let retry = self.retry.build()?;
-        Ok(CasExecutor::new(
-            retry.options().clone(),
-            self.observability,
-        ))
+        let options = self.retry.build()?;
+        let policy = options.to_policy().map_err(|error| {
+            RetryConfigError::invalid_value(error.field(), error.message())
+        })?;
+        Ok(CasExecutor::new(options, policy, self.observability))
     }
 
     /// Builds one executor with the contention-adaptive strategy.

@@ -45,7 +45,7 @@ fn test_cas_error_display_and_source_work() {
 
     assert_eq!(error.kind(), CasErrorKind::RetryExhausted);
     assert!(error.to_string().contains("retryable failures exhausted"));
-    assert_eq!(error.reason(), RetryErrorReason::AttemptsExceeded);
+    assert_eq!(error.reason(), RetryErrorReason::AttemptsExhausted);
     assert!(format!("{error:?}").contains("CasError"));
     assert_eq!(
         error.source().map(ToString::to_string),
@@ -97,7 +97,7 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         })
         .expect_err("conflicts should exhaust attempts");
     assert_eq!(conflict.kind(), CasErrorKind::Conflict);
-    assert_eq!(conflict.reason(), RetryErrorReason::AttemptsExceeded);
+    assert_eq!(conflict.reason(), RetryErrorReason::AttemptsExhausted);
     assert!(conflict.to_string().contains("conflicts exhausted"));
     assert_eq!(conflicts.load(Ordering::SeqCst), 2);
 
@@ -121,10 +121,7 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .into_result()
         .expect_err("operation elapsed budget should fail");
     assert_eq!(elapsed.kind(), CasErrorKind::MaxOperationElapsedExceeded);
-    assert_eq!(
-        elapsed.reason(),
-        RetryErrorReason::MaxOperationElapsedExceeded
-    );
+    assert_eq!(elapsed.reason(), RetryErrorReason::OperationBudgetExhausted);
     assert!(
         elapsed
             .to_string()
@@ -151,12 +148,11 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .into_result()
         .expect_err("total elapsed budget should fail");
     assert_eq!(total.kind(), CasErrorKind::MaxTotalElapsedExceeded);
-    assert_eq!(total.reason(), RetryErrorReason::MaxTotalElapsedExceeded);
+    assert_eq!(total.reason(), RetryErrorReason::TotalBudgetExhausted);
     assert!(total.to_string().contains("max total elapsed exceeded"));
 }
 
-/// Verifies synchronous execution reports configured attempt timeouts as an
-/// unsupported operation instead of retry exhaustion.
+/// Verifies synchronous execution does not expose async timeout controls.
 ///
 /// # Parameters
 /// This test has no parameters.
@@ -164,7 +160,7 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
 /// # Returns
 /// This test returns nothing.
 #[test]
-fn test_execute_sync_attempt_timeout_reports_unsupported_operation() {
+fn test_execute_sync_ignores_async_timeout_configuration() {
     let state = AtomicRef::from_value(21usize);
     let executor = CasExecutor::<usize, TestError>::builder()
         .attempt_timeout(Some(Duration::from_millis(10)))
@@ -176,14 +172,7 @@ fn test_execute_sync_attempt_timeout_reports_unsupported_operation() {
         CasDecision::<usize, (), TestError>::finish(())
     });
 
-    assert_eq!(
-        outcome.report().outcome(),
-        CasExecutionOutcome::ErrorUnsupportedOperation
-    );
-    let error = outcome.expect_err("sync attempt timeout is unsupported");
-    assert_eq!(error.kind(), CasErrorKind::UnsupportedOperation);
-    assert_eq!(error.reason(), RetryErrorReason::UnsupportedOperation);
-    assert!(error.to_string().contains("unsupported operation"));
+    assert!(outcome.into_result().is_ok());
 }
 
 /// Verifies async attempt timeouts use the timeout terminal error formatting.
@@ -230,6 +219,6 @@ async fn test_cas_error_display_covers_attempt_timeout_kind() {
         .expect_err("repeated attempt timeouts should exhaust attempts");
 
     assert_eq!(exhausted.kind(), CasErrorKind::AttemptTimeout);
-    assert_eq!(exhausted.reason(), RetryErrorReason::AttemptsExceeded);
+    assert_eq!(exhausted.reason(), RetryErrorReason::AttemptsExhausted);
     assert!(exhausted.to_string().contains("attempt timed out"));
 }

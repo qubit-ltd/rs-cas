@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-cas"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "qubit-atomic",
  "qubit-error",
@@ -340,7 +340,7 @@ checksum = "59f10e916324739b811520fbfb24746f4822ad9ea1adb53c79fc04b7c090e5ed"
 
 [[package]]
 name = "qubit-retry"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "parse-display",
  "qubit-argument",

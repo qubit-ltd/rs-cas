@@ -51,14 +51,15 @@ impl<T, E> CasError<T, E> {
         let context = CasContext::new(&retry_context);
         let last_failure = match raw_last_failure {
             Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout) => {
+            Some(AttemptFailure::Timeout { .. }) => {
                 timeout_current.map(CasAttemptFailure::timeout)
             }
-            Some(AttemptFailure::Panic(_))
-            | Some(AttemptFailure::Executor(_))
+            Some(AttemptFailure::Panic)
+            | Some(AttemptFailure::Infrastructure(_))
             | None => None,
+            Some(_) => None,
         };
-        let kind = Self::classify_kind(reason, last_failure.as_ref());
+        let kind = Self::classify_kind(reason, last_failure.as_ref(), &context);
         Self {
             kind,
             reason,
@@ -142,6 +143,7 @@ impl<T, E> CasError<T, E> {
     fn classify_kind(
         reason: RetryErrorReason,
         last_failure: Option<&CasAttemptFailure<T, E>>,
+        context: &CasContext,
     ) -> CasErrorKind {
         match reason {
             RetryErrorReason::Aborted => match last_failure {
@@ -150,7 +152,7 @@ impl<T, E> CasError<T, E> {
                 }
                 _ => CasErrorKind::Abort,
             },
-            RetryErrorReason::AttemptsExceeded => match last_failure {
+            RetryErrorReason::AttemptsExhausted => match last_failure {
                 Some(CasAttemptFailure::Conflict { .. }) => {
                     CasErrorKind::Conflict
                 }
@@ -159,19 +161,29 @@ impl<T, E> CasError<T, E> {
                 }
                 _ => CasErrorKind::RetryExhausted,
             },
-            RetryErrorReason::UnsupportedOperation => {
-                CasErrorKind::UnsupportedOperation
-            }
-            RetryErrorReason::SleeperFailed
+            RetryErrorReason::TimerFailed
             | RetryErrorReason::WorkerStillRunning => {
                 CasErrorKind::RetryInfrastructure
             }
-            RetryErrorReason::MaxOperationElapsedExceeded => {
+            RetryErrorReason::FlowTimedOut => {
+                if context.max_operation_elapsed().is_some()
+                    && context.max_total_elapsed().is_none()
+                {
+                    CasErrorKind::MaxOperationElapsedExceeded
+                } else if context.max_total_elapsed().is_some() {
+                    CasErrorKind::MaxTotalElapsedExceeded
+                } else {
+                    CasErrorKind::AttemptTimeout
+                }
+            }
+            RetryErrorReason::AttemptTimedOut => CasErrorKind::AttemptTimeout,
+            RetryErrorReason::OperationBudgetExhausted => {
                 CasErrorKind::MaxOperationElapsedExceeded
             }
-            RetryErrorReason::MaxTotalElapsedExceeded => {
+            RetryErrorReason::TotalBudgetExhausted => {
                 CasErrorKind::MaxTotalElapsedExceeded
             }
+            _ => CasErrorKind::RetryInfrastructure,
         }
     }
 }
