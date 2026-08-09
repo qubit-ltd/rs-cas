@@ -57,7 +57,7 @@ expressed as an explicit, typed decision.
 
 ```toml
 [dependencies]
-qubit-cas = "0.9"
+qubit-cas = "0.10"
 ```
 
 `qubit-cas` expects the shared state to be held in `qubit_atomic::AtomicRef<T>`.
@@ -71,7 +71,7 @@ Enable asynchronous execution with:
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.9", features = ["tokio"] }
+qubit-cas = { version = "0.10", features = ["tokio"] }
 ```
 
 Optional features:
