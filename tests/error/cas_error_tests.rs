@@ -201,7 +201,7 @@ async fn test_cas_error_display_covers_attempt_timeout_kind() {
         .expect_err("attempt timeout should abort");
 
     assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
-    assert_eq!(error.reason(), RetryErrorReason::Aborted);
+    assert_eq!(error.reason(), RetryErrorReason::AttemptTimedOut);
     assert!(error.to_string().contains("attempt timed out"));
 
     let retrying_executor = CasExecutor::<usize, TestError>::builder()
