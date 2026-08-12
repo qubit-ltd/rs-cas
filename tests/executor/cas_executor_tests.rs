@@ -26,14 +26,6 @@ use qubit_cas::CasHooks;
 use qubit_cas::CasObservabilityConfig;
 use qubit_cas::ContentionThresholds;
 use qubit_cas::ListenerPanicPolicy;
-#[cfg(feature = "tokio")]
-use qubit_retry::AttemptTimeoutOption;
-#[cfg(feature = "tokio")]
-use qubit_retry::RetryDelay;
-#[cfg(feature = "tokio")]
-use qubit_retry::RetryJitter;
-#[cfg(feature = "tokio")]
-use qubit_retry::RetryOptions;
 
 use crate::support::NonCloneValue;
 use crate::support::TestError;
@@ -730,43 +722,6 @@ async fn test_execute_async_timeout_abort_returns_attempt_timeout() {
     assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
     assert_eq!(error.attempts(), 1);
     assert_eq!(error.current().map(|current| **current), Some(5));
-}
-
-/// Verifies async timeout settings supplied through retry options are enforced.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
-#[cfg(feature = "tokio")]
-#[tokio::test(start_paused = true)]
-async fn test_execute_async_from_options_timeout_abort_returns_attempt_timeout()
-{
-    let state = AtomicRef::from_value(8usize);
-    let options = RetryOptions::new_with_attempt_timeout(
-        3,
-        None,
-        None,
-        RetryDelay::none(),
-        RetryJitter::none(),
-        Some(AttemptTimeoutOption::abort(Duration::from_millis(10))),
-    )
-    .expect("retry options should be valid");
-    let executor = CasExecutor::<usize, TestError>::from_options(options)
-        .expect("executor should build from retry options");
-
-    let error = executor
-        .execute_async(&state, |_current: Arc<usize>| async move {
-            tokio::time::sleep(Duration::from_millis(20)).await;
-            CasDecision::<usize, (), TestError>::finish(())
-        })
-        .await
-        .expect_err("timeout from retry options should abort");
-
-    assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
-    assert_eq!(error.attempts(), 1);
-    assert_eq!(error.current().map(|current| **current), Some(8));
 }
 
 /// Verifies async execution covers all CAS decision variants.

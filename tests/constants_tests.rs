@@ -24,11 +24,9 @@ use qubit_cas::constants::RELIABILITY_FIRST_MAX_ATTEMPTS;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_DELAY;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_ELAPSED;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_TOTAL_ELAPSED;
-use qubit_retry::constants::DEFAULT_RETRY_MAX_ATTEMPTS;
-
 #[test]
-fn test_cas_constants_match_retry_default_and_strategy_budgets() {
-    assert_eq!(DEFAULT_CAS_MAX_ATTEMPTS, DEFAULT_RETRY_MAX_ATTEMPTS);
+fn test_cas_constants_match_strategy_budgets() {
+    assert_eq!(DEFAULT_CAS_MAX_ATTEMPTS, 5);
 
     assert_eq!(LATENCY_FIRST_MAX_ATTEMPTS, 100);
     assert_eq!(LATENCY_FIRST_MAX_ELAPSED, Duration::from_millis(5));
