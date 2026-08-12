@@ -19,18 +19,16 @@ use qubit_function::Consumer;
 use qubit_function::Function;
 use qubit_retry::AttemptFailure;
 use qubit_retry::AttemptTimeoutKind;
-use qubit_retry::AttemptTimeoutPolicy;
 use qubit_retry::Retry;
-use qubit_retry::RetryConfigError;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
 use qubit_retry::RetryError;
-use qubit_retry::RetryOptions;
 use qubit_retry::RetryPolicy;
 use qubit_retry::RetrySuccess;
 
 use super::cas_builder::CasBuilder;
 use super::internal::AttemptSuccess;
+use super::internal::AttemptTimeoutAction;
 use super::internal::CasReportFinishContext;
 use crate::cas_decision::CasDecision;
 use crate::cas_outcome::CasOutcome;
@@ -53,10 +51,12 @@ use crate::strategy::CasStrategy;
 /// Executor for retry-aware compare-and-swap workflows.
 #[derive(Debug, Clone)]
 pub struct CasExecutor<T, E = BoxError> {
-    /// Immutable retry options shared by every execution.
-    options: RetryOptions,
     /// Pure policy used by the retry facades.
     policy: RetryPolicy,
+    /// Optional hard timeout applied to each async attempt.
+    attempt_timeout: Option<std::time::Duration>,
+    /// Action selected after a configured attempt timeout.
+    attempt_timeout_action: AttemptTimeoutAction,
     /// Observability settings shared by executions.
     observability: CasObservabilityConfig,
     /// Marker preserving `T` and `E`.
@@ -73,20 +73,18 @@ impl<T, E> CasExecutor<T, E> {
         CasBuilder::new()
     }
 
-    /// Creates an executor from retry options.
+    /// Creates an executor from a pure retry policy.
     ///
     /// # Parameters
-    /// - `options`: Retry options to validate and install.
+    /// - `policy`: Retry continuation and backoff policy to install.
     ///
     /// # Returns
-    /// A configured executor using the supplied retry options.
-    ///
-    /// # Errors
-    /// Returns the retry-layer validation error when `options` are invalid.
-    pub fn from_options(
-        options: RetryOptions,
-    ) -> Result<Self, RetryConfigError> {
-        Self::builder().options(options).build()
+    /// A configured executor using the supplied retry policy.
+    pub fn from_policy(policy: RetryPolicy) -> Self {
+        Self::builder()
+            .policy(policy)
+            .build()
+            .expect("an existing retry policy is already validated")
     }
 
     /// Creates an executor tuned for low-latency workloads.
@@ -136,32 +134,54 @@ impl<T, E> CasExecutor<T, E> {
     /// Creates one executor from validated parts.
     ///
     /// # Parameters
-    /// - `options`: Validated retry options.
+    /// - `policy`: Validated retry policy.
+    /// - `attempt_timeout`: Optional hard timeout for async attempts.
+    /// - `attempt_timeout_action`: Action selected for attempt timeouts.
     /// - `observability`: Observability settings shared by executions.
     ///
     /// # Returns
     /// A configured executor.
     #[inline]
     pub(crate) fn new(
-        options: RetryOptions,
         policy: RetryPolicy,
+        attempt_timeout: Option<std::time::Duration>,
+        attempt_timeout_action: AttemptTimeoutAction,
         observability: CasObservabilityConfig,
     ) -> Self {
         Self {
-            options,
             policy,
+            attempt_timeout,
+            attempt_timeout_action,
             observability,
             marker: PhantomData,
         }
     }
 
-    /// Returns the immutable retry options used by this executor.
+    /// Returns the immutable retry policy used by this executor.
     ///
     /// # Returns
-    /// Shared retry options.
+    /// Shared retry policy.
     #[inline(always)]
-    pub fn options(&self) -> &RetryOptions {
-        &self.options
+    pub fn policy(&self) -> &RetryPolicy {
+        &self.policy
+    }
+
+    /// Returns the optional hard timeout for each async attempt.
+    #[inline(always)]
+    pub fn attempt_timeout(&self) -> Option<std::time::Duration> {
+        self.attempt_timeout
+    }
+
+    /// Returns the hard wall-clock boundary derived from elapsed budgets.
+    #[cfg(feature = "tokio")]
+    #[inline(always)]
+    fn flow_timeout(&self) -> Option<std::time::Duration> {
+        self.policy
+            .limits()
+            .max_operation_elapsed()
+            .into_iter()
+            .chain(self.policy.limits().max_total_elapsed())
+            .min()
     }
 
     /// Returns observability settings used by this executor.
@@ -333,20 +353,10 @@ impl<T, E> CasExecutor<T, E> {
         let retry = self.build_result_retry();
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let mut async_retry = retry.asynchronous();
-        if let Some(timeout) = self
-            .options
-            .attempt_timeout()
-            .map(|option| option.timeout())
-        {
+        if let Some(timeout) = self.attempt_timeout {
             async_retry = async_retry.attempt_timeout(timeout);
         }
-        if let Some(timeout) = self
-            .options
-            .max_operation_elapsed()
-            .into_iter()
-            .chain(self.options.max_total_elapsed())
-            .min()
-        {
+        if let Some(timeout) = self.flow_timeout() {
             async_retry = async_retry.flow_timeout(timeout);
         }
         let attempt = async_retry
@@ -407,20 +417,10 @@ impl<T, E> CasExecutor<T, E> {
         let retry = self.build_retry(&hooks, Arc::clone(&report_builder));
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let mut async_retry = retry.asynchronous();
-        if let Some(timeout) = self
-            .options
-            .attempt_timeout()
-            .map(|option| option.timeout())
-        {
+        if let Some(timeout) = self.attempt_timeout {
             async_retry = async_retry.attempt_timeout(timeout);
         }
-        if let Some(timeout) = self
-            .options
-            .max_operation_elapsed()
-            .into_iter()
-            .chain(self.options.max_total_elapsed())
-            .min()
-        {
+        if let Some(timeout) = self.flow_timeout() {
             async_retry = async_retry.flow_timeout(timeout);
         }
         let attempt = async_retry
@@ -456,10 +456,7 @@ impl<T, E> CasExecutor<T, E> {
         E: 'static,
     {
         let event_hook = hooks.event_hook();
-        let retry_timeout_policy = self
-            .options
-            .attempt_timeout()
-            .map(|attempt_timeout| attempt_timeout.policy());
+        let attempt_timeout_action = self.attempt_timeout_action;
         let observability = self.observability.clone();
 
         Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
@@ -485,7 +482,7 @@ impl<T, E> CasExecutor<T, E> {
                                 },
                             );
                             if *kind == AttemptTimeoutKind::Attempt
-                                && retry_timeout_policy == Some(AttemptTimeoutPolicy::Retry)
+                                && attempt_timeout_action == AttemptTimeoutAction::Retry
                             {
                                 Self::dispatch_event(
                                     &observability,
@@ -497,7 +494,7 @@ impl<T, E> CasExecutor<T, E> {
                             }
                         }
                         return if *kind == AttemptTimeoutKind::Attempt
-                            && retry_timeout_policy == Some(AttemptTimeoutPolicy::Retry)
+                            && attempt_timeout_action == AttemptTimeoutAction::Retry
                         {
                             RetryDecision::Retry
                         } else {
@@ -564,10 +561,11 @@ impl<T, E> CasExecutor<T, E> {
         T: 'static,
         E: 'static,
     {
+        let attempt_timeout_action = self.attempt_timeout_action;
         Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
             .rule(
-                |failure: &AttemptFailure<CasAttemptFailure<T, E>>,
-                 _context: &RetryContext| {
+                move |failure: &AttemptFailure<CasAttemptFailure<T, E>>,
+                      _context: &RetryContext| {
                     match failure {
                         AttemptFailure::Error(
                             CasAttemptFailure::Conflict { .. }
@@ -578,8 +576,15 @@ impl<T, E> CasExecutor<T, E> {
                         }) => RetryDecision::Abort,
                         AttemptFailure::Error(CasAttemptFailure::Timeout {
                             ..
-                        })
-                        | AttemptFailure::Timeout { .. }
+                        }) => RetryDecision::UseDefault,
+                        AttemptFailure::Timeout {
+                            kind: AttemptTimeoutKind::Attempt,
+                        } if attempt_timeout_action
+                            == AttemptTimeoutAction::Retry =>
+                        {
+                            RetryDecision::Retry
+                        }
+                        AttemptFailure::Timeout { .. }
                         | AttemptFailure::Panic
                         | AttemptFailure::Infrastructure(_) => {
                             RetryDecision::UseDefault

@@ -9,10 +9,8 @@
 
 use std::time::Duration;
 
-use qubit_retry::constants::DEFAULT_RETRY_MAX_ATTEMPTS;
-
-/// Default maximum attempts inherited from `qubit-retry`.
-pub const DEFAULT_CAS_MAX_ATTEMPTS: u32 = DEFAULT_RETRY_MAX_ATTEMPTS;
+/// Default maximum attempts for CAS execution.
+pub const DEFAULT_CAS_MAX_ATTEMPTS: u32 = 5;
 
 /// Maximum attempts for the contention-adaptive strategy.
 pub const CONTENTION_ADAPTIVE_MAX_ATTEMPTS: u32 = 64;
