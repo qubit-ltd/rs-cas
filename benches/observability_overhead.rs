@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Measures the overhead of result-only execution and optional CAS
+//! observability for uncontended and deliberately conflicted updates.
 
 use std::hint::black_box;
 use std::sync::Arc;
@@ -13,6 +15,7 @@ use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use qubit_atomic::AtomicRef;
+use qubit_cas::CasAlert;
 use qubit_cas::CasDecision;
 use qubit_cas::CasEvent;
 use qubit_cas::CasExecutor;
@@ -39,38 +42,29 @@ fn run_group(group: &'static str, force_conflict: bool) {
 
     let raw = measure_raw(force_conflict);
     let result_only = measure_result_executor(
-        CasExecutor::<usize, &'static str>::latency_first(),
+        benchmark_executor(CasObservabilityConfig::default()),
         force_conflict,
     );
     let report_only = measure_executor(
-        CasExecutor::<usize, &'static str>::latency_first(),
+        benchmark_executor(CasObservabilityConfig::default()),
         CasHooks::new(),
         force_conflict,
     );
     let event_empty = measure_executor(
-        CasExecutor::<usize, &'static str>::builder()
-            .observability(CasObservabilityConfig::event_stream())
-            .build_latency_first()
-            .expect("benchmark executor should build"),
+        benchmark_executor(CasObservabilityConfig::event_stream()),
         CasHooks::new(),
         force_conflict,
     );
     let event_light = measure_executor(
-        CasExecutor::<usize, &'static str>::builder()
-            .observability(CasObservabilityConfig::event_stream())
-            .build_latency_first()
-            .expect("benchmark executor should build"),
+        benchmark_executor(CasObservabilityConfig::event_stream()),
         light_event_hook(),
         force_conflict,
     );
     let alert_light = measure_executor(
-        CasExecutor::<usize, &'static str>::builder()
-            .observability(CasObservabilityConfig::event_stream_with_alert(
-                ContentionThresholds::new(2, 1, 0.5),
-            ))
-            .build_latency_first()
-            .expect("benchmark executor should build"),
-        light_event_hook(),
+        benchmark_executor(CasObservabilityConfig::event_stream_with_alert(
+            ContentionThresholds::new(2, 1, 0.5),
+        )),
+        light_alert_hooks(),
         force_conflict,
     );
 
@@ -97,19 +91,32 @@ fn run_group(group: &'static str, force_conflict: bool) {
     );
 }
 
+fn benchmark_executor(
+    observability: CasObservabilityConfig,
+) -> CasExecutor<usize, &'static str> {
+    CasExecutor::<usize, &'static str>::builder()
+        .max_attempts(100)
+        .no_delay()
+        .observability(observability)
+        .build()
+        .expect("benchmark retry policy should be valid")
+}
+
 fn measure_result_executor(
     executor: CasExecutor<usize, &'static str>,
     force_conflict: bool,
 ) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
-        let _ = run_result_executor_sample(executor.clone(), force_conflict);
+        run_result_executor_sample(executor.clone(), force_conflict)
+            .expect("benchmark warmup should succeed");
     }
 
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
     let mut last = None;
     for _ in 0..MEASURED_RUNS {
         let result =
-            run_result_executor_sample(executor.clone(), force_conflict);
+            run_result_executor_sample(executor.clone(), force_conflict)
+                .expect("benchmark sample should succeed");
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -124,7 +131,7 @@ fn measure_result_executor(
 fn run_result_executor_sample(
     executor: CasExecutor<usize, &'static str>,
     force_conflict: bool,
-) -> BenchResult {
+) -> Result<BenchResult, String> {
     let state = AtomicRef::from_value(0usize);
     let forced = AtomicUsize::new(0);
     let start = Instant::now();
@@ -141,7 +148,9 @@ fn run_result_executor_sample(
                 }
                 CasDecision::update(*current + 1, *current + 1)
             })
-            .expect("benchmark CAS execution should succeed");
+            .map_err(|error| {
+                format!("result-only CAS execution failed: {error:?}")
+            })?;
         attempts += u64::from(success.attempts());
         conflicts += u64::from(success.attempts().saturating_sub(1));
         black_box(success);
@@ -149,12 +158,21 @@ fn run_result_executor_sample(
 
     let elapsed = start.elapsed();
     let ops_per_sec = ITERATIONS as f64 / elapsed.as_secs_f64();
-    BenchResult {
+    Ok(BenchResult {
         ops_per_sec,
         ns_per_op: elapsed.as_nanos() as f64 / ITERATIONS as f64,
         avg_attempts: attempts as f64 / ITERATIONS as f64,
         conflicts,
-    }
+    })
+}
+
+fn light_alert_hooks() -> CasHooks {
+    let alerts = Arc::new(AtomicUsize::new(0));
+    let alert_count = Arc::clone(&alerts);
+    light_event_hook().on_alert(move |alert: &CasAlert| {
+        alert_count
+            .fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
+    })
 }
 
 fn light_event_hook() -> CasHooks {
@@ -181,11 +199,8 @@ fn measure_executor(
     force_conflict: bool,
 ) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
-        let _ = run_executor_sample(
-            executor.clone(),
-            hooks.clone(),
-            force_conflict,
-        );
+        run_executor_sample(executor.clone(), hooks.clone(), force_conflict)
+            .expect("benchmark warmup should succeed");
     }
 
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
@@ -195,7 +210,8 @@ fn measure_executor(
             executor.clone(),
             hooks.clone(),
             force_conflict,
-        );
+        )
+        .expect("benchmark sample should succeed");
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -211,7 +227,7 @@ fn run_executor_sample(
     executor: CasExecutor<usize, &'static str>,
     hooks: CasHooks,
     force_conflict: bool,
-) -> BenchResult {
+) -> Result<BenchResult, String> {
     let state = AtomicRef::from_value(0usize);
     let forced = AtomicUsize::new(0);
     // Instant is a monotonic clock, so elapsed measurements are not affected by
@@ -235,17 +251,19 @@ fn run_executor_sample(
         );
         attempts += u64::from(outcome.report().attempts_total());
         conflicts += u64::from(outcome.report().conflicts());
-        black_box(outcome.expect("benchmark CAS execution should succeed"));
+        black_box(outcome.into_result().map_err(|error| {
+            format!("reported CAS execution failed: {error:?}")
+        })?);
     }
 
     let elapsed = start.elapsed();
     let ops_per_sec = ITERATIONS as f64 / elapsed.as_secs_f64();
-    BenchResult {
+    Ok(BenchResult {
         ops_per_sec,
         ns_per_op: elapsed.as_nanos() as f64 / ITERATIONS as f64,
         avg_attempts: attempts as f64 / ITERATIONS as f64,
         conflicts,
-    }
+    })
 }
 
 fn measure_raw(force_conflict: bool) -> BenchResult {

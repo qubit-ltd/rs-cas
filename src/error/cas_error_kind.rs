@@ -18,8 +18,6 @@ pub enum CasErrorKind {
     RetryExhausted,
     /// A timeout aborted the flow or exhausted retry limits.
     AttemptTimeout,
-    /// The selected execution mode does not support the configured behavior.
-    UnsupportedOperation,
     /// The retry layer failed while scheduling or stopping retry work.
     RetryInfrastructure,
     /// The cumulative user operation elapsed-time budget expired.

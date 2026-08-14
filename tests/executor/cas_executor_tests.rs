@@ -644,11 +644,41 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
     );
 }
 
-/// Verifies an elapsed-budget timeout updates CAS reports and failure events
-/// without emitting a retry request.
+/// Verifies the operation continuation budget does not cancel an admitted
+/// asynchronous attempt.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
 #[cfg(feature = "tokio")]
 #[tokio::test(start_paused = true)]
-async fn test_execute_async_elapsed_timeout_updates_report_and_events() {
+async fn test_execute_async_operation_elapsed_does_not_cancel_admitted_attempt()
+{
+    let state = AtomicRef::from_value(5usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_operation_elapsed(Some(Duration::from_millis(10)))
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_async_result(&state, |_current: Arc<usize>| async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            CasDecision::<usize, (), TestError>::finish(())
+        })
+        .await
+        .expect("an admitted operation should complete after its budget");
+
+    assert_eq!(success.attempts(), 1);
+}
+
+/// Verifies a total elapsed-budget timeout updates CAS reports and failure
+/// events without emitting a retry request.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_total_elapsed_timeout_updates_report_and_events() {
     let state = AtomicRef::from_value(5usize);
     let attempt_failures = Arc::new(AtomicUsize::new(0));
     let retry_requests = Arc::new(AtomicUsize::new(0));
@@ -667,7 +697,7 @@ async fn test_execute_async_elapsed_timeout_updates_report_and_events() {
     });
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
-        .max_operation_elapsed(Some(Duration::from_secs(30)))
+        .max_total_elapsed(Some(Duration::from_secs(30)))
         .no_delay()
         .observability(CasObservabilityConfig::event_stream())
         .build()
@@ -687,8 +717,9 @@ async fn test_execute_async_elapsed_timeout_updates_report_and_events() {
     assert_eq!(outcome.report().timeouts(), 1);
     assert_eq!(attempt_failures.load(Ordering::SeqCst), 1);
     assert_eq!(retry_requests.load(Ordering::SeqCst), 0);
-    let error = outcome.expect_err("elapsed timeout should terminate CAS");
-    assert_eq!(error.kind(), CasErrorKind::MaxOperationElapsedExceeded);
+    let error =
+        outcome.expect_err("total elapsed timeout should terminate CAS");
+    assert_eq!(error.kind(), CasErrorKind::MaxTotalElapsedExceeded);
     assert_eq!(error.attempts(), 1);
 }
 

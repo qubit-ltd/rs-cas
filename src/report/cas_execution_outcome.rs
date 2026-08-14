@@ -22,8 +22,6 @@ pub enum CasExecutionOutcome {
     ErrorRetryExhausted,
     /// The flow stopped because an async attempt timed out.
     ErrorAttemptTimeout,
-    /// The execution mode does not support the configured behavior.
-    ErrorUnsupportedOperation,
     /// Retry infrastructure failed while scheduling or stopping work.
     ErrorRetryInfrastructure,
     /// The cumulative user operation elapsed-time budget was exceeded.

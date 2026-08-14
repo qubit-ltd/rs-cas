@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
+use qubit_cas::CasAttemptFailure;
 use qubit_cas::CasDecision;
 use qubit_cas::CasErrorKind;
 use qubit_cas::CasExecutionOutcome;
@@ -53,6 +54,66 @@ fn test_cas_error_display_and_source_work() {
     );
     assert_eq!(error.error(), Some(&TestError("still-busy")));
     assert_eq!(error.current().map(|current| **current), Some(3));
+}
+
+/// Verifies terminal errors can transfer their captured failure without
+/// cloning it.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_cas_error_into_parts_preserves_owned_failure() {
+    let state = AtomicRef::from_value(3usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_result(&state, |_current: &usize| {
+            CasDecision::<usize, (), TestError>::abort(TestError("blocked"))
+        })
+        .expect_err("abort should fail");
+
+    let (kind, reason, context, last_failure) = error.into_parts();
+    assert_eq!(kind, CasErrorKind::Abort);
+    assert_eq!(reason, RetryErrorReason::Aborted);
+    assert_eq!(context.attempt(), 1);
+    match last_failure {
+        Some(CasAttemptFailure::Abort { current, error }) => {
+            assert_eq!(*current, 3);
+            assert_eq!(error, TestError("blocked"));
+        }
+        other => panic!("expected an owned abort failure, got {other:?}"),
+    }
+}
+
+/// Verifies terminal errors can consume just their captured failure.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_cas_error_into_last_failure_returns_owned_failure() {
+    let state = AtomicRef::from_value(4usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let failure = executor
+        .execute_result(&state, |_current: &usize| {
+            CasDecision::<usize, (), TestError>::abort(TestError("blocked"))
+        })
+        .expect_err("abort should fail")
+        .into_last_failure();
+
+    assert!(matches!(failure, Some(CasAttemptFailure::Abort { .. })));
 }
 
 /// Verifies terminal CAS error display text for non-retry terminal kinds.

@@ -114,6 +114,36 @@ impl<T, E> CasError<T, E> {
         self.last_failure.as_ref()
     }
 
+    /// Consumes this error and returns the captured attempt failure.
+    ///
+    /// # Returns
+    /// `Some(CasAttemptFailure<T, E>)` when the terminal error retained an
+    /// attempt failure, or `None` for retry infrastructure failures.
+    #[must_use]
+    #[inline(always)]
+    pub fn into_last_failure(self) -> Option<CasAttemptFailure<T, E>> {
+        self.last_failure
+    }
+
+    /// Consumes this error and returns all terminal error details.
+    ///
+    /// # Returns
+    /// The classified kind, retry-layer reason, terminal context, and owned
+    /// last attempt failure. The failure is `None` when the retry layer did
+    /// not preserve an attempt-level CAS failure.
+    #[must_use]
+    #[inline(always)]
+    pub fn into_parts(
+        self,
+    ) -> (
+        CasErrorKind,
+        RetryErrorReason,
+        CasContext,
+        Option<CasAttemptFailure<T, E>>,
+    ) {
+        (self.kind, self.reason, self.context, self.last_failure)
+    }
+
     /// Returns the current state associated with the last failure.
     ///
     /// # Returns
@@ -228,9 +258,6 @@ where
             CasErrorKind::Conflict => "CAS conflicts exhausted",
             CasErrorKind::RetryExhausted => "CAS retryable failures exhausted",
             CasErrorKind::AttemptTimeout => "CAS attempt timed out",
-            CasErrorKind::UnsupportedOperation => {
-                "CAS unsupported operation for this execution mode"
-            }
             CasErrorKind::RetryInfrastructure => {
                 "CAS retry infrastructure failed"
             }
