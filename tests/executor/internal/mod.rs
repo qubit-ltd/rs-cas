@@ -7,4 +7,5 @@
 // =============================================================================
 
 mod attempt_success_tests;
+mod attempt_timeout_action_tests;
 mod cas_report_finish_context_tests;
