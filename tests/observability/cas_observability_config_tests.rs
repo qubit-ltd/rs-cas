@@ -111,3 +111,33 @@ fn test_observability_config_alert_switches_install_thresholds() {
     assert_eq!(config.mode(), CasObservabilityMode::EventStreamWithAlert);
     assert_eq!(config.contention_thresholds(), Some(second_thresholds));
 }
+
+/// Verifies configuration transition methods can be used as function pointers.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_observability_config_transition_function_pointers() {
+    let thresholds = ContentionThresholds::new(2, 1, 0.5);
+    let with_event_stream: fn(
+        CasObservabilityConfig,
+    ) -> CasObservabilityConfig = CasObservabilityConfig::with_event_stream;
+    let with_alert: fn(
+        CasObservabilityConfig,
+        ContentionThresholds,
+    ) -> CasObservabilityConfig =
+        CasObservabilityConfig::with_event_stream_with_alert;
+    let with_thresholds: fn(
+        CasObservabilityConfig,
+        ContentionThresholds,
+    ) -> CasObservabilityConfig =
+        CasObservabilityConfig::with_contention_thresholds;
+
+    let event = with_event_stream(CasObservabilityConfig::default());
+    assert_eq!(event.mode(), CasObservabilityMode::EventStream);
+    let alert = with_alert(event, thresholds);
+    assert_eq!(alert.mode(), CasObservabilityMode::EventStreamWithAlert);
+    assert_eq!(alert.contention_thresholds(), Some(thresholds));
+    let configured = with_thresholds(alert, thresholds);
+    assert_eq!(configured.contention_thresholds(), Some(thresholds));
+}

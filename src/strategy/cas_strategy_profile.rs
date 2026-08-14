@@ -43,7 +43,6 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// Maximum number of attempts (including initial) for this strategy.
-    #[inline(always)]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -52,7 +51,6 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// User operation time budget for the entire CAS flow.
-    #[inline(always)]
     pub fn max_operation_elapsed(&self) -> Duration {
         self.max_operation_elapsed
     }
@@ -62,7 +60,6 @@ impl CasStrategyProfile {
     /// # Returns
     /// `Some(Duration)` when the strategy caps whole-flow time (including retry
     /// sleeps), or `None` when only the operation-time budget applies.
-    #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -71,7 +68,6 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// `true` for strategies that insert delays between retries.
-    #[inline(always)]
     pub fn uses_backoff(&self) -> bool {
         self.uses_backoff
     }

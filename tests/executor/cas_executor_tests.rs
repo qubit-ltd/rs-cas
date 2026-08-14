@@ -24,6 +24,7 @@ use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
 use qubit_cas::CasObservabilityConfig;
+use qubit_cas::CasStrategy;
 use qubit_cas::ContentionThresholds;
 use qubit_cas::ListenerPanicPolicy;
 
@@ -753,6 +754,26 @@ async fn test_execute_async_timeout_abort_returns_attempt_timeout() {
     assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
     assert_eq!(error.attempts(), 1);
     assert_eq!(error.current().map(|current| **current), Some(5));
+}
+
+/// Verifies the executor constructors and debug representation preserve config.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_executor_constructors_and_debug_work() {
+    let latency = CasExecutor::<usize, TestError>::latency_first();
+    let contention = CasExecutor::<usize, TestError>::contention_adaptive();
+    let reliability = CasExecutor::<usize, TestError>::reliability_first();
+    let selected = CasExecutor::<usize, TestError>::with_strategy(
+        CasStrategy::ReliabilityFirst,
+    );
+
+    assert!(latency.policy().limits().max_attempts().get() > 0);
+    assert!(contention.policy().limits().max_attempts().get() > 0);
+    assert!(reliability.policy().limits().max_attempts().get() > 0);
+    assert_eq!(selected.policy().limits(), reliability.policy().limits());
+    assert!(format!("{latency:?}").contains("CasExecutor"));
 }
 
 /// Verifies async execution covers all CAS decision variants.

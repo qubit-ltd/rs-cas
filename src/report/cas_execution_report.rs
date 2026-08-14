@@ -99,7 +99,6 @@ impl CasExecutionReport {
     /// # Returns
     /// One-based count of attempts performed (including the successful or
     /// terminal one).
-    #[inline(always)]
     pub fn attempts_total(&self) -> u32 {
         self.attempts_total
     }
@@ -109,7 +108,6 @@ impl CasExecutionReport {
     /// # Returns
     /// Count of times a CAS operation failed due to state change by another
     /// thread/process.
-    #[inline(always)]
     pub fn conflicts(&self) -> u32 {
         self.conflicts
     }
@@ -119,7 +117,6 @@ impl CasExecutionReport {
     /// # Returns
     /// Count of times the business operation returned
     /// [`CasDecision::Retry`](crate::CasDecision::Retry).
-    #[inline(always)]
     pub fn retry_errors(&self) -> u32 {
         self.retry_errors
     }
@@ -129,7 +126,6 @@ impl CasExecutionReport {
     /// # Returns
     /// Count of times the business operation returned
     /// [`CasDecision::Abort`](crate::CasDecision::Abort).
-    #[inline(always)]
     pub fn aborts(&self) -> u32 {
         self.aborts
     }
@@ -138,7 +134,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// Count of times an async operation exceeded its configured timeout.
-    #[inline(always)]
     pub fn timeouts(&self) -> u32 {
         self.timeouts
     }
@@ -147,7 +142,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// [`Instant`] at the start of the CAS execution.
-    #[inline(always)]
     pub fn started_at(&self) -> Instant {
         self.started_at
     }
@@ -156,7 +150,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// [`Instant`] when the CAS flow terminated.
-    #[inline(always)]
     pub fn finished_at(&self) -> Instant {
         self.finished_at
     }
@@ -165,7 +158,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// Duration between `started_at` and `finished_at`.
-    #[inline(always)]
     pub fn elapsed(&self) -> Duration {
         self.finished_at.duration_since(self.started_at)
     }
@@ -174,7 +166,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// The `max_attempts` value used by the retry policy.
-    #[inline(always)]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -183,7 +174,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// `Some(Duration)` if a budget was set, otherwise `None`.
-    #[inline(always)]
     pub fn max_operation_elapsed(&self) -> Option<Duration> {
         self.max_operation_elapsed
     }
@@ -192,7 +182,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// `Some(Duration)` if a budget was set, otherwise `None`.
-    #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -201,7 +190,6 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// The [`CasExecutionOutcome`] classifying how the execution ended.
-    #[inline(always)]
     pub fn outcome(&self) -> CasExecutionOutcome {
         self.outcome
     }

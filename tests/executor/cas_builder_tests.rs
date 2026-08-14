@@ -9,6 +9,11 @@
 use std::time::Duration;
 
 use qubit_cas::CasExecutor;
+use qubit_cas::CasStrategy;
+use qubit_cas::ContentionThresholds;
+use qubit_cas::ListenerPanicPolicy;
+use qubit_cas::executor::CasBuilder;
+use qubit_cas::observability::CasObservabilityConfig;
 use qubit_retry::BackoffPolicy;
 use qubit_retry::RetryPolicy;
 
@@ -51,4 +56,71 @@ fn test_build_reports_invalid_backoff() {
         .expect_err("reversed random bounds should fail");
 
     assert_eq!(error.field(), "backoff.uniform");
+}
+
+/// Verifies the builder exposes all retry and observability configuration
+/// paths.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_builder_configuration_methods_compose() {
+    let thresholds = ContentionThresholds::new(2, 1, 0.5);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(4)
+        .max_retries(3)
+        .max_operation_elapsed(Some(Duration::from_secs(2)))
+        .max_total_elapsed(Some(Duration::from_secs(3)))
+        .backoff(BackoffPolicy::immediate())
+        .no_delay()
+        .fixed_delay(Duration::from_millis(1))
+        .random_delay(Duration::from_millis(1), Duration::from_millis(2))
+        .exponential_backoff(Duration::from_millis(1), Duration::from_millis(4))
+        .exponential_backoff_with_multiplier(
+            Duration::from_millis(1),
+            Duration::from_millis(4),
+            2.0,
+        )
+        .jitter_factor(0.1)
+        .attempt_timeout(None)
+        .retry_on_timeout()
+        .abort_on_timeout()
+        .observability(CasObservabilityConfig::event_stream())
+        .alert_on_contention(thresholds)
+        .isolate_listener_panics()
+        .build()
+        .expect("composed builder should build");
+
+    assert_eq!(executor.policy().limits().max_attempts().get(), 4);
+    assert_eq!(
+        executor.observability().listener_panic_policy(),
+        ListenerPanicPolicy::Isolate
+    );
+    assert_eq!(
+        executor.observability().contention_thresholds(),
+        Some(thresholds)
+    );
+    assert_eq!(CasStrategy::default(), CasStrategy::LatencyFirst);
+    let _default_builder = CasBuilder::<usize, TestError>::default();
+}
+
+/// Verifies the built-in strategy builder helpers produce valid executors.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_builtin_strategy_builders_succeed() {
+    CasExecutor::<usize, TestError>::builder()
+        .build_contention_adaptive()
+        .expect("contention-adaptive builder should succeed");
+    CasExecutor::<usize, TestError>::builder()
+        .build_latency_first()
+        .expect("latency-first builder should succeed");
+    CasExecutor::<usize, TestError>::builder()
+        .build_reliability_first()
+        .expect("reliability-first builder should succeed");
+    CasExecutor::<usize, TestError>::builder()
+        .strategy(CasStrategy::ReliabilityFirst)
+        .build()
+        .expect("strategy builder should succeed");
 }
