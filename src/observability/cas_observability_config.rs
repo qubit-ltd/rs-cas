@@ -179,8 +179,8 @@ impl Default for CasObservabilityConfig {
     /// Returns report-only observability (the default, lowest overhead mode).
     ///
     /// # Returns
-    /// Config with `ReportOnly` mode, propagate panics, and no contention
-    /// thresholds.
+    /// Config with `ReportOnly` mode, listener panics exposed to their owning
+    /// boundaries, and no contention thresholds.
     #[inline]
     fn default() -> Self {
         Self {
