@@ -33,6 +33,7 @@ pub use error::CasAttemptFailure;
 pub use error::CasAttemptFailureKind;
 pub use error::CasError;
 pub use error::CasErrorKind;
+pub use error::CasRetryFailure;
 pub use event::CasContext;
 pub use event::CasEvent;
 pub use event::CasHooks;

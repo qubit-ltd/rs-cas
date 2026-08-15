@@ -24,9 +24,12 @@ use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
 use qubit_cas::CasObservabilityConfig;
+use qubit_cas::CasRetryFailure;
 use qubit_cas::CasStrategy;
 use qubit_cas::ContentionThresholds;
 use qubit_cas::ListenerPanicPolicy;
+use qubit_retry::RetryCallbackKind;
+use qubit_retry::RetryCallbackPhase;
 
 use crate::support::NonCloneValue;
 use crate::support::TestError;
@@ -127,7 +130,7 @@ fn test_execute_retries_conflict_and_calls_retry_hook() {
             retry_events
                 .lock()
                 .expect("retry events should be lockable")
-                .push((context.attempt(), *kind));
+                .push((context.attempts(), *kind));
         }
     });
 
@@ -285,7 +288,8 @@ fn test_execute_isolates_event_listener_panics() {
     assert_eq!(*success.output(), "ok");
 }
 
-/// Verifies the default listener policy propagates event listener panics.
+/// Verifies the default policy exposes an execution-started listener panic at
+/// the owning synchronous execution boundary.
 ///
 /// # Parameters
 /// This test has no parameters.
@@ -293,10 +297,14 @@ fn test_execute_isolates_event_listener_panics() {
 /// # Returns
 /// This test returns nothing.
 #[test]
-fn test_execute_propagates_event_listener_panics_by_default() {
+fn test_execute_exposes_execution_started_listener_panic_by_default() {
     let state = AtomicRef::from_value(3usize);
-    let hooks = CasHooks::new().on_event(|_event: &CasEvent| {
-        panic!("event listener panic should propagate");
+    let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+        if matches!(event, CasEvent::ExecutionStarted { .. }) {
+            panic!(
+                "execution-started listener panic should reach the boundary"
+            );
+        }
     });
     let executor = CasExecutor::<usize, TestError>::builder()
         .no_delay()
@@ -313,6 +321,129 @@ fn test_execute_propagates_event_listener_panics_by_default() {
     }));
 
     assert!(panic.is_err());
+}
+
+/// Verifies the default policy exposes an execution-finished listener panic at
+/// the owning synchronous execution boundary.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_exposes_execution_finished_listener_panic_by_default() {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+        if matches!(event, CasEvent::ExecutionFinished { .. }) {
+            panic!(
+                "execution-finished listener panic should reach the boundary"
+            );
+        }
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _outcome = executor.execute_with_hooks(
+            &state,
+            |_current: &usize| CasDecision::<usize, (), TestError>::finish(()),
+            hooks,
+        );
+    }));
+
+    assert!(panic.is_err());
+}
+
+/// Verifies a synchronous attempt-failed listener panic retains observer
+/// attribution and the last business failure.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_attributes_attempt_failed_listener_panic_to_observer() {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+        if matches!(event, CasEvent::AttemptFailed { .. }) {
+            panic!("attempt-failed listener panic");
+        }
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_with_hooks(
+            &state,
+            |_current: &usize| {
+                CasDecision::<usize, (), TestError>::retry(TestError("busy"))
+            },
+            hooks,
+        )
+        .expect_err("attempt-failed listener panic should stop execution");
+
+    assert_eq!(error.kind(), CasErrorKind::RetryInfrastructure);
+    assert_eq!(error.error(), Some(&TestError("busy")));
+    let callback = match error.failure() {
+        CasRetryFailure::CallbackFailed { callback } => callback,
+        failure => panic!("expected callback failure, got {failure:?}"),
+    };
+    assert_eq!(callback.callback(), RetryCallbackKind::Observer);
+    assert_eq!(callback.index(), 0);
+    assert_eq!(callback.phase(), RetryCallbackPhase::AttemptFailed);
+}
+
+/// Verifies a retry-requested listener panic remains a structured retry rule
+/// callback failure instead of unwinding through the execution boundary.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_attributes_retry_requested_listener_panic_to_rule() {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+        if matches!(event, CasEvent::RetryRequested { .. }) {
+            panic!("retry-requested listener panic");
+        }
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(2)
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_with_hooks(
+            &state,
+            |_current: &usize| {
+                CasDecision::<usize, (), TestError>::retry(TestError("busy"))
+            },
+            hooks,
+        )
+        .expect_err("retry-requested listener panic should stop execution");
+
+    assert_eq!(error.kind(), CasErrorKind::RetryInfrastructure);
+    assert_eq!(error.attempts(), 1);
+    assert_eq!(error.error(), Some(&TestError("busy")));
+    let callback = match error.failure() {
+        CasRetryFailure::CallbackFailed { callback } => callback,
+        failure => panic!("expected callback failure, got {failure:?}"),
+    };
+    assert_eq!(callback.callback(), RetryCallbackKind::Rule);
+    assert_eq!(callback.index(), 0);
+    assert_eq!(callback.phase(), RetryCallbackPhase::RuleDecision);
 }
 
 /// Verifies alert listener panics can be isolated.
@@ -354,6 +485,47 @@ fn test_execute_isolates_alert_listener_panics() {
         .expect("alert listener panic should be isolated");
 
     assert_eq!(success.attempts(), 2);
+}
+
+/// Verifies the default policy exposes an alert listener panic at the owning
+/// synchronous execution boundary.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_exposes_alert_listener_panic_by_default() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = AtomicUsize::new(0);
+    let thresholds = ContentionThresholds::new(2, 1, 0.5);
+    let hooks = CasHooks::new().on_alert(|_alert: &CasAlert| {
+        panic!("alert listener panic should reach the boundary");
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream_with_alert(
+            thresholds,
+        ))
+        .build()
+        .expect("executor should build");
+
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _outcome = executor.execute_with_hooks(
+            &state,
+            |current: &usize| {
+                if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                    state.store(Arc::new(*current + 1));
+                }
+                CasDecision::update(*current + 1, ())
+            },
+            hooks,
+        );
+    }));
+
+    assert!(panic.is_err());
 }
 
 /// Verifies alert mode does not require an alert listener.
@@ -436,7 +608,7 @@ fn test_execute_abort_returns_error_and_calls_abort_hook() {
             abort_events
                 .lock()
                 .expect("abort events should be lockable")
-                .push((context.attempt(), *kind));
+                .push((context.attempts(), *kind));
         }
     });
 
@@ -597,7 +769,7 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
             retry_events
                 .lock()
                 .expect("retry events should be lockable")
-                .push((context.attempt(), *kind));
+                .push((context.attempts(), *kind));
         }
     });
 
@@ -633,16 +805,59 @@ async fn test_execute_async_retries_timeout_then_succeeds() {
         .expect("second async attempt should succeed");
 
     assert_eq!(success.attempts(), 2);
-    assert_eq!(
-        success.context().attempt_timeout(),
-        Some(Duration::from_millis(10))
-    );
+    assert_eq!(success.context().current_attempt_timeout(), None);
     assert_eq!(**success.current(), 1);
     assert_eq!(*success.output(), 100);
     assert_eq!(
         *retries.lock().expect("retry events should be lockable"),
         vec![(1, CasAttemptFailureKind::Timeout)]
     );
+}
+
+/// Verifies an asynchronous attempt-failed listener panic retains observer
+/// attribution and the last business failure.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test]
+async fn test_execute_async_attributes_attempt_failed_listener_panic_to_observer()
+ {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+        if matches!(event, CasEvent::AttemptFailed { .. }) {
+            panic!("attempt-failed listener panic");
+        }
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_async_with_hooks(
+            &state,
+            |_current: Arc<usize>| async move {
+                CasDecision::<usize, (), TestError>::retry(TestError("busy"))
+            },
+            hooks,
+        )
+        .await
+        .expect_err("attempt-failed listener panic should stop execution");
+
+    assert_eq!(error.kind(), CasErrorKind::RetryInfrastructure);
+    assert_eq!(error.error(), Some(&TestError("busy")));
+    let callback = match error.failure() {
+        CasRetryFailure::CallbackFailed { callback } => callback,
+        failure => panic!("expected callback failure, got {failure:?}"),
+    };
+    assert_eq!(callback.callback(), RetryCallbackKind::Observer);
+    assert_eq!(callback.index(), 0);
+    assert_eq!(callback.phase(), RetryCallbackPhase::AttemptFailed);
 }
 
 /// Verifies the operation continuation budget does not cancel an admitted

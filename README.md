@@ -410,7 +410,7 @@ let executor = CasExecutor::<usize, &'static str>::builder()
 let hooks = CasHooks::new().on_event(|event: &CasEvent| {
     if let CasEvent::AttemptFailed { context, kind } = event {
         if *kind == CasAttemptFailureKind::Conflict {
-            eprintln!("CAS conflict at attempt {}", context.attempt());
+            eprintln!("CAS conflict at attempt {}", context.attempts());
         }
     }
 });
@@ -490,6 +490,10 @@ async fn main() {
 - `CasSuccess<T, R>`: successful update or no-write finish, including current
   state, optional previous state, output, and attempt context.
 - `CasError<T, E>`: terminal failure with a classified `CasErrorKind`.
+- `CasRetryFailure`: exact retry terminal details for the pinned 0.19.0
+  limits, timeouts, cancellation, callback failures, and infrastructure
+  failures, plus a defensive `Unknown` classification for substituted path
+  sources that extend that contract.
 - `CasHooks`: per-execution lifecycle and alert hooks.
 - `CasObservabilityConfig`: selects report-only mode, event stream mode, or
   event stream with contention alerts.
