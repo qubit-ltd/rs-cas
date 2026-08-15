@@ -9,12 +9,17 @@
 
 /// Policy for panics raised by event or alert listeners.
 ///
-/// The default is [`Self::Propagate`], so a listener panic unwinds through the
-/// synchronous or asynchronous execution call. Select [`Self::Isolate`] to
-/// catch listener panics and allow the CAS flow to continue.
+/// The default is [`Self::Propagate`], which exposes a listener panic to the
+/// boundary that owns that listener invocation. Retry-owned
+/// `AttemptFailed`/`RetryRequested` invocations are owned by `qubit-retry`, so
+/// their panics become structured [`crate::CasRetryFailure::CallbackFailed`]
+/// values. Outer `ExecutionStarted`/`ExecutionFinished` event invocations and
+/// alert invocations are owned by the CAS execution call and therefore unwind
+/// through it. Select [`Self::Isolate`] to catch listener panics at dispatch
+/// and allow the CAS flow to continue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListenerPanicPolicy {
-    /// Listener panics propagate to the caller.
+    /// Exposes a listener panic to its owning execution boundary.
     Propagate,
     /// Listener panics are isolated so the CAS flow can continue.
     Isolate,
@@ -24,7 +29,8 @@ impl Default for ListenerPanicPolicy {
     /// Returns the default listener panic policy.
     ///
     /// # Returns
-    /// [`ListenerPanicPolicy::Propagate`] (panics bubble up to caller).
+    /// [`ListenerPanicPolicy::Propagate`], which exposes a panic to the
+    /// boundary that owns the listener invocation.
     #[inline]
     fn default() -> Self {
         Self::Propagate

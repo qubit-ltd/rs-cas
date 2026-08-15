@@ -42,16 +42,17 @@ fn test_success_context_accessors_work() {
     assert!(!success.is_updated());
     assert_eq!(*success.current().as_ref(), 5);
     assert_eq!(success.output().value, "ready");
-    assert_eq!(success.context().attempt(), 1);
+    assert_eq!(success.context().attempts(), 1);
+    assert_eq!(success.context().current_attempt(), None);
     assert_eq!(success.context().max_attempts(), 3);
     assert_eq!(success.context().max_retries(), 2);
     assert_eq!(success.context().max_operation_elapsed(), None);
     assert_eq!(success.context().max_total_elapsed(), None);
     assert!(
         success.context().total_elapsed()
-            >= success.context().attempt_elapsed()
+            >= success.context().last_attempt_elapsed()
     );
-    assert_eq!(success.context().attempt_timeout(), None);
+    assert_eq!(success.context().current_attempt_timeout(), None);
     assert_eq!(success.context().next_delay(), None);
 }
 
@@ -77,7 +78,8 @@ fn test_bounded_context_accessors_work() {
         .expect("bounded execution should succeed");
     let context = std::hint::black_box(success.context());
 
-    assert_eq!(std::hint::black_box(context.attempt()), 1);
+    assert_eq!(std::hint::black_box(context.attempts()), 1);
+    assert_eq!(std::hint::black_box(context.current_attempt()), None);
     assert_eq!(std::hint::black_box(context.max_attempts()), 4);
     assert_eq!(std::hint::black_box(context.max_retries()), 3);
     assert_eq!(
@@ -90,9 +92,12 @@ fn test_bounded_context_accessors_work() {
     );
     assert!(
         std::hint::black_box(context.total_elapsed())
-            >= context.attempt_elapsed()
+            >= context.last_attempt_elapsed()
     );
-    assert_eq!(std::hint::black_box(context.attempt_timeout()), None);
+    assert_eq!(
+        std::hint::black_box(context.current_attempt_timeout()),
+        None
+    );
     assert_eq!(std::hint::black_box(context.next_delay()), None);
 }
 
@@ -115,10 +120,13 @@ fn test_context_accessor_function_pointers_work() {
     let max_retries: fn(&CasContext) -> u32 = CasContext::max_retries;
     let total_elapsed: fn(&CasContext) -> std::time::Duration =
         CasContext::total_elapsed;
-    let attempt_elapsed: fn(&CasContext) -> std::time::Duration =
-        CasContext::attempt_elapsed;
-    let attempt_timeout: fn(&CasContext) -> Option<std::time::Duration> =
-        CasContext::attempt_timeout;
+    let current_attempt: fn(&CasContext) -> Option<std::num::NonZeroU32> =
+        CasContext::current_attempt;
+    let last_attempt_elapsed: fn(&CasContext) -> std::time::Duration =
+        CasContext::last_attempt_elapsed;
+    let current_attempt_timeout: fn(
+        &CasContext,
+    ) -> Option<std::time::Duration> = CasContext::current_attempt_timeout;
     let next_delay: fn(&CasContext) -> Option<std::time::Duration> =
         CasContext::next_delay;
 
@@ -126,7 +134,8 @@ fn test_context_accessor_function_pointers_work() {
         max_retries(&context),
         DEFAULT_CAS_MAX_ATTEMPTS.saturating_sub(1)
     );
-    assert!(total_elapsed(&context) >= attempt_elapsed(&context));
-    assert_eq!(attempt_timeout(&context), None);
+    assert_eq!(current_attempt(&context), None);
+    assert!(total_elapsed(&context) >= last_attempt_elapsed(&context));
+    assert_eq!(current_attempt_timeout(&context), None);
     assert_eq!(next_delay(&context), None);
 }

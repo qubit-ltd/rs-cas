@@ -6,9 +6,4 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod cas_attempt_failure_kind_tests;
-mod cas_attempt_failure_tests;
-mod cas_error_kind_tests;
-mod cas_error_tests;
-mod cas_retry_failure_tests;
-mod internal;
+mod cas_error_details_tests;

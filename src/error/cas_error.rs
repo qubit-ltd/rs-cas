@@ -12,11 +12,16 @@ use std::fmt;
 use std::sync::Arc;
 
 use qubit_retry::AttemptFailure;
+use qubit_retry::RetryContext;
 use qubit_retry::RetryError;
-use qubit_retry::RetryErrorReason;
+use qubit_retry::RetryFailure;
+use qubit_retry::RetryLimitKind;
+use qubit_retry::RetryTimeoutScope;
 
 use super::CasAttemptFailure;
 use super::CasErrorKind;
+use super::CasRetryFailure;
+use super::internal::CasErrorDetails;
 use crate::event::CasContext;
 
 /// Terminal CAS error returned by [`crate::CasExecutor`].
@@ -24,11 +29,9 @@ use crate::event::CasContext;
 pub struct CasError<T, E> {
     /// Cached high-level CAS error kind.
     kind: CasErrorKind,
-    /// Terminal reason selected by the retry layer.
-    reason: RetryErrorReason,
-    /// Copied CAS context captured when execution stopped.
-    context: CasContext,
-    /// Last attempt-level CAS failure, when one exists.
+    /// Retry-layer details stored out of line to keep this error compact.
+    details: Box<CasErrorDetails>,
+    /// Retained application CAS failure or snapshot-backed timeout.
     last_failure: Option<CasAttemptFailure<T, E>>,
 }
 
@@ -47,24 +50,98 @@ impl<T, E> CasError<T, E> {
         inner: RetryError<CasAttemptFailure<T, E>>,
         timeout_current: Option<Arc<T>>,
     ) -> Self {
-        let (reason, raw_last_failure, retry_context) = inner.into_parts();
+        let (failure, retry_context) = inner.into_parts();
+        Self::from_retry_parts(failure, retry_context, timeout_current)
+    }
+
+    /// Converts structured retry terminal parts into one CAS error.
+    fn from_retry_parts(
+        failure: RetryFailure<CasAttemptFailure<T, E>>,
+        retry_context: RetryContext,
+        mut timeout_current: Option<Arc<T>>,
+    ) -> Self {
         let context = CasContext::new(&retry_context);
-        let last_failure = match raw_last_failure {
-            Some(AttemptFailure::Error(failure)) => Some(failure),
-            Some(AttemptFailure::Timeout { .. }) => {
-                timeout_current.map(CasAttemptFailure::timeout)
-            }
-            Some(AttemptFailure::Panic)
-            | Some(AttemptFailure::Infrastructure(_))
-            | None => None,
-            Some(_) => None,
+        let (failure, last_failure) = match failure {
+            RetryFailure::Aborted { last_failure, .. } => (
+                CasRetryFailure::Aborted,
+                Self::map_attempt_failure(last_failure, &mut timeout_current),
+            ),
+            RetryFailure::Exhausted {
+                limit,
+                last_failure,
+                ..
+            } => (
+                CasRetryFailure::Exhausted { limit },
+                last_failure.and_then(|failure| {
+                    Self::map_attempt_failure(failure, &mut timeout_current)
+                }),
+            ),
+            RetryFailure::TimedOut {
+                scope,
+                last_failure,
+                ..
+            } => (
+                CasRetryFailure::TimedOut { scope },
+                last_failure.and_then(|failure| {
+                    Self::map_attempt_failure(failure, &mut timeout_current)
+                }),
+            ),
+            RetryFailure::Cancelled {
+                phase,
+                last_failure,
+                ..
+            } => (
+                CasRetryFailure::Cancelled { phase },
+                last_failure.and_then(|failure| {
+                    Self::map_attempt_failure(failure, &mut timeout_current)
+                }),
+            ),
+            RetryFailure::CallbackFailed {
+                callback,
+                last_failure,
+                ..
+            } => (
+                CasRetryFailure::CallbackFailed { callback },
+                last_failure.and_then(|failure| {
+                    Self::map_attempt_failure(failure, &mut timeout_current)
+                }),
+            ),
+            RetryFailure::Infrastructure {
+                failure,
+                last_failure,
+                ..
+            } => (
+                CasRetryFailure::Infrastructure { failure },
+                last_failure.and_then(|failure| {
+                    Self::map_attempt_failure(failure, &mut timeout_current)
+                }),
+            ),
+            // Cargo.toml pins the published contract to exactly 0.19.0. A
+            // substituted path source can nevertheless keep that package
+            // version while adding a non-exhaustive variant, so degrade to a
+            // safe structural terminal instead of panicking at runtime.
+            _ => (CasRetryFailure::Unknown, None),
         };
-        let kind = Self::classify_kind(reason, last_failure.as_ref(), &context);
+        let kind = Self::classify_kind(&failure, last_failure.as_ref());
         Self {
             kind,
-            reason,
-            context,
+            details: Box::new(CasErrorDetails { failure, context }),
             last_failure,
+        }
+    }
+
+    /// Extracts a CAS attempt failure only from an application attempt error.
+    fn map_attempt_failure(
+        failure: AttemptFailure<CasAttemptFailure<T, E>>,
+        timeout_current: &mut Option<Arc<T>>,
+    ) -> Option<CasAttemptFailure<T, E>> {
+        match failure {
+            AttemptFailure::Error(failure) => Some(failure),
+            AttemptFailure::TimedOut { .. } => {
+                timeout_current.take().map(CasAttemptFailure::timeout)
+            }
+            AttemptFailure::Panicked { .. } => None,
+            _ => None,
         }
     }
 
@@ -73,52 +150,64 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// High-level CAS error kind derived from the retry-layer reason and last
     /// attempt failure.
+    #[must_use]
     #[inline(always)]
     pub fn kind(&self) -> CasErrorKind {
         self.kind
     }
 
-    /// Returns the retry-layer terminal reason.
+    /// Returns the structured retry-layer terminal failure.
     ///
     /// # Returns
-    /// Underlying [`RetryErrorReason`].
+    /// Structured terminal classification and every detail available through
+    /// the pinned retry-layer contract.
+    #[must_use = "the structured retry terminal classification must be inspected"]
     #[inline(always)]
-    pub fn reason(&self) -> RetryErrorReason {
-        self.reason
+    pub fn failure(&self) -> &CasRetryFailure {
+        &self.details.failure
     }
 
     /// Returns the terminal CAS context.
     ///
     /// # Returns
     /// Copied CAS context captured when execution stopped.
+    #[must_use]
     #[inline(always)]
     pub fn context(&self) -> CasContext {
-        self.context
+        self.details.context
     }
 
     /// Returns the number of attempts that were executed.
     ///
     /// # Returns
     /// One-based attempt count.
+    #[must_use]
     #[inline(always)]
     pub fn attempts(&self) -> u32 {
-        self.context.attempt()
+        self.details.context.attempts()
     }
 
-    /// Returns the last CAS attempt failure when one exists.
+    /// Returns the retained application-level CAS failure, when one exists.
     ///
     /// # Returns
-    /// `Some(&CasAttemptFailure<T, E>)` when at least one attempt failed.
+    /// `Some(&CasAttemptFailure<T, E>)` for a retained application CAS failure,
+    /// including an asynchronous timeout only when a state snapshot was
+    /// available. Returns `None` when the retry terminal retained no
+    /// application failure or a timeout had no available state snapshot.
+    #[must_use]
     #[inline(always)]
     pub fn last_failure(&self) -> Option<&CasAttemptFailure<T, E>> {
         self.last_failure.as_ref()
     }
 
-    /// Consumes this error and returns the captured attempt failure.
+    /// Consumes this error and returns the retained application-level CAS
+    /// failure.
     ///
     /// # Returns
-    /// `Some(CasAttemptFailure<T, E>)` when the terminal error retained an
-    /// attempt failure, or `None` for retry infrastructure failures.
+    /// `Some(CasAttemptFailure<T, E>)` for a retained application CAS failure,
+    /// including an asynchronous timeout only when a state snapshot was
+    /// available. Returns `None` when no application failure was retained;
+    /// this is independent of whether attempts ran or infrastructure failed.
     #[must_use]
     #[inline(always)]
     pub fn into_last_failure(self) -> Option<CasAttemptFailure<T, E>> {
@@ -128,26 +217,28 @@ impl<T, E> CasError<T, E> {
     /// Consumes this error and returns all terminal error details.
     ///
     /// # Returns
-    /// The classified kind, retry-layer reason, terminal context, and owned
-    /// last attempt failure. The failure is `None` when the retry layer did
-    /// not preserve an attempt-level CAS failure.
-    #[must_use]
+    /// The classified kind, structured retry terminal failure, terminal
+    /// context, and optional owned application CAS failure. The optional
+    /// failure includes a timeout only when a state snapshot was available.
+    #[must_use = "consuming the error returns its structured terminal details"]
     #[inline(always)]
     pub fn into_parts(
         self,
     ) -> (
         CasErrorKind,
-        RetryErrorReason,
+        CasRetryFailure,
         CasContext,
         Option<CasAttemptFailure<T, E>>,
     ) {
-        (self.kind, self.reason, self.context, self.last_failure)
+        let CasErrorDetails { failure, context } = *self.details;
+        (self.kind, failure, context, self.last_failure)
     }
 
     /// Returns the current state associated with the last failure.
     ///
     /// # Returns
     /// `Some(&Arc<T>)` when the terminal error preserved a current state.
+    #[must_use]
     #[inline(always)]
     pub fn current(&self) -> Option<&Arc<T>> {
         self.last_failure().map(CasAttemptFailure::current)
@@ -157,64 +248,66 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Returns
     /// `Some(&E)` for retryable or aborting business failures.
+    #[must_use]
     #[inline(always)]
     pub fn error(&self) -> Option<&E> {
         self.last_failure().and_then(CasAttemptFailure::error)
     }
 
-    /// Classifies one terminal CAS error kind from retry reason and failure.
+    /// Classifies one terminal CAS error kind from retry and attempt failures.
     ///
     /// # Parameters
-    /// - `reason`: Terminal reason selected by the retry layer.
+    /// - `failure`: Structured terminal failure selected by the retry layer.
     /// - `last_failure`: Last CAS failure when one exists.
     ///
     /// # Returns
     /// Derived high-level CAS error kind.
     fn classify_kind(
-        reason: RetryErrorReason,
+        failure: &CasRetryFailure,
         last_failure: Option<&CasAttemptFailure<T, E>>,
-        context: &CasContext,
     ) -> CasErrorKind {
-        match reason {
-            RetryErrorReason::Aborted => match last_failure {
+        match failure {
+            CasRetryFailure::Aborted => match last_failure {
                 Some(CasAttemptFailure::Timeout { .. }) => {
                     CasErrorKind::AttemptTimeout
                 }
                 _ => CasErrorKind::Abort,
             },
-            RetryErrorReason::AttemptsExhausted => match last_failure {
-                Some(CasAttemptFailure::Conflict { .. }) => {
-                    CasErrorKind::Conflict
-                }
-                Some(CasAttemptFailure::Timeout { .. }) => {
-                    CasErrorKind::AttemptTimeout
-                }
-                _ => CasErrorKind::RetryExhausted,
-            },
-            RetryErrorReason::TimerFailed
-            | RetryErrorReason::WorkerStillRunning => {
-                CasErrorKind::RetryInfrastructure
-            }
-            RetryErrorReason::FlowTimedOut => {
-                if context.max_operation_elapsed().is_some()
-                    && context.max_total_elapsed().is_none()
-                {
+            CasRetryFailure::Exhausted { limit } => match limit {
+                RetryLimitKind::Attempts => match last_failure {
+                    Some(CasAttemptFailure::Conflict { .. }) => {
+                        CasErrorKind::Conflict
+                    }
+                    Some(CasAttemptFailure::Timeout { .. }) => {
+                        CasErrorKind::AttemptTimeout
+                    }
+                    _ => CasErrorKind::RetryExhausted,
+                },
+                RetryLimitKind::OperationElapsed => {
                     CasErrorKind::MaxOperationElapsedExceeded
-                } else if context.max_total_elapsed().is_some() {
-                    CasErrorKind::MaxTotalElapsedExceeded
-                } else {
-                    CasErrorKind::AttemptTimeout
                 }
-            }
-            RetryErrorReason::AttemptTimedOut => CasErrorKind::AttemptTimeout,
-            RetryErrorReason::OperationBudgetExhausted => {
-                CasErrorKind::MaxOperationElapsedExceeded
-            }
-            RetryErrorReason::TotalBudgetExhausted => {
-                CasErrorKind::MaxTotalElapsedExceeded
-            }
-            _ => CasErrorKind::RetryInfrastructure,
+                RetryLimitKind::TotalElapsed => {
+                    CasErrorKind::MaxTotalElapsedExceeded
+                }
+            },
+            CasRetryFailure::TimedOut { scope } => match scope {
+                RetryTimeoutScope::Attempt => CasErrorKind::AttemptTimeout,
+                RetryTimeoutScope::Flow => {
+                    CasErrorKind::MaxTotalElapsedExceeded
+                }
+            },
+            CasRetryFailure::Cancelled { .. }
+            | CasRetryFailure::CallbackFailed { .. }
+            | CasRetryFailure::Infrastructure { .. }
+            | CasRetryFailure::Unknown => CasErrorKind::RetryInfrastructure,
         }
+    }
+}
+
+impl<T, E> From<RetryError<CasAttemptFailure<T, E>>> for CasError<T, E> {
+    /// Converts a retry error without an external async timeout snapshot.
+    fn from(error: RetryError<CasAttemptFailure<T, E>>) -> Self {
+        Self::new(error, None)
     }
 }
 
@@ -232,7 +325,7 @@ impl<T, E> fmt::Debug for CasError<T, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CasError")
             .field("kind", &self.kind())
-            .field("reason", &self.reason())
+            .field("failure", &self.failure())
             .field("context", &self.context())
             .finish()
     }
@@ -269,6 +362,7 @@ where
             }
         };
         write!(f, "{message} after {} attempt(s)", self.attempts())?;
+        write!(f, "; {}", self.failure())?;
         if let Some(failure) = self.last_failure() {
             write!(f, "; last failure: {failure}")?;
         }
@@ -284,7 +378,8 @@ where
     ///
     /// # Returns
     /// `Some(&dyn Error)` when the terminal CAS failure preserved a business
-    /// error implementing [`std::error::Error`].
+    /// error implementing [`std::error::Error`]. Callback panic payloads and
+    /// infrastructure diagnostic strings do not fabricate error sources.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.error().map(|error| error as &(dyn Error + 'static))
     }

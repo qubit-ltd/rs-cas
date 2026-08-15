@@ -171,8 +171,9 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// One-based attempt count.
+    #[must_use]
     #[inline(always)]
     pub fn attempts(&self) -> u32 {
-        self.context().attempt()
+        self.context().attempts()
     }
 }

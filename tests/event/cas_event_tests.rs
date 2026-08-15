@@ -85,7 +85,7 @@ fn test_event_stream_emits_retry_requested_for_conflict() {
             seen_events
                 .lock()
                 .expect("event vector should be lockable")
-                .push(context.attempt());
+                .push(context.attempts());
         }
     });
 
