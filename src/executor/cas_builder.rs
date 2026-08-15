@@ -330,7 +330,8 @@ impl<T, E> CasBuilder<T, E> {
         self
     }
 
-    /// Enables retry-layer listener panic isolation.
+    /// Catches listener panics at dispatch instead of exposing them to their
+    /// owning execution boundaries.
     ///
     /// # Returns
     /// The updated builder.

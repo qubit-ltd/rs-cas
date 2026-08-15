@@ -19,13 +19,13 @@ use qubit_error::BoxError;
 use qubit_function::Consumer;
 use qubit_function::Function;
 use qubit_retry::AttemptFailure;
-use qubit_retry::AttemptTimeoutKind;
 use qubit_retry::Retry;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
 use qubit_retry::RetryError;
 use qubit_retry::RetryPolicy;
 use qubit_retry::RetrySuccess;
+use qubit_retry::RetryTimeoutScope;
 
 use super::cas_builder::CasBuilder;
 use super::internal::AttemptSuccess;
@@ -298,10 +298,13 @@ impl<T, E> CasExecutor<T, E> {
     /// Configured retry delays block the calling thread until execution ends.
     ///
     /// # Panics
-    /// Panics raised by event or alert listeners propagate when
-    /// [`ListenerPanicPolicy::Propagate`] is configured. Use
-    /// [`ListenerPanicPolicy::Isolate`] to keep listener panics from unwinding
-    /// through this call.
+    /// With [`ListenerPanicPolicy::Propagate`], panics from outer
+    /// `ExecutionStarted`/`ExecutionFinished` listeners and alert listeners
+    /// unwind through this call. Panics from retry-owned `AttemptFailed` and
+    /// `RetryRequested` listeners instead return a
+    /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
+    /// [`ListenerPanicPolicy::Isolate`] catches every listener
+    /// panic at dispatch and allows execution to continue.
     pub fn execute_with_hooks<R, O>(
         &self,
         state: &AtomicRef<T>,
@@ -419,10 +422,13 @@ impl<T, E> CasExecutor<T, E> {
     /// A terminal result together with the execution report.
     ///
     /// # Panics
-    /// Panics raised by event or alert listeners propagate when
-    /// [`ListenerPanicPolicy::Propagate`] is configured. Use
-    /// [`ListenerPanicPolicy::Isolate`] to keep listener panics from unwinding
-    /// through this future.
+    /// With [`ListenerPanicPolicy::Propagate`], panics from outer
+    /// `ExecutionStarted`/`ExecutionFinished` listeners and alert listeners
+    /// unwind while this future is polled. Panics from retry-owned
+    /// `AttemptFailed` and `RetryRequested` listeners instead return a
+    /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
+    /// [`ListenerPanicPolicy::Isolate`] catches every listener panic at
+    /// dispatch and allows execution to continue.
     #[cfg(feature = "tokio")]
     pub async fn execute_async_with_hooks<R, O, Fut>(
         &self,
@@ -483,79 +489,86 @@ impl<T, E> CasExecutor<T, E> {
         let event_hook = hooks.event_hook();
         let attempt_timeout_action = self.attempt_timeout_action;
         let observability = self.observability.clone();
+        let observer_event_hook = event_hook.clone();
+        let observer_observability = observability.clone();
+        let observer_report_builder = Arc::clone(&report_builder);
 
         Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
+            .observer(
+                move |failure: &AttemptFailure<CasAttemptFailure<T, E>>,
+                      context: &RetryContext| {
+                    let kind = match failure {
+                        AttemptFailure::Error(failure) => {
+                            let mut report = observer_report_builder
+                                .lock()
+                                .expect("CAS report builder should be lockable");
+                            match failure {
+                                CasAttemptFailure::Conflict { .. } => report.record_conflict(),
+                                CasAttemptFailure::Retry { .. } => report.record_retry_error(),
+                                CasAttemptFailure::Abort { .. } => report.record_abort(),
+                                CasAttemptFailure::Timeout { .. } => report.record_timeout(),
+                            }
+                            Some(Self::failure_kind(failure))
+                        }
+                        AttemptFailure::TimedOut { .. } => {
+                            observer_report_builder
+                                .lock()
+                                .expect("CAS report builder should be lockable")
+                                .record_timeout();
+                            Some(crate::error::CasAttemptFailureKind::Timeout)
+                        }
+                        AttemptFailure::Panicked { .. } => None,
+                        _ => None,
+                    };
+                    if let Some(kind) = kind
+                        && Self::should_emit_events(
+                            &observer_observability,
+                            &observer_event_hook,
+                        )
+                    {
+                        Self::dispatch_event(
+                            &observer_observability,
+                            observer_event_hook
+                                .as_ref()
+                                .expect("event hook should exist when events are emitted"),
+                            CasEvent::AttemptFailed {
+                                context: CasContext::new(context),
+                                kind,
+                            },
+                        );
+                    }
+                },
+            )
             .rule(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
                     let failure = match failure {
                         AttemptFailure::Error(failure) => failure,
-                        AttemptFailure::Timeout { kind } => {
-                            report_builder
-                                .lock()
-                                .expect("CAS report builder should be lockable")
-                                .record_timeout();
+                        AttemptFailure::TimedOut { scope } => {
                             let cas_context = CasContext::new(context);
-                            if Self::should_emit_events(&observability, &event_hook) {
-                                let hook = event_hook
-                                    .as_ref()
-                                    .expect("event hook should exist when events are emitted");
-                                Self::dispatch_event(
-                                    &observability,
-                                    hook,
-                                    CasEvent::AttemptFailed {
-                                        context: cas_context,
-                                        kind: crate::error::CasAttemptFailureKind::Timeout,
-                                    },
-                                );
-                                if *kind == AttemptTimeoutKind::Attempt
-                                    && attempt_timeout_action == AttemptTimeoutAction::Retry
-                                {
+                            if *scope == RetryTimeoutScope::Attempt
+                                && attempt_timeout_action == AttemptTimeoutAction::Retry
+                            {
+                                if Self::should_emit_events(&observability, &event_hook) {
                                     Self::dispatch_event(
                                         &observability,
-                                        hook,
+                                        event_hook.as_ref().expect(
+                                            "event hook should exist when events are emitted",
+                                        ),
                                         CasEvent::RetryRequested {
                                             context: cas_context,
                                         },
                                     );
                                 }
+                                return RetryDecision::Retry;
                             }
-                            return if *kind == AttemptTimeoutKind::Attempt
-                                && attempt_timeout_action == AttemptTimeoutAction::Retry
-                            {
-                                RetryDecision::Retry
-                            } else {
-                                RetryDecision::Abort
-                            };
+                            return RetryDecision::UseDefault;
                         }
-                        AttemptFailure::Panic | AttemptFailure::Infrastructure(_) => {
+                        AttemptFailure::Panicked { .. } => {
                             return RetryDecision::UseDefault;
                         }
                         _ => return RetryDecision::UseDefault,
                     };
                     let cas_context = CasContext::new(context);
-                    {
-                        let mut report = report_builder
-                            .lock()
-                            .expect("CAS report builder should be lockable");
-                        match failure {
-                            CasAttemptFailure::Conflict { .. } => report.record_conflict(),
-                            CasAttemptFailure::Retry { .. } => report.record_retry_error(),
-                            CasAttemptFailure::Abort { .. } => report.record_abort(),
-                            CasAttemptFailure::Timeout { .. } => report.record_timeout(),
-                        }
-                    }
-                    if Self::should_emit_events(&observability, &event_hook) {
-                        Self::dispatch_event(
-                            &observability,
-                            event_hook
-                                .as_ref()
-                                .expect("event hook should exist when events are emitted"),
-                            CasEvent::AttemptFailed {
-                                context: cas_context,
-                                kind: Self::failure_kind(failure),
-                            },
-                        );
-                    }
                     match failure {
                         CasAttemptFailure::Conflict { .. } | CasAttemptFailure::Retry { .. } => {
                             if Self::should_emit_events(&observability, &event_hook) {
@@ -572,7 +585,7 @@ impl<T, E> CasExecutor<T, E> {
                             RetryDecision::Retry
                         }
                         CasAttemptFailure::Abort { .. } => RetryDecision::Abort,
-                        CasAttemptFailure::Timeout { .. } => RetryDecision::Abort,
+                        CasAttemptFailure::Timeout { .. } => RetryDecision::UseDefault,
                     }
                 },
             )
@@ -607,16 +620,15 @@ impl<T, E> CasExecutor<T, E> {
                             AttemptFailure::Error(
                                 CasAttemptFailure::Timeout { .. },
                             ) => RetryDecision::UseDefault,
-                            AttemptFailure::Timeout {
-                                kind: AttemptTimeoutKind::Attempt,
+                            AttemptFailure::TimedOut {
+                                scope: RetryTimeoutScope::Attempt,
                             } if attempt_timeout_action
                                 == AttemptTimeoutAction::Retry =>
                             {
                                 RetryDecision::Retry
                             }
-                            AttemptFailure::Timeout { .. }
-                            | AttemptFailure::Panic
-                            | AttemptFailure::Infrastructure(_) => {
+                            AttemptFailure::TimedOut { .. }
+                            | AttemptFailure::Panicked { .. } => {
                                 RetryDecision::UseDefault
                             }
                             _ => RetryDecision::UseDefault,
@@ -743,7 +755,7 @@ impl<T, E> CasExecutor<T, E> {
         match attempt {
             Ok(success) => {
                 let (success, context) = success.into_parts();
-                let attempts_total = context.attempt();
+                let attempts_total = context.attempts();
                 let max_attempts = context.max_attempts();
                 let max_operation_elapsed = context.max_operation_elapsed();
                 let max_total_elapsed = context.max_total_elapsed();
@@ -783,7 +795,7 @@ impl<T, E> CasExecutor<T, E> {
                     &hooks,
                     report_builder,
                     CasReportFinishContext::new(
-                        context.attempt(),
+                        context.attempts(),
                         context.max_attempts(),
                         context.max_operation_elapsed(),
                         context.max_total_elapsed(),
@@ -968,8 +980,9 @@ impl<T, E> CasExecutor<T, E> {
     /// - `event`: Lifecycle event to dispatch.
     ///
     /// # Panics
-    /// Propagates listener panics when [`ListenerPanicPolicy::Propagate`] is
-    /// configured.
+    /// With [`ListenerPanicPolicy::Propagate`], exposes a listener panic to the
+    /// boundary owning this dispatch. Retry-owned boundaries convert that
+    /// panic to a structured callback failure; outer CAS boundaries unwind.
     fn dispatch_event(
         observability: &CasObservabilityConfig,
         hook: &crate::event::CasEventHook,
@@ -1004,8 +1017,8 @@ impl<T, E> CasExecutor<T, E> {
     /// - `alert`: Contention alert to dispatch.
     ///
     /// # Panics
-    /// Propagates listener panics when [`ListenerPanicPolicy::Propagate`] is
-    /// configured.
+    /// Exposes alert listener panics to the owning CAS execution boundary when
+    /// [`ListenerPanicPolicy::Propagate`] is configured.
     fn dispatch_alert(
         observability: &CasObservabilityConfig,
         hook: &Option<crate::event::CasAlertHook>,

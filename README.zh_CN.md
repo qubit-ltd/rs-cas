@@ -357,7 +357,7 @@ let executor = CasExecutor::<usize, &'static str>::builder()
 let hooks = CasHooks::new().on_event(|event: &CasEvent| {
     if let CasEvent::AttemptFailed { context, kind } = event {
         if *kind == CasAttemptFailureKind::Conflict {
-            eprintln!("CAS conflict at attempt {}", context.attempt());
+            eprintln!("CAS conflict at attempt {}", context.attempts());
         }
     }
 });
@@ -428,6 +428,8 @@ async fn main() {
 - `CasOutcome<T, R, E>`：终态结果与 `CasExecutionReport` 的组合。
 - `CasSuccess<T, R>`：成功更新或无写入完成，包含当前状态、可选旧状态、业务输出和 attempt 上下文。
 - `CasError<T, E>`：带 `CasErrorKind` 分类的终止失败。
+- `CasRetryFailure`：精确保留固定 0.19.0 契约中的限额、超时、取消、回调失败与基础设施失败
+  细节；若替换后的本地 path 源扩展了该契约，则以防御性的 `Unknown` 分类承接。
 - `CasHooks`：单次执行的生命周期事件 hook 和告警 hook。
 - `CasObservabilityConfig`：选择仅报告、事件流或带争用告警的事件流。
 - `ContentionThresholds`：基于 attempt 数、冲突数和冲突率识别热点争用。
