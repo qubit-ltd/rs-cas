@@ -37,22 +37,17 @@ fn test_cas_alert_exposes_report_and_thresholds() {
     let alerts = Arc::new(Mutex::new(Vec::new()));
     let alert_events = Arc::clone(&alerts);
     let hooks = CasHooks::new().on_alert(move |alert: &CasAlert| {
-        alert_events
-            .lock()
-            .expect("alert events should be lockable")
-            .push((
-                alert.report().attempts_total(),
-                alert.report().conflicts(),
-                alert.thresholds(),
-            ));
+        alert_events.lock().expect("alert events should be lockable").push((
+            alert.report().attempts_total(),
+            alert.report().conflicts(),
+            alert.thresholds(),
+        ));
     });
 
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream_with_alert(
-            thresholds,
-        ))
+        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
         .build()
         .expect("executor should build");
 
@@ -89,8 +84,7 @@ fn test_cas_alert_threshold_accessor_function_pointer() {
     let alerts = Arc::new(Mutex::new(Vec::new()));
     let alert_events = Arc::clone(&alerts);
     let hooks = CasHooks::new().on_alert(move |alert: &CasAlert| {
-        let thresholds_accessor: fn(&CasAlert) -> ContentionThresholds =
-            CasAlert::thresholds;
+        let thresholds_accessor: fn(&CasAlert) -> ContentionThresholds = CasAlert::thresholds;
         alert_events
             .lock()
             .expect("alert list should be lockable")
@@ -99,9 +93,7 @@ fn test_cas_alert_threshold_accessor_function_pointer() {
 
     CasExecutor::<usize, TestError>::builder()
         .max_attempts(1)
-        .observability(CasObservabilityConfig::event_stream_with_alert(
-            thresholds,
-        ))
+        .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
         .build()
         .expect("executor should build")
         .execute_with_hooks(
@@ -111,8 +103,5 @@ fn test_cas_alert_threshold_accessor_function_pointer() {
         )
         .expect("execution should succeed");
 
-    assert_eq!(
-        *alerts.lock().expect("alert list should be lockable"),
-        vec![thresholds]
-    );
+    assert_eq!(*alerts.lock().expect("alert list should be lockable"), vec![thresholds]);
 }

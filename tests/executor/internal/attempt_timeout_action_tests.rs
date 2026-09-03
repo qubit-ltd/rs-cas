@@ -37,8 +37,7 @@ async fn test_retry_on_timeout_continues_execution() {
         .execute_async(&state, {
             let attempts = Arc::clone(&attempts);
             move |_current: Arc<usize>| {
-                let attempt =
-                    attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let attempt = attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 async move {
                     if attempt == 0 {
                         tokio::time::sleep(Duration::from_millis(20)).await;

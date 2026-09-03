@@ -25,9 +25,7 @@ fn test_result_only_execution_enriches_updated_success() {
     let executor = CasExecutor::<usize, TestError>::latency_first();
 
     let success = executor
-        .execute_result(&state, |current: &usize| {
-            CasDecision::update(*current + 1, *current)
-        })
+        .execute_result(&state, |current: &usize| CasDecision::update(*current + 1, *current))
         .expect("result-only update should succeed");
 
     assert!(success.is_updated());

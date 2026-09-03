@@ -40,16 +40,7 @@ fn test_report_finalization_preserves_limits_and_outcome() {
 
     assert_eq!(outcome.report().attempts_total(), 1);
     assert_eq!(outcome.report().max_attempts(), 4);
-    assert_eq!(
-        outcome.report().max_operation_elapsed(),
-        Some(max_operation_elapsed)
-    );
-    assert_eq!(
-        outcome.report().max_total_elapsed(),
-        Some(max_total_elapsed)
-    );
-    assert_eq!(
-        outcome.report().outcome(),
-        CasExecutionOutcome::SuccessFinished
-    );
+    assert_eq!(outcome.report().max_operation_elapsed(), Some(max_operation_elapsed));
+    assert_eq!(outcome.report().max_total_elapsed(), Some(max_total_elapsed));
+    assert_eq!(outcome.report().outcome(), CasExecutionOutcome::SuccessFinished);
 }

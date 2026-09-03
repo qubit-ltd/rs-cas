@@ -52,15 +52,9 @@ fn test_cas_retry_failure_accessors_preserve_terminal_details() {
 
     assert_eq!(exhausted.limit(), Some(RetryLimitKind::Attempts));
     assert_eq!(timed_out.timeout_scope(), Some(RetryTimeoutScope::Flow));
-    assert_eq!(
-        cancelled.cancellation_phase(),
-        Some(RetryCancellationPhase::Backoff)
-    );
+    assert_eq!(cancelled.cancellation_phase(), Some(RetryCancellationPhase::Backoff));
     assert_eq!(callback_failed.callback_failure(), Some(&callback));
-    assert_eq!(
-        infrastructure_failed.infrastructure_failure(),
-        Some(&infrastructure)
-    );
+    assert_eq!(infrastructure_failed.infrastructure_failure(), Some(&infrastructure));
     assert_eq!(CasRetryFailure::Aborted.limit(), None);
     assert_eq!(CasRetryFailure::Aborted.timeout_scope(), None);
     assert_eq!(CasRetryFailure::Aborted.cancellation_phase(), None);
@@ -108,8 +102,7 @@ fn test_cas_retry_failure_display_describes_each_terminal() {
         CasRetryFailure::Unknown,
     ];
 
-    let displays: Vec<String> =
-        failures.iter().map(ToString::to_string).collect();
+    let displays: Vec<String> = failures.iter().map(ToString::to_string).collect();
     assert_eq!(displays[0], "retry aborted");
     assert!(displays[1].contains("operation elapsed"));
     assert!(displays[2].contains("attempt"));

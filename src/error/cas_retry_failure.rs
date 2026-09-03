@@ -126,9 +126,7 @@ impl CasRetryFailure {
     /// `None` otherwise.
     #[inline(always)]
     #[must_use]
-    pub fn infrastructure_failure(
-        &self,
-    ) -> Option<&RetryInfrastructureFailure> {
+    pub fn infrastructure_failure(&self) -> Option<&RetryInfrastructureFailure> {
         match self {
             Self::Infrastructure { failure } => Some(failure),
             _ => None,
@@ -156,9 +154,7 @@ impl fmt::Display for CasRetryFailure {
             Self::Infrastructure { failure } => {
                 write!(formatter, "retry infrastructure failed: {failure}")
             }
-            Self::Unknown => {
-                formatter.write_str("unknown retry terminal failure")
-            }
+            Self::Unknown => formatter.write_str("unknown retry terminal failure"),
         }
     }
 }

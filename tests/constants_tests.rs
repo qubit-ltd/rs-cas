@@ -36,10 +36,7 @@ fn test_cas_constants_match_strategy_budgets() {
     assert_eq!(CONTENTION_ADAPTIVE_INITIAL_DELAY, Duration::from_micros(50));
     assert_eq!(CONTENTION_ADAPTIVE_MAX_DELAY, Duration::from_millis(5));
     assert_eq!(CONTENTION_ADAPTIVE_MAX_ELAPSED, Duration::from_millis(50));
-    assert_eq!(
-        CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED,
-        Duration::from_millis(250)
-    );
+    assert_eq!(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED, Duration::from_millis(250));
     assert_eq!(CONTENTION_ADAPTIVE_JITTER_FACTOR, 0.25);
 
     assert_eq!(RELIABILITY_FIRST_MAX_ATTEMPTS, 128);
@@ -53,10 +50,6 @@ fn test_cas_constants_match_strategy_budgets() {
 #[test]
 fn test_total_elapsed_budgets_exceed_operation_budgets() {
     assert!(LATENCY_FIRST_MAX_TOTAL_ELAPSED > LATENCY_FIRST_MAX_ELAPSED);
-    assert!(
-        CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED > CONTENTION_ADAPTIVE_MAX_ELAPSED
-    );
-    assert!(
-        RELIABILITY_FIRST_MAX_TOTAL_ELAPSED > RELIABILITY_FIRST_MAX_ELAPSED
-    );
+    assert!(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED > CONTENTION_ADAPTIVE_MAX_ELAPSED);
+    assert!(RELIABILITY_FIRST_MAX_TOTAL_ELAPSED > RELIABILITY_FIRST_MAX_ELAPSED);
 }

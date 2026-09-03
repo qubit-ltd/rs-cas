@@ -55,9 +55,7 @@ fn terminal_test_policy(max_attempts: u32) -> RetryPolicy {
 /// Observer that panics before the first operation is admitted.
 struct PanickingStartedObserver;
 
-impl RetryObserver<CasAttemptFailure<usize, TestError>>
-    for PanickingStartedObserver
-{
+impl RetryObserver<CasAttemptFailure<usize, TestError>> for PanickingStartedObserver {
     fn on_attempt_started(&self, _context: &RetryContext) {
         panic!("CAS retry observer failed");
     }
@@ -67,10 +65,7 @@ impl RetryObserver<CasAttemptFailure<usize, TestError>>
 #[test]
 fn test_cas_error_maps_aborted_terminal() {
     let retry_error = Retry::builder(terminal_test_policy(2))
-        .rule(
-            |_: &AttemptFailure<CasAttemptFailure<usize, TestError>>,
-             _: &RetryContext| { RetryDecision::Abort },
-        )
+        .rule(|_: &AttemptFailure<CasAttemptFailure<usize, TestError>>, _: &RetryContext| RetryDecision::Abort)
         .build()
         .sync()
         .run(|| {
@@ -118,17 +113,13 @@ fn test_cas_error_maps_exhausted_terminal() {
 #[cfg(feature = "tokio")]
 #[tokio::test(start_paused = true)]
 async fn test_cas_error_maps_timed_out_terminal_without_business_error() {
-    let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(
-        terminal_test_policy(1),
-    )
-    .build()
-    .asynchronous()
-    .attempt_timeout(Duration::from_millis(1))
-    .run(
-        std::future::pending::<Result<(), CasAttemptFailure<usize, TestError>>>,
-    )
-    .await
-    .expect_err("the pending attempt should time out");
+    let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(terminal_test_policy(1))
+        .build()
+        .asynchronous()
+        .attempt_timeout(Duration::from_millis(1))
+        .run(std::future::pending::<Result<(), CasAttemptFailure<usize, TestError>>>)
+        .await
+        .expect_err("the pending attempt should time out");
 
     let error = CasError::from(retry_error);
     assert!(matches!(
@@ -137,10 +128,7 @@ async fn test_cas_error_maps_timed_out_terminal_without_business_error() {
             scope: RetryTimeoutScope::Attempt,
         }
     ));
-    assert_eq!(
-        error.failure().timeout_scope(),
-        Some(RetryTimeoutScope::Attempt)
-    );
+    assert_eq!(error.failure().timeout_scope(), Some(RetryTimeoutScope::Attempt));
     assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
     assert_eq!(error.error(), None);
 }
@@ -151,15 +139,13 @@ async fn test_cas_error_maps_timed_out_terminal_without_business_error() {
 async fn test_cas_error_maps_cancelled_terminal_without_business_error() {
     let cancellation = RetryCancellationToken::new();
     cancellation.cancel();
-    let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(
-        terminal_test_policy(1),
-    )
-    .build()
-    .asynchronous()
-    .cancellation_token(cancellation)
-    .run(|| async { Ok::<_, CasAttemptFailure<usize, TestError>>(()) })
-    .await
-    .expect_err("pre-attempt cancellation should stop the flow");
+    let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(terminal_test_policy(1))
+        .build()
+        .asynchronous()
+        .cancellation_token(cancellation)
+        .run(|| async { Ok::<_, CasAttemptFailure<usize, TestError>>(()) })
+        .await
+        .expect_err("pre-attempt cancellation should stop the flow");
 
     let error = CasError::from(retry_error);
     assert!(matches!(
@@ -179,14 +165,12 @@ async fn test_cas_error_maps_cancelled_terminal_without_business_error() {
 /// Verifies callback attribution is retained instead of becoming business E.
 #[test]
 fn test_cas_error_maps_callback_failed_terminal_without_business_error() {
-    let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(
-        terminal_test_policy(1),
-    )
-    .observer(PanickingStartedObserver)
-    .build()
-    .sync()
-    .run(|| Ok::<_, CasAttemptFailure<usize, TestError>>(()))
-    .expect_err("the started observer should fail");
+    let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(terminal_test_policy(1))
+        .observer(PanickingStartedObserver)
+        .build()
+        .sync()
+        .run(|| Ok::<_, CasAttemptFailure<usize, TestError>>(()))
+        .expect_err("the started observer should fail");
 
     let error = CasError::from(retry_error);
     let CasRetryFailure::CallbackFailed { callback } = error.failure() else {
@@ -205,12 +189,11 @@ fn test_cas_error_maps_callback_failed_terminal_without_business_error() {
 /// business error is retained.
 #[test]
 fn test_cas_error_maps_infrastructure_terminal_without_reclassification() {
-    let timer: Arc<dyn Timer> =
-        Arc::new(FaultInjectingTimer::backend_unavailable(
-            TimerFailurePoint::Registration,
-            "cas-test",
-            "offline",
-        ));
+    let timer: Arc<dyn Timer> = Arc::new(FaultInjectingTimer::backend_unavailable(
+        TimerFailurePoint::Registration,
+        "cas-test",
+        "offline",
+    ));
     let retry_error = Retry::builder(
         RetryPolicy::builder()
             .max_attempts(2)
@@ -236,9 +219,7 @@ fn test_cas_error_maps_infrastructure_terminal_without_reclassification() {
     assert!(matches!(failure, RetryInfrastructureFailure::Timer { .. }));
     assert_eq!(
         failure.message(),
-        Some(
-            "monotonic timer is unavailable: timer backend 'cas-test' is unavailable: offline"
-        )
+        Some("monotonic timer is unavailable: timer backend 'cas-test' is unavailable: offline")
     );
     assert_eq!(error.failure().infrastructure_failure(), Some(failure));
     assert!(error.to_string().contains("cas-test"));
@@ -277,10 +258,7 @@ fn test_cas_error_display_and_source_work() {
         }
     ));
     assert!(format!("{error:?}").contains("CasError"));
-    assert_eq!(
-        error.source().map(ToString::to_string),
-        Some("still-busy".to_string())
-    );
+    assert_eq!(error.source().map(ToString::to_string), Some("still-busy".to_string()));
     assert_eq!(error.error(), Some(&TestError("still-busy")));
     assert_eq!(error.current().map(|current| **current), Some(3));
 }
@@ -332,10 +310,7 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
     assert_eq!(abort.kind(), CasErrorKind::Abort);
     assert_eq!(abort.failure(), &CasRetryFailure::Aborted);
     assert!(abort.to_string().contains("CAS aborted"));
-    assert_eq!(
-        abort.source().map(ToString::to_string),
-        Some("blocked".to_string())
-    );
+    assert_eq!(abort.source().map(ToString::to_string), Some("blocked".to_string()));
 
     let conflict_state = AtomicRef::from_value(10usize);
     let conflicts = AtomicUsize::new(0);
@@ -368,11 +343,10 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .max_operation_elapsed(Some(Duration::from_millis(1)))
         .build()
         .expect("executor should build");
-    let op_outcome =
-        elapsed_executor.execute(&elapsed_state, |_current: &usize| {
-            std::thread::sleep(Duration::from_millis(2));
-            CasDecision::<usize, (), TestError>::retry(TestError("slow"))
-        });
+    let op_outcome = elapsed_executor.execute(&elapsed_state, |_current: &usize| {
+        std::thread::sleep(Duration::from_millis(2));
+        CasDecision::<usize, (), TestError>::retry(TestError("slow"))
+    });
     assert_eq!(
         op_outcome.report().outcome(),
         CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
@@ -387,11 +361,7 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
             limit: RetryLimitKind::OperationElapsed,
         }
     ));
-    assert!(
-        elapsed
-            .to_string()
-            .contains("max operation elapsed exceeded")
-    );
+    assert!(elapsed.to_string().contains("max operation elapsed exceeded"));
 
     let total_state = AtomicRef::from_value(13usize);
     let total_executor = CasExecutor::<usize, TestError>::builder()
@@ -401,10 +371,9 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
         .max_total_elapsed(Some(Duration::ZERO))
         .build()
         .expect("executor should build");
-    let total_outcome =
-        total_executor.execute(&total_state, |_current: &usize| {
-            CasDecision::<usize, (), TestError>::retry(TestError("x"))
-        });
+    let total_outcome = total_executor.execute(&total_state, |_current: &usize| {
+        CasDecision::<usize, (), TestError>::retry(TestError("x"))
+    });
     assert_eq!(
         total_outcome.report().outcome(),
         CasExecutionOutcome::ErrorMaxTotalElapsedExceeded

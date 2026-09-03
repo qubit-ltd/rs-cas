@@ -46,10 +46,7 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// A [`CasError`] wrapper.
     #[inline]
-    pub(crate) fn new(
-        inner: RetryError<CasAttemptFailure<T, E>>,
-        timeout_current: Option<Arc<T>>,
-    ) -> Self {
+    pub(crate) fn new(inner: RetryError<CasAttemptFailure<T, E>>, timeout_current: Option<Arc<T>>) -> Self {
         let (failure, retry_context) = inner.into_parts();
         Self::from_retry_parts(failure, retry_context, timeout_current)
     }
@@ -67,54 +64,34 @@ impl<T, E> CasError<T, E> {
                 Self::map_attempt_failure(last_failure, &mut timeout_current),
             ),
             RetryFailure::Exhausted {
-                limit,
-                last_failure,
-                ..
+                limit, last_failure, ..
             } => (
                 CasRetryFailure::Exhausted { limit },
-                last_failure.and_then(|failure| {
-                    Self::map_attempt_failure(failure, &mut timeout_current)
-                }),
+                last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
             RetryFailure::TimedOut {
-                scope,
-                last_failure,
-                ..
+                scope, last_failure, ..
             } => (
                 CasRetryFailure::TimedOut { scope },
-                last_failure.and_then(|failure| {
-                    Self::map_attempt_failure(failure, &mut timeout_current)
-                }),
+                last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
             RetryFailure::Cancelled {
-                phase,
-                last_failure,
-                ..
+                phase, last_failure, ..
             } => (
                 CasRetryFailure::Cancelled { phase },
-                last_failure.and_then(|failure| {
-                    Self::map_attempt_failure(failure, &mut timeout_current)
-                }),
+                last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
             RetryFailure::CallbackFailed {
-                callback,
-                last_failure,
-                ..
+                callback, last_failure, ..
             } => (
                 CasRetryFailure::CallbackFailed { callback },
-                last_failure.and_then(|failure| {
-                    Self::map_attempt_failure(failure, &mut timeout_current)
-                }),
+                last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
             RetryFailure::Infrastructure {
-                failure,
-                last_failure,
-                ..
+                failure, last_failure, ..
             } => (
                 CasRetryFailure::Infrastructure { failure },
-                last_failure.and_then(|failure| {
-                    Self::map_attempt_failure(failure, &mut timeout_current)
-                }),
+                last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
             // Cargo.toml pins the published contract to exactly 0.19.0. A
             // substituted path source can nevertheless keep that package
@@ -137,9 +114,7 @@ impl<T, E> CasError<T, E> {
     ) -> Option<CasAttemptFailure<T, E>> {
         match failure {
             AttemptFailure::Error(failure) => Some(failure),
-            AttemptFailure::TimedOut { .. } => {
-                timeout_current.take().map(CasAttemptFailure::timeout)
-            }
+            AttemptFailure::TimedOut { .. } => timeout_current.take().map(CasAttemptFailure::timeout),
             AttemptFailure::Panicked { .. } => None,
             _ => None,
         }
@@ -262,39 +237,24 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Returns
     /// Derived high-level CAS error kind.
-    fn classify_kind(
-        failure: &CasRetryFailure,
-        last_failure: Option<&CasAttemptFailure<T, E>>,
-    ) -> CasErrorKind {
+    fn classify_kind(failure: &CasRetryFailure, last_failure: Option<&CasAttemptFailure<T, E>>) -> CasErrorKind {
         match failure {
             CasRetryFailure::Aborted => match last_failure {
-                Some(CasAttemptFailure::Timeout { .. }) => {
-                    CasErrorKind::AttemptTimeout
-                }
+                Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                 _ => CasErrorKind::Abort,
             },
             CasRetryFailure::Exhausted { limit } => match limit {
                 RetryLimitKind::Attempts => match last_failure {
-                    Some(CasAttemptFailure::Conflict { .. }) => {
-                        CasErrorKind::Conflict
-                    }
-                    Some(CasAttemptFailure::Timeout { .. }) => {
-                        CasErrorKind::AttemptTimeout
-                    }
+                    Some(CasAttemptFailure::Conflict { .. }) => CasErrorKind::Conflict,
+                    Some(CasAttemptFailure::Timeout { .. }) => CasErrorKind::AttemptTimeout,
                     _ => CasErrorKind::RetryExhausted,
                 },
-                RetryLimitKind::OperationElapsed => {
-                    CasErrorKind::MaxOperationElapsedExceeded
-                }
-                RetryLimitKind::TotalElapsed => {
-                    CasErrorKind::MaxTotalElapsedExceeded
-                }
+                RetryLimitKind::OperationElapsed => CasErrorKind::MaxOperationElapsedExceeded,
+                RetryLimitKind::TotalElapsed => CasErrorKind::MaxTotalElapsedExceeded,
             },
             CasRetryFailure::TimedOut { scope } => match scope {
                 RetryTimeoutScope::Attempt => CasErrorKind::AttemptTimeout,
-                RetryTimeoutScope::Flow => {
-                    CasErrorKind::MaxTotalElapsedExceeded
-                }
+                RetryTimeoutScope::Flow => CasErrorKind::MaxTotalElapsedExceeded,
             },
             CasRetryFailure::Cancelled { .. }
             | CasRetryFailure::CallbackFailed { .. }
@@ -351,15 +311,9 @@ where
             CasErrorKind::Conflict => "CAS conflicts exhausted",
             CasErrorKind::RetryExhausted => "CAS retryable failures exhausted",
             CasErrorKind::AttemptTimeout => "CAS attempt timed out",
-            CasErrorKind::RetryInfrastructure => {
-                "CAS retry infrastructure failed"
-            }
-            CasErrorKind::MaxOperationElapsedExceeded => {
-                "CAS max operation elapsed exceeded"
-            }
-            CasErrorKind::MaxTotalElapsedExceeded => {
-                "CAS max total elapsed exceeded"
-            }
+            CasErrorKind::RetryInfrastructure => "CAS retry infrastructure failed",
+            CasErrorKind::MaxOperationElapsedExceeded => "CAS max operation elapsed exceeded",
+            CasErrorKind::MaxTotalElapsedExceeded => "CAS max total elapsed exceeded",
         };
         write!(f, "{message} after {} attempt(s)", self.attempts())?;
         write!(f, "; {}", self.failure())?;

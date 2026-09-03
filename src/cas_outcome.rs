@@ -51,10 +51,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// A new [`CasOutcome`] wrapping both values.
     #[inline]
-    pub(crate) fn new(
-        result: Result<CasSuccess<T, R>, CasError<T, E>>,
-        report: CasExecutionReport,
-    ) -> Self {
+    pub(crate) fn new(result: Result<CasSuccess<T, R>, CasError<T, E>>, report: CasExecutionReport) -> Self {
         Self { result, report }
     }
 
@@ -108,9 +105,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// Tuple of the terminal result and the execution report.
     #[inline(always)]
-    pub fn into_parts(
-        self,
-    ) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
+    pub fn into_parts(self) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
         (self.result, self.report)
     }
 

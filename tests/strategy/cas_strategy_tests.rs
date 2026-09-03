@@ -27,10 +27,7 @@ fn test_strategy_profiles_expose_expected_values() {
 
     let latency = CasStrategy::LatencyFirst.profile();
     assert_eq!(latency.max_attempts(), LATENCY_FIRST_MAX_ATTEMPTS);
-    assert_eq!(
-        latency.max_total_elapsed(),
-        Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED)
-    );
+    assert_eq!(latency.max_total_elapsed(), Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED));
     assert!(!latency.uses_backoff());
 
     let contention = CasStrategy::ContentionAdaptive.profile();

@@ -76,11 +76,7 @@ fn test_builder_configuration_methods_compose() {
         .fixed_delay(Duration::from_millis(1))
         .random_delay(Duration::from_millis(1), Duration::from_millis(2))
         .exponential_backoff(Duration::from_millis(1), Duration::from_millis(4))
-        .exponential_backoff_with_multiplier(
-            Duration::from_millis(1),
-            Duration::from_millis(4),
-            2.0,
-        )
+        .exponential_backoff_with_multiplier(Duration::from_millis(1), Duration::from_millis(4), 2.0)
         .jitter_factor(0.1)
         .attempt_timeout(None)
         .retry_on_timeout()
@@ -96,10 +92,7 @@ fn test_builder_configuration_methods_compose() {
         executor.observability().listener_panic_policy(),
         ListenerPanicPolicy::Isolate
     );
-    assert_eq!(
-        executor.observability().contention_thresholds(),
-        Some(thresholds)
-    );
+    assert_eq!(executor.observability().contention_thresholds(), Some(thresholds));
     assert_eq!(CasStrategy::default(), CasStrategy::LatencyFirst);
     let _default_builder = CasBuilder::<usize, TestError>::default();
 }

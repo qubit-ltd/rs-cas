@@ -38,10 +38,7 @@ fn test_event_stream_emits_started_and_finished() {
             CasEvent::RetryRequested { .. } => "retry_requested",
             CasEvent::ExecutionFinished { .. } => "finished",
         };
-        seen_events
-            .lock()
-            .expect("event vector should be lockable")
-            .push(name);
+        seen_events.lock().expect("event vector should be lockable").push(name);
     });
 
     let executor = CasExecutor::<usize, TestError>::builder()
@@ -53,11 +50,7 @@ fn test_event_stream_emits_started_and_finished() {
     let state = AtomicRef::from_value(7usize);
 
     let success = executor
-        .execute_with_hooks(
-            &state,
-            |_current: &usize| CasDecision::finish(11usize),
-            hooks,
-        )
+        .execute_with_hooks(&state, |_current: &usize| CasDecision::finish(11usize), hooks)
         .expect("execution should finish");
     assert_eq!(*success.output(), 11usize);
 
@@ -110,8 +103,5 @@ fn test_event_stream_emits_retry_requested_for_conflict() {
         .expect("second attempt should succeed");
 
     assert_eq!(success.attempts(), 2);
-    assert_eq!(
-        *seen.lock().expect("event vector should be lockable"),
-        vec![1]
-    );
+    assert_eq!(*seen.lock().expect("event vector should be lockable"), vec![1]);
 }

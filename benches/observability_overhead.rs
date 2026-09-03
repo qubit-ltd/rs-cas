@@ -28,9 +28,7 @@ const WARMUP_RUNS: usize = 2;
 const MEASURED_RUNS: usize = 9;
 
 fn main() {
-    println!(
-        "iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}"
-    );
+    println!("iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}");
 
     run_group("low_conflict", false);
     run_group("forced_conflict", true);
@@ -41,10 +39,7 @@ fn run_group(group: &'static str, force_conflict: bool) {
     println!("## {group}");
 
     let raw = measure_raw(force_conflict);
-    let result_only = measure_result_executor(
-        benchmark_executor(CasObservabilityConfig::default()),
-        force_conflict,
-    );
+    let result_only = measure_result_executor(benchmark_executor(CasObservabilityConfig::default()), force_conflict);
     let report_only = measure_executor(
         benchmark_executor(CasObservabilityConfig::default()),
         CasHooks::new(),
@@ -91,9 +86,7 @@ fn run_group(group: &'static str, force_conflict: bool) {
     );
 }
 
-fn benchmark_executor(
-    observability: CasObservabilityConfig,
-) -> CasExecutor<usize, &'static str> {
+fn benchmark_executor(observability: CasObservabilityConfig) -> CasExecutor<usize, &'static str> {
     CasExecutor::<usize, &'static str>::builder()
         .max_attempts(100)
         .no_delay()
@@ -102,21 +95,16 @@ fn benchmark_executor(
         .expect("benchmark retry policy should be valid")
 }
 
-fn measure_result_executor(
-    executor: CasExecutor<usize, &'static str>,
-    force_conflict: bool,
-) -> BenchResult {
+fn measure_result_executor(executor: CasExecutor<usize, &'static str>, force_conflict: bool) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
-        run_result_executor_sample(executor.clone(), force_conflict)
-            .expect("benchmark warmup should succeed");
+        run_result_executor_sample(executor.clone(), force_conflict).expect("benchmark warmup should succeed");
     }
 
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
     let mut last = None;
     for _ in 0..MEASURED_RUNS {
         let result =
-            run_result_executor_sample(executor.clone(), force_conflict)
-                .expect("benchmark sample should succeed");
+            run_result_executor_sample(executor.clone(), force_conflict).expect("benchmark sample should succeed");
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -141,16 +129,12 @@ fn run_result_executor_sample(
     for _ in 0..ITERATIONS {
         let success = executor
             .execute_result(&state, |current: &usize| {
-                if force_conflict
-                    && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2)
-                {
+                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
             })
-            .map_err(|error| {
-                format!("result-only CAS execution failed: {error:?}")
-            })?;
+            .map_err(|error| format!("result-only CAS execution failed: {error:?}"))?;
         attempts += u64::from(success.attempts());
         conflicts += u64::from(success.attempts().saturating_sub(1));
         black_box(success);
@@ -170,8 +154,7 @@ fn light_alert_hooks() -> CasHooks {
     let alerts = Arc::new(AtomicUsize::new(0));
     let alert_count = Arc::clone(&alerts);
     light_event_hook().on_alert(move |alert: &CasAlert| {
-        alert_count
-            .fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
+        alert_count.fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
     })
 }
 
@@ -193,25 +176,16 @@ struct BenchResult {
     conflicts: u64,
 }
 
-fn measure_executor(
-    executor: CasExecutor<usize, &'static str>,
-    hooks: CasHooks,
-    force_conflict: bool,
-) -> BenchResult {
+fn measure_executor(executor: CasExecutor<usize, &'static str>, hooks: CasHooks, force_conflict: bool) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
-        run_executor_sample(executor.clone(), hooks.clone(), force_conflict)
-            .expect("benchmark warmup should succeed");
+        run_executor_sample(executor.clone(), hooks.clone(), force_conflict).expect("benchmark warmup should succeed");
     }
 
     let mut samples = Vec::with_capacity(MEASURED_RUNS);
     let mut last = None;
     for _ in 0..MEASURED_RUNS {
-        let result = run_executor_sample(
-            executor.clone(),
-            hooks.clone(),
-            force_conflict,
-        )
-        .expect("benchmark sample should succeed");
+        let result = run_executor_sample(executor.clone(), hooks.clone(), force_conflict)
+            .expect("benchmark sample should succeed");
         samples.push(result.ops_per_sec);
         last = Some(result);
     }
@@ -240,9 +214,7 @@ fn run_executor_sample(
         let outcome = executor.execute_with_hooks(
             &state,
             |current: &usize| {
-                if force_conflict
-                    && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2)
-                {
+                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
@@ -251,9 +223,11 @@ fn run_executor_sample(
         );
         attempts += u64::from(outcome.report().attempts_total());
         conflicts += u64::from(outcome.report().conflicts());
-        black_box(outcome.into_result().map_err(|error| {
-            format!("reported CAS execution failed: {error:?}")
-        })?);
+        black_box(
+            outcome
+                .into_result()
+                .map_err(|error| format!("reported CAS execution failed: {error:?}"))?,
+        );
     }
 
     let elapsed = start.elapsed();
@@ -325,23 +299,13 @@ fn run_raw_sample(force_conflict: bool) -> BenchResult {
 }
 
 fn median(samples: &mut [f64]) -> f64 {
-    samples.sort_by(|left, right| {
-        left.partial_cmp(right)
-            .expect("benchmark samples should not be NaN")
-    });
+    samples.sort_by(|left, right| left.partial_cmp(right).expect("benchmark samples should not be NaN"));
     samples[samples.len() / 2]
 }
 
-fn print_row(
-    name: &'static str,
-    result: &BenchResult,
-    raw_ops: Option<f64>,
-    report_ops: Option<f64>,
-) {
-    let raw_loss =
-        raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
-    let report_loss =
-        report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
+fn print_row(name: &'static str, result: &BenchResult, raw_ops: Option<f64>, report_ops: Option<f64>) {
+    let raw_loss = raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
+    let report_loss = report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     println!(
         "{name:24} ops/s={:>10.0} ns/op={:>8.1} avg_attempts={:.3} conflicts={:<8} loss_vs_raw={} loss_vs_report_only={}",
         result.ops_per_sec,

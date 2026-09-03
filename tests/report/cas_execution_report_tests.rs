@@ -61,10 +61,7 @@ fn test_report_exposes_counts_ratios_and_limits() {
     assert_eq!(report.conflict_ratio(), 0.5);
     assert_eq!(report.retryable_failure_ratio(), 0.0);
     assert!(report.finished_at() >= report.started_at());
-    assert!(
-        report.elapsed()
-            <= report.finished_at().duration_since(report.started_at())
-    );
+    assert!(report.elapsed() <= report.finished_at().duration_since(report.started_at()));
 }
 
 /// Verifies contention thresholds are evaluated from report statistics.
@@ -154,36 +151,22 @@ fn test_report_accessor_function_pointers_work() {
         .report()
         .clone();
 
-    let attempts_total: fn(&CasExecutionReport) -> u32 =
-        CasExecutionReport::attempts_total;
-    let conflicts: fn(&CasExecutionReport) -> u32 =
-        CasExecutionReport::conflicts;
-    let retry_errors: fn(&CasExecutionReport) -> u32 =
-        CasExecutionReport::retry_errors;
+    let attempts_total: fn(&CasExecutionReport) -> u32 = CasExecutionReport::attempts_total;
+    let conflicts: fn(&CasExecutionReport) -> u32 = CasExecutionReport::conflicts;
+    let retry_errors: fn(&CasExecutionReport) -> u32 = CasExecutionReport::retry_errors;
     let aborts: fn(&CasExecutionReport) -> u32 = CasExecutionReport::aborts;
     let timeouts: fn(&CasExecutionReport) -> u32 = CasExecutionReport::timeouts;
-    let started_at: fn(&CasExecutionReport) -> std::time::Instant =
-        CasExecutionReport::started_at;
-    let finished_at: fn(&CasExecutionReport) -> std::time::Instant =
-        CasExecutionReport::finished_at;
-    let elapsed: fn(&CasExecutionReport) -> Duration =
-        CasExecutionReport::elapsed;
-    let max_attempts: fn(&CasExecutionReport) -> u32 =
-        CasExecutionReport::max_attempts;
-    let max_operation_elapsed: fn(&CasExecutionReport) -> Option<Duration> =
-        CasExecutionReport::max_operation_elapsed;
-    let max_total_elapsed: fn(&CasExecutionReport) -> Option<Duration> =
-        CasExecutionReport::max_total_elapsed;
-    let outcome: fn(&CasExecutionReport) -> CasExecutionOutcome =
-        CasExecutionReport::outcome;
-    let conflict_ratio: fn(&CasExecutionReport) -> f64 =
-        CasExecutionReport::conflict_ratio;
-    let retryable_failure_ratio: fn(&CasExecutionReport) -> f64 =
-        CasExecutionReport::retryable_failure_ratio;
-    let is_contention_hot: fn(
-        &CasExecutionReport,
-        &ContentionThresholds,
-    ) -> bool = CasExecutionReport::is_contention_hot;
+    let started_at: fn(&CasExecutionReport) -> std::time::Instant = CasExecutionReport::started_at;
+    let finished_at: fn(&CasExecutionReport) -> std::time::Instant = CasExecutionReport::finished_at;
+    let elapsed: fn(&CasExecutionReport) -> Duration = CasExecutionReport::elapsed;
+    let max_attempts: fn(&CasExecutionReport) -> u32 = CasExecutionReport::max_attempts;
+    let max_operation_elapsed: fn(&CasExecutionReport) -> Option<Duration> = CasExecutionReport::max_operation_elapsed;
+    let max_total_elapsed: fn(&CasExecutionReport) -> Option<Duration> = CasExecutionReport::max_total_elapsed;
+    let outcome: fn(&CasExecutionReport) -> CasExecutionOutcome = CasExecutionReport::outcome;
+    let conflict_ratio: fn(&CasExecutionReport) -> f64 = CasExecutionReport::conflict_ratio;
+    let retryable_failure_ratio: fn(&CasExecutionReport) -> f64 = CasExecutionReport::retryable_failure_ratio;
+    let is_contention_hot: fn(&CasExecutionReport, &ContentionThresholds) -> bool =
+        CasExecutionReport::is_contention_hot;
 
     assert_eq!(attempts_total(&report), 1);
     assert_eq!(conflicts(&report), 0);
@@ -198,8 +181,5 @@ fn test_report_accessor_function_pointers_work() {
     assert_eq!(outcome(&report), CasExecutionOutcome::SuccessFinished);
     assert_eq!(conflict_ratio(&report), 0.0);
     assert_eq!(retryable_failure_ratio(&report), 0.0);
-    assert!(is_contention_hot(
-        &report,
-        &ContentionThresholds::new(1, 0, 0.0)
-    ));
+    assert!(is_contention_hot(&report, &ContentionThresholds::new(1, 0, 0.0)));
 }

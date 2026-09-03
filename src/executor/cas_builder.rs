@@ -118,10 +118,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn max_operation_elapsed(
-        mut self,
-        max_operation_elapsed: Option<Duration>,
-    ) -> Self {
+    pub fn max_operation_elapsed(mut self, max_operation_elapsed: Option<Duration>) -> Self {
         self.max_operation_elapsed = max_operation_elapsed;
         self
     }
@@ -134,10 +131,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn max_total_elapsed(
-        mut self,
-        max_total_elapsed: Option<Duration>,
-    ) -> Self {
+    pub fn max_total_elapsed(mut self, max_total_elapsed: Option<Duration>) -> Self {
         self.max_total_elapsed = max_total_elapsed;
         self
     }
@@ -213,12 +207,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn exponential_backoff_with_multiplier(
-        self,
-        initial: Duration,
-        max: Duration,
-        multiplier: f64,
-    ) -> Self {
+    pub fn exponential_backoff_with_multiplier(self, initial: Duration, max: Duration, multiplier: f64) -> Self {
         let mut builder = self;
         builder.backoff = BackoffPolicy::exponential(initial, multiplier, max);
         builder
@@ -233,9 +222,7 @@ impl<T, E> CasBuilder<T, E> {
     /// The updated builder.
     #[inline(always)]
     pub fn jitter_factor(mut self, factor: f64) -> Self {
-        self.backoff = self
-            .backoff
-            .and_then(|backoff| backoff.with_bounded_jitter(factor));
+        self.backoff = self.backoff.and_then(|backoff| backoff.with_bounded_jitter(factor));
         self
     }
 
@@ -247,10 +234,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn attempt_timeout(
-        mut self,
-        attempt_timeout: Option<Duration>,
-    ) -> Self {
+    pub fn attempt_timeout(mut self, attempt_timeout: Option<Duration>) -> Self {
         self.attempt_timeout = attempt_timeout;
         self
     }
@@ -289,9 +273,7 @@ impl<T, E> CasBuilder<T, E> {
             .max_operation_elapsed(Some(profile.max_operation_elapsed()))
             .max_total_elapsed(profile.max_total_elapsed());
         if let Some((initial, max, jitter)) = strategy.backoff() {
-            builder
-                .exponential_backoff(initial, max)
-                .jitter_factor(jitter)
+            builder.exponential_backoff(initial, max).jitter_factor(jitter)
         } else {
             builder.no_delay()
         }
@@ -305,10 +287,7 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn observability(
-        mut self,
-        observability: CasObservabilityConfig,
-    ) -> Self {
+    pub fn observability(mut self, observability: CasObservabilityConfig) -> Self {
         self.observability = observability;
         self
     }
@@ -321,12 +300,8 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn alert_on_contention(
-        mut self,
-        thresholds: ContentionThresholds,
-    ) -> Self {
-        self.observability =
-            self.observability.with_contention_thresholds(thresholds);
+    pub fn alert_on_contention(mut self, thresholds: ContentionThresholds) -> Self {
+        self.observability = self.observability.with_contention_thresholds(thresholds);
         self
     }
 
@@ -371,9 +346,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] suitable for contended writers.
-    pub fn build_contention_adaptive(
-        self,
-    ) -> Result<CasExecutor<T, E>, RetryPolicyError> {
+    pub fn build_contention_adaptive(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
         self.strategy(CasStrategy::ContentionAdaptive).build()
     }
 
@@ -381,9 +354,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for low latency.
-    pub fn build_latency_first(
-        self,
-    ) -> Result<CasExecutor<T, E>, RetryPolicyError> {
+    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
         self.strategy(CasStrategy::LatencyFirst).build()
     }
 
@@ -391,9 +362,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for long retry windows.
-    pub fn build_reliability_first(
-        self,
-    ) -> Result<CasExecutor<T, E>, RetryPolicyError> {
+    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
         self.strategy(CasStrategy::ReliabilityFirst).build()
     }
 }
