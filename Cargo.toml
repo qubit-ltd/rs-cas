@@ -48,7 +48,7 @@ qubit-function = "0.16"
 qubit-retry = { version = "=0.19.0", path = "../rs-retry" }
 
 [dev-dependencies]
-qubit-clock = { version = "0.13", path = "../rs-clock", features = ["test-util"] }
+qubit-clock = { version = "0.13", features = ["test-util"] }
 tokio = { version = "1.52", features = ["full", "test-util"] }
 
 [package.metadata.docs.rs]
