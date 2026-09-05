@@ -490,7 +490,7 @@ async fn main() {
 - `CasSuccess<T, R>`: successful update or no-write finish, including current
   state, optional previous state, output, and attempt context.
 - `CasError<T, E>`: terminal failure with a classified `CasErrorKind`.
-- `CasRetryFailure`: exact retry terminal details for the pinned 0.19.0
+- `CasRetryFailure`: exact retry terminal details for the pinned 0.20.0
   limits, timeouts, cancellation, callback failures, and infrastructure
   failures, plus a defensive `Unknown` classification for substituted path
   sources that extend that contract.
@@ -512,6 +512,14 @@ async fn main() {
 - `src/strategy`: built-in execution strategies and strategy profiles.
 - `benches`: observability overhead benchmarks.
 - `tests`: behavior tests for executor, builder, hooks, errors, and options.
+
+## Retry event accounting
+
+CAS uses qubit-retry 0.20. `CasEvent::RetryRequested` records the CAS rule's intent,
+including after the final admitted conflict. The continuation budget may reject
+that request. Use the final report's `attempts_total()` or the result's attempt
+count to measure executed operations. Retry scheduling callbacks are distinct
+from both this intent event and actual admission.
 
 ## Testing
 
