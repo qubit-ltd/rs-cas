@@ -997,3 +997,34 @@ async fn test_execute_async_covers_decision_variants() {
         .expect_err("async conflict should exhaust attempts");
     assert_eq!(conflict.kind(), CasErrorKind::Conflict);
 }
+
+/// A rule intent on the final attempt does not imply another admitted
+/// operation.
+#[test]
+fn test_retry_requested_is_intent_on_final_attempt() {
+    let state = AtomicRef::from_value(0usize);
+    let requested = Arc::new(AtomicUsize::new(0));
+    let recorded = Arc::clone(&requested);
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+        if matches!(event, CasEvent::RetryRequested { .. }) {
+            recorded.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(1)
+        .no_delay()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("valid executor");
+    let outcome = executor.execute_with_hooks(
+        &state,
+        |current: &usize| {
+            state.store(Arc::new(*current + 1));
+            CasDecision::update(*current + 1, ())
+        },
+        hooks,
+    );
+    let error = outcome.expect_err("conflict exhausts the only attempt");
+    assert_eq!(requested.load(Ordering::SeqCst), 1);
+    assert_eq!(error.context().attempts(), 1);
+}

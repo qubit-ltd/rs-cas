@@ -30,7 +30,10 @@ pub enum CasEvent {
         kind: CasAttemptFailureKind,
     },
 
-    /// A retry has been requested by the CAS layer.
+    /// The CAS rule requested a retry after a failed operation.
+    /// This is an intent event, including on the final allowed attempt. Budget
+    /// checks may reject the request; use the terminal report's attempts_total
+    /// to count admitted operations rather than counting this event.
     RetryRequested {
         /// Context captured after the failed attempt.
         context: CasContext,

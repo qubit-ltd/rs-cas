@@ -159,9 +159,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-budget"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc94844f6f5cca8005774cbd1d84e58b9369b50eab393aa9b34d0662edf435fb"
+checksum = "f93253bc135140ca58d3d4f7dffcc330394cf94fec873c5f86ec3bb41dbfa18e"
 dependencies = [
  "qubit-clock",
  "thiserror",
@@ -214,7 +214,7 @@ checksum = "59f10e916324739b811520fbfb24746f4822ad9ea1adb53c79fc04b7c090e5ed"
 
 [[package]]
 name = "qubit-retry"
-version = "0.19.0"
+version = "0.20.0"
 dependencies = [
  "qubit-budget",
  "qubit-clock",
