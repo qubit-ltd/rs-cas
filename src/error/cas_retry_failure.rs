@@ -19,7 +19,7 @@ use qubit_retry::RetryTimeoutScope;
 /// [`crate::CasError`].
 ///
 /// Attempt-level CAS failures are stored separately on [`crate::CasError`].
-/// The six `qubit-retry` 0.19.0 terminals preserve their exact details without
+/// The six `qubit-retry` 0.21.0 terminals preserve their exact details without
 /// reclassifying callback or infrastructure failures as CAS business errors.
 /// [`Self::Unknown`] safely contains a substituted path source that extends
 /// the pinned upstream terminal enum without changing its package metadata.
@@ -54,10 +54,10 @@ pub enum CasRetryFailure {
         /// Exact clock, timer, worker-spawn, or worker-stop failure.
         failure: RetryInfrastructureFailure,
     },
-    /// A terminal variant outside the exact `qubit-retry` 0.19.0 contract.
+    /// A terminal variant outside the exact `qubit-retry` 0.21.0 contract.
     ///
     /// This defensive classification can only be observed when a substituted
-    /// path source keeps the 0.19.0 package metadata while extending its
+    /// path source keeps the 0.21.0 package metadata while extending its
     /// non-exhaustive terminal enum. The unknown variant cannot expose owned
     /// terminal fields that the pinned API does not define.
     Unknown,
