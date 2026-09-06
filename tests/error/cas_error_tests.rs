@@ -58,7 +58,7 @@ fn terminal_test_policy(max_attempts: u32) -> RetryPolicy {
 struct PanickingStartedObserver;
 
 impl RetryObserver<CasAttemptFailure<usize, TestError>> for PanickingStartedObserver {
-    fn on_attempt_started(&self, _context: &RetryContext) {
+    fn on_before_attempt(&self, _context: &RetryContext) {
         panic!("CAS retry observer failed");
     }
 }
@@ -239,7 +239,7 @@ fn test_cas_error_maps_callback_failed_terminal_without_business_error() {
     };
     assert_eq!(callback.callback(), RetryCallbackKind::Observer);
     assert_eq!(callback.index(), 0);
-    assert_eq!(callback.phase(), RetryCallbackPhase::AttemptStarted);
+    assert_eq!(callback.phase(), RetryCallbackPhase::BeforeAttempt);
     assert_eq!(error.failure().callback_failure(), Some(callback));
     assert!(error.to_string().contains("observer callback 0"));
     assert_eq!(error.kind(), CasErrorKind::RetryInfrastructure);

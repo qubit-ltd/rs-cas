@@ -40,6 +40,8 @@ pub struct CasBuilder<T, E = BoxError> {
     max_operation_elapsed: Option<Duration>,
     /// Optional end-to-end continuation budget.
     max_total_elapsed: Option<Duration>,
+    /// Optional hard wall-clock timeout for asynchronous retry flows.
+    flow_timeout: Option<Duration>,
     /// Validated backoff policy or its deferred construction error.
     backoff: Result<BackoffPolicy, RetryPolicyError>,
     /// Optional hard timeout applied to each async attempt.
@@ -62,6 +64,7 @@ impl<T, E> CasBuilder<T, E> {
             max_attempts: DEFAULT_CAS_MAX_ATTEMPTS,
             max_operation_elapsed: None,
             max_total_elapsed: None,
+            flow_timeout: None,
             backoff: Ok(BackoffPolicy::immediate()),
             attempt_timeout: None,
             attempt_timeout_action: AttemptTimeoutAction::Abort,
@@ -133,6 +136,17 @@ impl<T, E> CasBuilder<T, E> {
     #[inline(always)]
     pub fn max_total_elapsed(mut self, max_total_elapsed: Option<Duration>) -> Self {
         self.max_total_elapsed = max_total_elapsed;
+        self
+    }
+
+    /// Sets the hard wall-clock timeout for asynchronous retry flows.
+    ///
+    /// This timeout cancels an admitted attempt when reached. The retry policy
+    /// `max_total_elapsed` setting remains a soft continuation budget that only
+    /// controls admission of later attempts.
+    #[inline(always)]
+    pub fn flow_timeout(mut self, flow_timeout: Option<Duration>) -> Self {
+        self.flow_timeout = flow_timeout;
         self
     }
 
@@ -337,6 +351,7 @@ impl<T, E> CasBuilder<T, E> {
         Ok(CasExecutor::new(
             policy,
             self.attempt_timeout,
+            self.flow_timeout,
             self.attempt_timeout_action,
             self.observability,
         ))

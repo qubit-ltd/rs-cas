@@ -8,4 +8,5 @@
 
 mod cas_builder_tests;
 mod cas_executor_tests;
+mod cas_timeout_contract_tests;
 mod internal;

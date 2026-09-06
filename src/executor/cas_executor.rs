@@ -54,6 +54,8 @@ use crate::strategy::CasStrategy;
 pub struct CasExecutor<T, E = BoxError> {
     /// Pure policy used by the retry facades.
     policy: RetryPolicy,
+    /// Optional hard wall-clock timeout for asynchronous retry flows.
+    flow_timeout: Option<std::time::Duration>,
     /// Optional hard timeout applied to each async attempt.
     attempt_timeout: Option<std::time::Duration>,
     /// Action selected after a configured attempt timeout.
@@ -81,6 +83,7 @@ impl<T, E> std::fmt::Debug for CasExecutor<T, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CasExecutor")
             .field("policy", &self.policy)
+            .field("flow_timeout", &self.flow_timeout)
             .field("attempt_timeout", &self.attempt_timeout)
             .field("attempt_timeout_action", &self.attempt_timeout_action)
             .field("observability", &self.observability)
@@ -161,6 +164,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Parameters
     /// - `policy`: Validated retry policy.
     /// - `attempt_timeout`: Optional hard timeout for async attempts.
+    /// - `flow_timeout`: Optional hard timeout for asynchronous retry flows.
     /// - `attempt_timeout_action`: Action selected for attempt timeouts.
     /// - `observability`: Observability settings shared by executions.
     ///
@@ -170,11 +174,13 @@ impl<T, E> CasExecutor<T, E> {
     pub(crate) fn new(
         policy: RetryPolicy,
         attempt_timeout: Option<std::time::Duration>,
+        flow_timeout: Option<std::time::Duration>,
         attempt_timeout_action: AttemptTimeoutAction,
         observability: CasObservabilityConfig,
     ) -> Self {
         Self {
             policy,
+            flow_timeout,
             attempt_timeout,
             attempt_timeout_action,
             observability,
@@ -204,10 +210,9 @@ impl<T, E> CasExecutor<T, E> {
     /// The end-to-end total elapsed budget, when configured. The operation
     /// budget controls whether another attempt may start and never cancels an
     /// admitted attempt.
-    #[cfg(feature = "tokio")]
     #[inline(always)]
-    fn flow_timeout(&self) -> Option<std::time::Duration> {
-        self.policy.limits().max_total_elapsed()
+    pub fn flow_timeout(&self) -> Option<std::time::Duration> {
+        self.flow_timeout
     }
 
     /// Returns observability settings used by this executor.

@@ -24,6 +24,7 @@ fn test_build_exposes_pure_policy_and_attempt_timeout() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(3)
         .fixed_delay(Duration::from_millis(2))
+        .flow_timeout(Some(Duration::from_millis(20)))
         .attempt_timeout(Some(Duration::from_millis(10)))
         .build()
         .expect("CAS policy should be valid");
@@ -34,6 +35,7 @@ fn test_build_exposes_pure_policy_and_attempt_timeout() {
         Some(Duration::from_millis(2))
     );
     assert_eq!(executor.attempt_timeout(), Some(Duration::from_millis(10)));
+    assert_eq!(executor.flow_timeout(), Some(Duration::from_millis(20)));
 }
 
 #[test]
@@ -46,6 +48,35 @@ fn test_from_policy_preserves_validated_policy() {
     let executor = CasExecutor::<usize, TestError>::from_policy(policy.clone());
 
     assert_eq!(executor.policy(), &policy);
+}
+
+#[test]
+fn cas_timeout_contract_builder_keeps_explicit_timeout_independent() {
+    let soft = Duration::from_secs(9);
+    let hard = Duration::from_secs(3);
+    let policy = RetryPolicy::builder()
+        .max_total_elapsed(soft)
+        .build()
+        .expect("retry policy should build");
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .flow_timeout(Some(hard))
+        .policy(policy.clone())
+        .strategy(CasStrategy::LatencyFirst)
+        .build()
+        .expect("executor should build");
+    assert_eq!(executor.flow_timeout(), Some(hard));
+
+    let cleared = CasExecutor::<usize, TestError>::builder()
+        .flow_timeout(Some(hard))
+        .flow_timeout(None)
+        .build()
+        .expect("executor should build");
+    assert_eq!(cleared.flow_timeout(), None);
+    assert_eq!(
+        CasExecutor::<usize, TestError>::from_policy(policy).flow_timeout(),
+        None
+    );
+    assert_eq!(CasExecutor::<usize, TestError>::latency_first().flow_timeout(), None);
 }
 
 #[test]
@@ -71,6 +102,7 @@ fn test_builder_configuration_methods_compose() {
         .max_retries(3)
         .max_operation_elapsed(Some(Duration::from_secs(2)))
         .max_total_elapsed(Some(Duration::from_secs(3)))
+        .flow_timeout(Some(Duration::from_secs(4)))
         .backoff(BackoffPolicy::immediate())
         .no_delay()
         .fixed_delay(Duration::from_millis(1))
@@ -88,6 +120,7 @@ fn test_builder_configuration_methods_compose() {
         .expect("composed builder should build");
 
     assert_eq!(executor.policy().limits().max_attempts().get(), 4);
+    assert_eq!(executor.flow_timeout(), Some(Duration::from_secs(4)));
     assert_eq!(
         executor.observability().listener_panic_policy(),
         ListenerPanicPolicy::Isolate
