@@ -428,7 +428,7 @@ async fn main() {
 - `CasOutcome<T, R, E>`：终态结果与 `CasExecutionReport` 的组合。
 - `CasSuccess<T, R>`：成功更新或无写入完成，包含当前状态、可选旧状态、业务输出和 attempt 上下文。
 - `CasError<T, E>`：带 `CasErrorKind` 分类的终止失败。
-- `CasRetryFailure`：精确保留固定 0.20.0 契约中的限额、超时、取消、回调失败与基础设施失败
+- `CasRetryFailure`：精确保留固定 0.21.0 契约中的限额、超时、取消、回调失败与基础设施失败
   细节；若替换后的本地 path 源扩展了该契约，则以防御性的 `Unknown` 分类承接。
 - `CasHooks`：单次执行的生命周期事件 hook 和告警 hook。
 - `CasObservabilityConfig`：选择仅报告、事件流或带争用告警的事件流。
@@ -448,7 +448,7 @@ async fn main() {
 
 ## 重试事件与次数
 
-CAS 已迁移到 qubit-retry 0.20。`CasEvent::RetryRequested` 表示 CAS 规则请求重试，
+CAS 已迁移到 qubit-retry 0.21。`CasEvent::RetryRequested` 表示 CAS 规则请求重试，
 即使最后一次允许的尝试发生冲突，也可能发出该事件；随后预算仍可能拒绝继续执行。
 统计实际操作次数时，请读取最终报告的 `attempts_total()` 或结果中的尝试次数。
 规则请求、重试调度回调和实际准入是三个不同阶段。
