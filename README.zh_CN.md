@@ -402,6 +402,8 @@ async fn main() {
     let state = AtomicRef::from_value(0usize);
     let executor = CasExecutor::<usize, &'static str>::builder()
         .max_attempts(3)
+        .max_total_elapsed(Some(Duration::from_secs(5)))
+        .flow_timeout(Some(Duration::from_secs(30)))
         .attempt_timeout(Some(Duration::from_millis(100)))
         .retry_on_timeout()
         .build()
@@ -458,7 +460,9 @@ CAS 已迁移到 qubit-retry 0.21。`CasEvent::RetryRequested` 表示 CAS 规则
 `Propagate`/`Isolate` hook 行为：retry 控制回调 panic 仍可能形成 `CallbackFailed`，
 CAS 报告和告警回调继续遵循 CAS 自身的 panic 策略；CAS 不会通过 retry 完成观察者重复发送终止事件。
 
-耗时限额仍是软性续试预算，异步单次尝试超时须另行配置。`CasRetryFailure` 保留超时范围、
+`max_total_elapsed` 是软性续试预算：预算耗尽后拒绝下一次尝试，但已准入的操作可以完成。
+`flow_timeout` 是独立的异步硬流程超时，作用于 rich 和 result-only 两条异步路径；同步执行会忽略
+`flow_timeout`。异步单次尝试超时须另行配置。`CasRetryFailure` 保留超时范围、
 取消及基础设施故障细节，并保留未知终态 fallback。CAS 错误转换也会保留超时前的状态快照
 （内部名为 `timeout_current`），可通过 `CasError::current()` 读取。应用若共享 retry 类型，
 应将直接依赖的 `qubit-retry`、CAS 适配层和锁文件同步迁移到 `0.21`。
@@ -466,6 +470,22 @@ CAS 报告和告警回调继续遵循 CAS 自身的 panic 策略；CAS 不会通
 上下文及完成诊断；它不替代 CAS 自身的终态领域转换。消费 retry 结果前可读取
 `completion_callback_failures()`，或使用 `into_parts_with_diagnostics()`；
 `into_parts()` 会丢弃这些附加诊断。
+
+## 下一版本迁移说明
+
+两项 elapsed 限制都是软性续试预算。需要异步硬流程截止时间时，必须显式配置独立的
+`flow_timeout`；默认值是 `None`，同步执行不会使用它。依赖旧实现中由
+`max_total_elapsed` 隐式触发流程超时的调用方，需要显式补上该配置。替换 policy 或 strategy
+不会覆盖已经设置的 flow timeout。`MaxTotalElapsedExceeded` 仍是粗粒度分类；使用
+`failure()` 区分 `Exhausted` 与 `TimedOut { scope: Flow }`。
+
+```rust
+let executor = qubit_cas::CasExecutor::<usize, ()>::builder()
+    .max_total_elapsed(Some(std::time::Duration::from_secs(10)))
+    .flow_timeout(Some(std::time::Duration::from_secs(10)))
+    .build()
+    .expect("valid CAS configuration");
+```
 
 ## 测试
 

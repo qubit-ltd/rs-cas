@@ -461,6 +461,8 @@ async fn main() {
     let state = AtomicRef::from_value(0usize);
     let executor = CasExecutor::<usize, &'static str>::builder()
         .max_attempts(3)
+        .max_total_elapsed(Some(Duration::from_secs(5)))
+        .flow_timeout(Some(Duration::from_secs(30)))
         .attempt_timeout(Some(Duration::from_millis(100)))
         .retry_on_timeout()
         .build()
@@ -528,8 +530,12 @@ hook behavior. Retry control-callback panics can still yield `CallbackFailed`;
 CAS report and alert callbacks continue to follow CAS's own panic policy.
 CAS does not emit an extra terminal event through retry completion observers.
 
-Elapsed limits remain soft continuation budgets. Async attempt timeouts are
-configured separately. `CasRetryFailure` preserves timeout scope, cancellation,
+`max_total_elapsed` is a soft continuation budget: it rejects a later attempt
+after the budget is exhausted, while an already admitted operation may finish.
+`flow_timeout` is an independent hard wall-clock timeout for asynchronous
+execution and applies to both rich and result-only paths. Synchronous execution
+ignores `flow_timeout`. Async attempt timeouts are configured separately.
+`CasRetryFailure` preserves timeout scope, cancellation,
 and infrastructure details, including unknown terminal fallbacks. CAS error
 conversion also retains the state snapshot captured before timeout (internally
 `timeout_current`), accessible through `CasError::current()`. Applications sharing retry types should update their direct
@@ -539,6 +545,24 @@ to transform the retained payload without losing limits, context, or completion
 diagnostics. It does not replace CAS's domain-specific terminal conversion.
 Read `completion_callback_failures()` before consuming a retry result, or use
 `into_parts_with_diagnostics()`; `into_parts()` discards these extra diagnostics.
+
+## Migration notes for the next release
+
+Both elapsed limits are soft continuation budgets. Configure the independent
+`flow_timeout` explicitly when an asynchronous hard wall-clock boundary is
+needed; it defaults to `None` and has no effect on synchronous execution.
+Callers that relied on the previous implicit `max_total_elapsed` flow timeout
+must add it explicitly. Replacing a policy or strategy does not overwrite an
+explicit flow timeout. `MaxTotalElapsedExceeded` remains a coarse classification;
+inspect `failure()` to distinguish `Exhausted` from `TimedOut { scope: Flow }`.
+
+```rust
+let executor = qubit_cas::CasExecutor::<usize, ()>::builder()
+    .max_total_elapsed(Some(std::time::Duration::from_secs(10)))
+    .flow_timeout(Some(std::time::Duration::from_secs(10)))
+    .build()
+    .expect("valid CAS configuration");
+```
 
 ## Testing
 
