@@ -521,6 +521,25 @@ that request. Use the final report's `attempts_total()` or the result's attempt
 count to measure executed operations. Retry scheduling callbacks are distinct
 from both this intent event and actual admission.
 
+With `max_attempts = 1`, a conflict still produces one `AttemptFailed`, one
+`RetryRequested`, and one `ExecutionFinished`, while `attempts_total()` is one.
+The 0.21 migration preserves these events and the existing `Propagate`/`Isolate`
+hook behavior. Retry control-callback panics can still yield `CallbackFailed`;
+CAS report and alert callbacks continue to follow CAS's own panic policy.
+CAS does not emit an extra terminal event through retry completion observers.
+
+Elapsed limits remain soft continuation budgets. Async attempt timeouts are
+configured separately. `CasRetryFailure` preserves timeout scope, cancellation,
+and infrastructure details, including unknown terminal fallbacks. CAS error
+conversion also retains the state snapshot captured before timeout (internally
+`timeout_current`), accessible through `CasError::current()`. Applications sharing retry types should update their direct
+`qubit-retry` dependency to `0.21` with the CAS adapter and lockfile.
+For a pure conversion of `RetryError<CasAttemptFailure<T, E>>`, use `map_error`
+to transform the retained payload without losing limits, context, or completion
+diagnostics. It does not replace CAS's domain-specific terminal conversion.
+Read `completion_callback_failures()` before consuming a retry result, or use
+`into_parts_with_diagnostics()`; `into_parts()` discards these extra diagnostics.
+
 ## Testing
 
 ```bash

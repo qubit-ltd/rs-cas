@@ -453,6 +453,20 @@ CAS 已迁移到 qubit-retry 0.21。`CasEvent::RetryRequested` 表示 CAS 规则
 统计实际操作次数时，请读取最终报告的 `attempts_total()` 或结果中的尝试次数。
 规则请求、重试调度回调和实际准入是三个不同阶段。
 
+例如 `max_attempts = 1` 时发生一次冲突，仍会产生各一次 `AttemptFailed`、`RetryRequested`
+和 `ExecutionFinished`，但 `attempts_total()` 为一。迁移到 0.21 不改变这些事件和原有的
+`Propagate`/`Isolate` hook 行为：retry 控制回调 panic 仍可能形成 `CallbackFailed`，
+CAS 报告和告警回调继续遵循 CAS 自身的 panic 策略；CAS 不会通过 retry 完成观察者重复发送终止事件。
+
+耗时限额仍是软性续试预算，异步单次尝试超时须另行配置。`CasRetryFailure` 保留超时范围、
+取消及基础设施故障细节，并保留未知终态 fallback。CAS 错误转换也会保留超时前的状态快照
+（内部名为 `timeout_current`），可通过 `CasError::current()` 读取。应用若共享 retry 类型，
+应将直接依赖的 `qubit-retry`、CAS 适配层和锁文件同步迁移到 `0.21`。
+对 `RetryError<CasAttemptFailure<T, E>>` 做纯载荷转换时，可使用 `map_error`，避免丢失限额、
+上下文及完成诊断；它不替代 CAS 自身的终态领域转换。消费 retry 结果前可读取
+`completion_callback_failures()`，或使用 `into_parts_with_diagnostics()`；
+`into_parts()` 会丢弃这些附加诊断。
+
 ## 测试
 
 ```bash
