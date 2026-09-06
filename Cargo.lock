@@ -214,7 +214,7 @@ checksum = "59f10e916324739b811520fbfb24746f4822ad9ea1adb53c79fc04b7c090e5ed"
 
 [[package]]
 name = "qubit-retry"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "qubit-budget",
  "qubit-clock",

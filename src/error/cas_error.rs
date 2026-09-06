@@ -93,7 +93,7 @@ impl<T, E> CasError<T, E> {
                 CasRetryFailure::Infrastructure { failure },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            // Cargo.toml pins the published contract to exactly 0.19.0. A
+            // Cargo.toml pins the published contract to exactly 0.21.0. A
             // substituted path source can nevertheless keep that package
             // version while adding a non-exhaustive variant, so degrade to a
             // safe structural terminal instead of panicking at runtime.

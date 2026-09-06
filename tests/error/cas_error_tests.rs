@@ -34,6 +34,8 @@ use qubit_retry::RetryCancellationPhase;
 use qubit_retry::RetryCancellationToken;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
+use qubit_retry::RetryError;
+use qubit_retry::RetryFailure;
 use qubit_retry::RetryInfrastructureFailure;
 use qubit_retry::RetryLimitKind;
 use qubit_retry::RetryObserver;
@@ -59,6 +61,65 @@ impl RetryObserver<CasAttemptFailure<usize, TestError>> for PanickingStartedObse
     fn on_attempt_started(&self, _context: &RetryContext) {
         panic!("CAS retry observer failed");
     }
+}
+
+/// Observer that panics while receiving the terminal failure notification.
+struct PanickingTerminalObserver;
+
+impl RetryObserver<CasAttemptFailure<i32, String>> for PanickingTerminalObserver {
+    fn on_terminal_failure(&self, _failure: &RetryFailure<CasAttemptFailure<i32, String>>, _context: &RetryContext) {
+        panic!("CAS terminal observer failed");
+    }
+}
+
+/// Verifies retry error mapping consumes the business failure while preserving
+/// its terminal classification, context, and completion diagnostics.
+#[test]
+fn test_retry_error_map_error_preserves_terminal_details() {
+    let retry_error: RetryError<CasAttemptFailure<i32, String>> = Retry::builder(terminal_test_policy(1))
+        .observer(PanickingTerminalObserver)
+        .build()
+        .sync()
+        .run(|| {
+            Err::<(), _>(CasAttemptFailure::Retry {
+                current: Arc::new(7),
+                error: "busy".to_string(),
+            })
+        })
+        .expect_err("one retryable failure should exhaust the policy");
+    let original_context = *retry_error.context();
+    let original_completion_failures = retry_error.completion_callback_failures().to_vec();
+
+    let mapped = retry_error.map_error(|failure| match failure {
+        CasAttemptFailure::Conflict { current } => CasAttemptFailure::Conflict { current },
+        CasAttemptFailure::Retry { current, error } => CasAttemptFailure::Retry {
+            current,
+            error: error.len(),
+        },
+        CasAttemptFailure::Abort { current, error } => CasAttemptFailure::Abort {
+            current,
+            error: error.len(),
+        },
+        CasAttemptFailure::Timeout { current } => CasAttemptFailure::Timeout { current },
+    });
+    let (failure, context, completion_failures) = mapped.into_parts_with_diagnostics();
+
+    assert_eq!(context, original_context);
+    assert_eq!(context.attempts(), 1);
+    assert_eq!(completion_failures, original_completion_failures);
+    assert_eq!(completion_failures[0].phase(), RetryCallbackPhase::TerminalFailure);
+    let RetryFailure::Exhausted {
+        limit, last_failure, ..
+    } = failure
+    else {
+        panic!("expected attempt exhaustion");
+    };
+    assert_eq!(limit, RetryLimitKind::Attempts);
+    let Some(AttemptFailure::Error(CasAttemptFailure::Retry { current, error })) = last_failure else {
+        panic!("expected a mapped retryable CAS failure");
+    };
+    assert_eq!(*current, 7);
+    assert_eq!(error, 4);
 }
 
 /// Verifies an abort terminal keeps its business attempt failure.
