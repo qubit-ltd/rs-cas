@@ -65,7 +65,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Reference to the inner [`Result<CasSuccess<T, R>, CasError<T, E>>`].
-    #[must_use]
+    #[must_use = "inspect the terminal CAS result"]
     #[inline(always)]
     pub fn result(&self) -> &Result<CasSuccess<T, R>, CasError<T, E>> {
         &self.result
@@ -75,7 +75,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Reference to the [`CasExecutionReport`] captured during execution.
-    #[must_use]
+    #[must_use = "inspect both the terminal result and execution report"]
     #[inline(always)]
     pub fn report(&self) -> &CasExecutionReport {
         &self.report
@@ -105,7 +105,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The owned [`Result<CasSuccess<T, R>, CasError<T, E>>`].
-    #[must_use]
+    #[must_use = "inspect the consumed terminal CAS result"]
     #[inline(always)]
     pub fn into_result(self) -> Result<CasSuccess<T, R>, CasError<T, E>> {
         self.result
@@ -115,7 +115,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Tuple of the terminal result and the execution report.
-    #[must_use]
+    #[must_use = "inspect the consumed terminal result and execution report"]
     #[inline(always)]
     pub fn into_parts(self) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
         (self.result, self.report)
