@@ -57,7 +57,7 @@ expressed as an explicit, typed decision.
 
 ```toml
 [dependencies]
-qubit-cas = "0.10"
+qubit-cas = "0.11"
 ```
 
 `qubit-cas` expects the shared state to be held in `qubit_atomic::AtomicRef<T>`.
@@ -71,7 +71,7 @@ Enable asynchronous execution with:
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.10", features = ["tokio"] }
+qubit-cas = { version = "0.11", features = ["tokio"] }
 ```
 
 Optional features:
@@ -492,7 +492,7 @@ async fn main() {
 - `CasSuccess<T, R>`: successful update or no-write finish, including current
   state, optional previous state, output, and attempt context.
 - `CasError<T, E>`: terminal failure with a classified `CasErrorKind`.
-- `CasRetryFailure`: exact retry terminal details for the pinned 0.21.0
+- `CasRetryFailure`: exact retry terminal details for the pinned 0.22.0
   limits, timeouts, cancellation, callback failures, and infrastructure
   failures, plus a defensive `Unknown` classification for substituted path
   sources that extend that contract.
@@ -517,7 +517,7 @@ async fn main() {
 
 ## Retry event accounting
 
-CAS uses qubit-retry 0.21. `CasEvent::RetryRequested` records the CAS rule's intent,
+CAS uses qubit-retry 0.22. `CasEvent::RetryRequested` records the CAS rule's intent,
 including after the final admitted conflict. The continuation budget may reject
 that request. Use the final report's `attempts_total()` or the result's attempt
 count to measure executed operations. Retry scheduling callbacks are distinct
@@ -525,7 +525,7 @@ from both this intent event and actual admission.
 
 With `max_attempts = 1`, a conflict still produces one `AttemptFailed`, one
 `RetryRequested`, and one `ExecutionFinished`, while `attempts_total()` is one.
-The 0.21 migration preserves these events and the existing `Propagate`/`Isolate`
+The 0.22 migration preserves these events and the existing `Propagate`/`Isolate`
 hook behavior. Retry control-callback panics can still yield `CallbackFailed`;
 CAS report and alert callbacks continue to follow CAS's own panic policy.
 CAS does not emit an extra terminal event through retry completion observers.
@@ -539,12 +539,14 @@ ignores `flow_timeout`. Async attempt timeouts are configured separately.
 and infrastructure details, including unknown terminal fallbacks. CAS error
 conversion also retains the state snapshot captured before timeout (internally
 `timeout_current`), accessible through `CasError::current()`. Applications sharing retry types should update their direct
-`qubit-retry` dependency to `0.21` with the CAS adapter and lockfile.
+`qubit-retry` dependency to `0.22` with the CAS adapter and lockfile.
 For a pure conversion of `RetryError<CasAttemptFailure<T, E>>`, use `map_error`
 to transform the retained payload without losing limits, context, or completion
 diagnostics. It does not replace CAS's domain-specific terminal conversion.
-Read `completion_callback_failures()` before consuming a retry result, or use
-`into_parts_with_diagnostics()`; `into_parts()` discards these extra diagnostics.
+Read `completion_callback_failures()` on retry and CAS errors. Retry
+`into_parts()` preserves failure, context, and diagnostics; CAS `into_parts()`
+returns kind, retry failure, CAS context, last application failure, and diagnostics.
+The old retry `into_parts_with_diagnostics()` name has been removed.
 
 ## Migration notes for the next release
 
@@ -563,6 +565,15 @@ let executor = qubit_cas::CasExecutor::<usize, ()>::builder()
     .build()
     .expect("valid CAS configuration");
 ```
+
+### Diagnostic ownership in 0.11
+
+`CasError::completion_callback_failures()` borrows the retained completion
+observer failures. `CasError::into_parts()` now returns five elements, including
+the diagnostic vector last; clone preserves these diagnostics. Timeout snapshots
+and `CasRetryFailure` domain mapping are unchanged. Normal CAS execution registers
+no retry completion observers, so successful adapters explicitly discard the empty
+vector while projecting context. `into_last_failure()` discards the other details.
 
 ## Testing
 

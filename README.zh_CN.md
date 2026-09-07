@@ -48,7 +48,7 @@ CAS 机制可以理解为“先比较、再交换”：只有当共享状态仍�
 
 ```toml
 [dependencies]
-qubit-cas = "0.10"
+qubit-cas = "0.11"
 ```
 
 `qubit-cas` 使用 `qubit_atomic::AtomicRef<T>` 保存共享状态。应用代码如果需要构造或
@@ -61,7 +61,7 @@ qubit-cas = "0.10"
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.10", features = ["tokio"] }
+qubit-cas = { version = "0.11", features = ["tokio"] }
 ```
 
 可选 feature：
@@ -430,7 +430,7 @@ async fn main() {
 - `CasOutcome<T, R, E>`：终态结果与 `CasExecutionReport` 的组合。
 - `CasSuccess<T, R>`：成功更新或无写入完成，包含当前状态、可选旧状态、业务输出和 attempt 上下文。
 - `CasError<T, E>`：带 `CasErrorKind` 分类的终止失败。
-- `CasRetryFailure`：精确保留固定 0.21.0 契约中的限额、超时、取消、回调失败与基础设施失败
+- `CasRetryFailure`：精确保留固定 0.22.0 契约中的限额、超时、取消、回调失败与基础设施失败
   细节；若替换后的本地 path 源扩展了该契约，则以防御性的 `Unknown` 分类承接。
 - `CasHooks`：单次执行的生命周期事件 hook 和告警 hook。
 - `CasObservabilityConfig`：选择仅报告、事件流或带争用告警的事件流。
@@ -450,13 +450,13 @@ async fn main() {
 
 ## 重试事件与次数
 
-CAS 已迁移到 qubit-retry 0.21。`CasEvent::RetryRequested` 表示 CAS 规则请求重试，
+CAS 已迁移到 qubit-retry 0.22。`CasEvent::RetryRequested` 表示 CAS 规则请求重试，
 即使最后一次允许的尝试发生冲突，也可能发出该事件；随后预算仍可能拒绝继续执行。
 统计实际操作次数时，请读取最终报告的 `attempts_total()` 或结果中的尝试次数。
 规则请求、重试调度回调和实际准入是三个不同阶段。
 
 例如 `max_attempts = 1` 时发生一次冲突，仍会产生各一次 `AttemptFailed`、`RetryRequested`
-和 `ExecutionFinished`，但 `attempts_total()` 为一。迁移到 0.21 不改变这些事件和原有的
+和 `ExecutionFinished`，但 `attempts_total()` 为一。迁移到 0.22 不改变这些事件和原有的
 `Propagate`/`Isolate` hook 行为：retry 控制回调 panic 仍可能形成 `CallbackFailed`，
 CAS 报告和告警回调继续遵循 CAS 自身的 panic 策略；CAS 不会通过 retry 完成观察者重复发送终止事件。
 
@@ -465,11 +465,12 @@ CAS 报告和告警回调继续遵循 CAS 自身的 panic 策略；CAS 不会通
 `flow_timeout`。异步单次尝试超时须另行配置。`CasRetryFailure` 保留超时范围、
 取消及基础设施故障细节，并保留未知终态 fallback。CAS 错误转换也会保留超时前的状态快照
 （内部名为 `timeout_current`），可通过 `CasError::current()` 读取。应用若共享 retry 类型，
-应将直接依赖的 `qubit-retry`、CAS 适配层和锁文件同步迁移到 `0.21`。
+应将直接依赖的 `qubit-retry`、CAS 适配层和锁文件同步迁移到 `0.22`。
 对 `RetryError<CasAttemptFailure<T, E>>` 做纯载荷转换时，可使用 `map_error`，避免丢失限额、
 上下文及完成诊断；它不替代 CAS 自身的终态领域转换。消费 retry 结果前可读取
-`completion_callback_failures()`，或使用 `into_parts_with_diagnostics()`；
-`into_parts()` 会丢弃这些附加诊断。
+`completion_callback_failures()`；CAS 错误也提供该 getter。retry 的 `into_parts()` 保留失败、上下文和诊断，
+CAS 的 `into_parts()` 则依次返回分类、retry 失败、CAS 上下文、最后业务失败和诊断。
+旧 retry 方法名 `into_parts_with_diagnostics()` 已删除。
 
 ## 下一版本迁移说明
 
@@ -486,6 +487,13 @@ let executor = qubit_cas::CasExecutor::<usize, ()>::builder()
     .build()
     .expect("valid CAS configuration");
 ```
+
+### 0.11 的诊断所有权
+
+`CasError::completion_callback_failures()` 借用保留的完成观察者失败；`CasError::into_parts()`
+改为五元组，最后一项为诊断 Vec，克隆也保留诊断。超时快照与 `CasRetryFailure` 领域映射不变。
+正常 CAS 执行不注册 retry 完成观察者，成功适配时在投影上下文的同时明确丢弃空诊断。
+`into_last_failure()` 会丢弃其他终态信息。
 
 ## 测试
 
