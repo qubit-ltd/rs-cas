@@ -20,7 +20,10 @@ use qubit_cas::ListenerPanicPolicy;
 /// This test returns nothing.
 #[test]
 fn test_observability_config_report_only_equals_default() {
-    assert_eq!(CasObservabilityConfig::report_only(), CasObservabilityConfig::default());
+    assert_eq!(
+        CasObservabilityConfig::report_only(),
+        CasObservabilityConfig::default()
+    );
 }
 
 /// Verifies event-stream helpers and builder mutators.
@@ -73,12 +76,18 @@ fn test_observability_config_mode_switches_clear_alert_thresholds() {
 
     let event_stream = config.clone().with_event_stream();
     assert_eq!(event_stream.mode(), CasObservabilityMode::EventStream);
-    assert_eq!(event_stream.listener_panic_policy(), ListenerPanicPolicy::Isolate);
+    assert_eq!(
+        event_stream.listener_panic_policy(),
+        ListenerPanicPolicy::Isolate
+    );
     assert!(event_stream.contention_thresholds().is_none());
 
     let report_only = config.with_report_only();
     assert_eq!(report_only.mode(), CasObservabilityMode::ReportOnly);
-    assert_eq!(report_only.listener_panic_policy(), ListenerPanicPolicy::Isolate);
+    assert_eq!(
+        report_only.listener_panic_policy(),
+        ListenerPanicPolicy::Isolate
+    );
     assert!(report_only.contention_thresholds().is_none());
 }
 
@@ -114,8 +123,17 @@ fn test_observability_config_transition_function_pointers() {
         CasObservabilityConfig::with_event_stream;
     let with_alert: fn(CasObservabilityConfig, ContentionThresholds) -> CasObservabilityConfig =
         CasObservabilityConfig::with_event_stream_with_alert;
-    let with_thresholds: fn(CasObservabilityConfig, ContentionThresholds) -> CasObservabilityConfig =
-        CasObservabilityConfig::with_contention_thresholds;
+    let with_thresholds: fn(
+        CasObservabilityConfig,
+        ContentionThresholds,
+    ) -> CasObservabilityConfig = CasObservabilityConfig::with_contention_thresholds;
+    let report_only: fn() -> CasObservabilityConfig = CasObservabilityConfig::report_only;
+    let event_stream: fn() -> CasObservabilityConfig = CasObservabilityConfig::event_stream;
+    let mode: fn(&CasObservabilityConfig) -> CasObservabilityMode = CasObservabilityConfig::mode;
+    let listener_policy: fn(&CasObservabilityConfig) -> ListenerPanicPolicy =
+        CasObservabilityConfig::listener_panic_policy;
+    let without_alerts: fn(CasObservabilityConfig) -> CasObservabilityConfig =
+        CasObservabilityConfig::without_contention_alerts;
 
     let event = with_event_stream(CasObservabilityConfig::default());
     assert_eq!(event.mode(), CasObservabilityMode::EventStream);
@@ -124,4 +142,11 @@ fn test_observability_config_transition_function_pointers() {
     assert_eq!(alert.contention_thresholds(), Some(thresholds));
     let configured = with_thresholds(alert, thresholds);
     assert_eq!(configured.contention_thresholds(), Some(thresholds));
+    assert_eq!(mode(&report_only()), CasObservabilityMode::ReportOnly);
+    assert_eq!(mode(&event_stream()), CasObservabilityMode::EventStream);
+    assert_eq!(listener_policy(&configured), ListenerPanicPolicy::Propagate);
+    assert_eq!(
+        without_alerts(configured).mode(),
+        CasObservabilityMode::EventStream
+    );
 }

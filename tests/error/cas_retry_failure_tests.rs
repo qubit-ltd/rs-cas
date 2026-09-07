@@ -52,9 +52,15 @@ fn test_cas_retry_failure_accessors_preserve_terminal_details() {
 
     assert_eq!(exhausted.limit(), Some(RetryLimitKind::Attempts));
     assert_eq!(timed_out.timeout_scope(), Some(RetryTimeoutScope::Flow));
-    assert_eq!(cancelled.cancellation_phase(), Some(RetryCancellationPhase::Backoff));
+    assert_eq!(
+        cancelled.cancellation_phase(),
+        Some(RetryCancellationPhase::Backoff)
+    );
     assert_eq!(callback_failed.callback_failure(), Some(&callback));
-    assert_eq!(infrastructure_failed.infrastructure_failure(), Some(&infrastructure));
+    assert_eq!(
+        infrastructure_failed.infrastructure_failure(),
+        Some(&infrastructure)
+    );
     assert_eq!(CasRetryFailure::Aborted.limit(), None);
     assert_eq!(CasRetryFailure::Aborted.timeout_scope(), None);
     assert_eq!(CasRetryFailure::Aborted.cancellation_phase(), None);
@@ -65,6 +71,63 @@ fn test_cas_retry_failure_accessors_preserve_terminal_details() {
     assert_eq!(CasRetryFailure::Unknown.cancellation_phase(), None);
     assert_eq!(CasRetryFailure::Unknown.callback_failure(), None);
     assert_eq!(CasRetryFailure::Unknown.infrastructure_failure(), None);
+}
+
+/// Verifies every structured accessor remains callable through its public
+/// function type, including the `None` branches for unrelated terminals.
+#[test]
+fn test_cas_retry_failure_accessor_function_pointers_work() {
+    let exhausted = CasRetryFailure::Exhausted {
+        limit: RetryLimitKind::Attempts,
+    };
+    let timed_out = CasRetryFailure::TimedOut {
+        scope: RetryTimeoutScope::Attempt,
+    };
+    let cancelled = CasRetryFailure::Cancelled {
+        phase: RetryCancellationPhase::BeforeAttempt,
+    };
+    let callback = RetryCallbackFailure::new(
+        RetryCallbackKind::Observer,
+        0,
+        RetryCallbackPhase::BeforeAttempt,
+        RetryPanic::StaticStr("listener failed"),
+    );
+    let callback_failed = CasRetryFailure::CallbackFailed {
+        callback: callback.clone(),
+    };
+    let infrastructure = RetryInfrastructureFailure::Clock {
+        message: "offline".into(),
+    };
+    let infrastructure_failed = CasRetryFailure::Infrastructure {
+        failure: infrastructure.clone(),
+    };
+
+    let limit: fn(&CasRetryFailure) -> Option<RetryLimitKind> = CasRetryFailure::limit;
+    let timeout_scope: fn(&CasRetryFailure) -> Option<RetryTimeoutScope> =
+        CasRetryFailure::timeout_scope;
+    let cancellation_phase: fn(&CasRetryFailure) -> Option<RetryCancellationPhase> =
+        CasRetryFailure::cancellation_phase;
+    let callback_failure: fn(&CasRetryFailure) -> Option<&RetryCallbackFailure> =
+        CasRetryFailure::callback_failure;
+    let infrastructure_failure: fn(&CasRetryFailure) -> Option<&RetryInfrastructureFailure> =
+        CasRetryFailure::infrastructure_failure;
+
+    assert_eq!(limit(&exhausted), Some(RetryLimitKind::Attempts));
+    assert_eq!(timeout_scope(&timed_out), Some(RetryTimeoutScope::Attempt));
+    assert_eq!(
+        cancellation_phase(&cancelled),
+        Some(RetryCancellationPhase::BeforeAttempt)
+    );
+    assert_eq!(callback_failure(&callback_failed), Some(&callback));
+    assert_eq!(
+        infrastructure_failure(&infrastructure_failed),
+        Some(&infrastructure)
+    );
+    assert_eq!(limit(&CasRetryFailure::Aborted), None);
+    assert_eq!(timeout_scope(&CasRetryFailure::Aborted), None);
+    assert_eq!(cancellation_phase(&CasRetryFailure::Aborted), None);
+    assert_eq!(callback_failure(&CasRetryFailure::Aborted), None);
+    assert_eq!(infrastructure_failure(&CasRetryFailure::Aborted), None);
 }
 
 /// Verifies every structured retry terminal renders diagnostic detail.
