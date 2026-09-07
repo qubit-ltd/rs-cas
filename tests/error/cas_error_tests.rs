@@ -428,6 +428,33 @@ fn test_cas_error_display_covers_abort_conflict_and_elapsed_kinds() {
     assert!(conflict.to_string().contains("conflicts exhausted"));
     assert_eq!(conflicts.load(Ordering::SeqCst), 2);
 
+    let elapsed_state = AtomicRef::from_value(12usize);
+    let elapsed_executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .max_operation_elapsed(Some(Duration::from_millis(1)))
+        .build()
+        .expect("executor should build");
+    let op_outcome = elapsed_executor.execute(&elapsed_state, |_current: &usize| {
+        std::thread::sleep(Duration::from_millis(2));
+        CasDecision::<usize, (), TestError>::retry(TestError("slow"))
+    });
+    assert_eq!(
+        op_outcome.report().outcome(),
+        CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
+    );
+    let elapsed = op_outcome
+        .into_result()
+        .expect_err("operation elapsed budget should fail");
+    assert_eq!(elapsed.kind(), CasErrorKind::MaxOperationElapsedExceeded);
+    assert!(matches!(
+        elapsed.failure(),
+        CasRetryFailure::Exhausted {
+            limit: RetryLimitKind::OperationElapsed,
+        }
+    ));
+    assert!(elapsed.to_string().contains("max operation elapsed exceeded"));
+
     let total_state = AtomicRef::from_value(13usize);
     let total_executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(5)

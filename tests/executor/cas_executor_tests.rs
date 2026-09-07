@@ -30,7 +30,6 @@ use qubit_cas::ContentionThresholds;
 use qubit_cas::ListenerPanicPolicy;
 use qubit_retry::RetryCallbackKind;
 use qubit_retry::RetryCallbackPhase;
-#[cfg(feature = "tokio")]
 use qubit_retry::RetryTimeoutScope;
 
 use crate::support::NonCloneValue;
@@ -642,6 +641,42 @@ fn test_execute_retry_exhausted_preserves_last_error() {
     assert!(matches!(error.last_failure(), Some(failure) if failure.is_retry()));
 }
 
+/// Verifies max-elapsed exhaustion preserves the last failure.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[test]
+fn test_execute_max_elapsed_exceeded_preserves_last_failure() {
+    let state = AtomicRef::from_value(11usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(10)
+        .no_delay()
+        .max_operation_elapsed(Some(Duration::from_millis(1)))
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute(&state, |_current: &usize| {
+            std::thread::sleep(Duration::from_millis(2));
+            CasDecision::<usize, (), TestError>::retry(TestError("again"))
+        })
+        .expect_err("max elapsed should fail");
+
+    assert_eq!(error.kind(), CasErrorKind::MaxOperationElapsedExceeded);
+    assert_eq!(error.last_failure().map(|failure| failure.is_retry()), Some(true));
+    assert_eq!(error.current().map(|current| **current), Some(11));
+}
+
+/// Verifies async execution can retry timed-out attempts and then succeed.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
 /// Verifies async result-only execution retries conflicts and returns success.
 ///
 /// # Parameters
@@ -678,6 +713,71 @@ async fn test_execute_async_result_retries_conflict_and_returns_success() {
     assert_eq!(success.attempts(), 2);
     assert_eq!(*success.output(), 11);
     assert_eq!(*state.load(), 2);
+}
+
+/// Verifies async execution can retry timed-out attempts and then succeed.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_retries_timeout_then_succeeds() {
+    let state = AtomicRef::from_value(0usize);
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let retries = Arc::new(Mutex::new(Vec::new()));
+    let retry_events = Arc::clone(&retries);
+
+    let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+        if let CasEvent::AttemptFailed { context, kind } = event {
+            retry_events
+                .lock()
+                .expect("retry events should be lockable")
+                .push((context.attempts(), *kind));
+        }
+    });
+
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .attempt_timeout(Some(Duration::from_millis(10)))
+        .retry_on_timeout()
+        .observability(CasObservabilityConfig::event_stream())
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_async_with_hooks(
+            &state,
+            {
+                let attempts = Arc::clone(&attempts);
+                move |current: Arc<usize>| {
+                    let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                    async move {
+                        if attempt == 0 {
+                            tokio::time::sleep(Duration::from_millis(20)).await;
+                            CasDecision::<usize, usize, TestError>::finish(999)
+                        } else {
+                            CasDecision::update(*current + 1, *current + 100)
+                        }
+                    }
+                }
+            },
+            hooks,
+        )
+        .await
+        .expect("second async attempt should succeed");
+
+    assert_eq!(success.attempts(), 2);
+    assert_eq!(success.context().current_attempt_timeout(), None);
+    assert_eq!(**success.current(), 1);
+    assert_eq!(*success.output(), 100);
+    assert_eq!(
+        *retries.lock().expect("retry events should be lockable"),
+        vec![(1, CasAttemptFailureKind::Timeout)]
+    );
 }
 
 /// Verifies an asynchronous attempt-failed listener panic retains observer
@@ -721,6 +821,93 @@ async fn test_execute_async_attributes_attempt_failed_listener_panic_to_observer
     assert_eq!(callback.callback(), RetryCallbackKind::Observer);
     assert_eq!(callback.index(), 0);
     assert_eq!(callback.phase(), RetryCallbackPhase::AttemptFailed);
+}
+
+/// Verifies the operation continuation budget does not cancel an admitted
+/// asynchronous attempt.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_operation_elapsed_does_not_cancel_admitted_attempt() {
+    let state = AtomicRef::from_value(5usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_operation_elapsed(Some(Duration::from_millis(10)))
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_async_result(&state, |_current: Arc<usize>| async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            CasDecision::<usize, (), TestError>::finish(())
+        })
+        .await
+        .expect("an admitted operation should complete after its budget");
+
+    assert_eq!(success.attempts(), 1);
+}
+
+/// The soft total elapsed budget admits an in-flight operation and is visible
+/// in the terminal context without cancelling that operation.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_soft_total_budget_does_not_cancel_admitted_attempt() {
+    let state = AtomicRef::from_value(5usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_total_elapsed(Some(Duration::from_millis(10)))
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let success = executor
+        .execute_async_result(&state, |_current: Arc<usize>| async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            CasDecision::<usize, (), TestError>::finish(())
+        })
+        .await
+        .expect("an admitted operation should complete after its soft budget");
+
+    assert_eq!(success.attempts(), 1);
+    assert_eq!(success.context().max_total_elapsed(), Some(Duration::from_millis(10)));
+}
+
+/// The soft total elapsed budget rejects a later retry after the first
+/// admitted operation completes.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_soft_total_budget_rejects_next_attempt() {
+    let state = AtomicRef::from_value(5usize);
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .max_total_elapsed(Some(Duration::from_millis(10)))
+        .no_delay()
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_async_result(&state, {
+            let attempts = Arc::clone(&attempts);
+            move |_current: Arc<usize>| {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                    CasDecision::<usize, (), TestError>::retry(TestError("busy"))
+                }
+            }
+        })
+        .await
+        .expect_err("the soft budget should reject the next attempt");
+
+    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(error.kind(), CasErrorKind::MaxTotalElapsedExceeded);
+    assert_eq!(error.attempts(), 1);
+    assert_eq!(error.context().max_total_elapsed(), Some(Duration::from_millis(10)));
 }
 
 /// Verifies an explicit flow timeout updates CAS reports and failure events
@@ -775,6 +962,29 @@ async fn test_execute_async_flow_timeout_updates_report_and_events() {
     ));
 }
 
+/// The hard flow timeout applies to the result-only asynchronous facade.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_result_hard_flow_timeout_is_independent() {
+    let state = AtomicRef::from_value(5usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_total_elapsed(Some(Duration::from_secs(30)))
+        .flow_timeout(Some(Duration::from_millis(10)))
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_async_result(&state, |_current: Arc<usize>| async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            CasDecision::<usize, (), TestError>::finish(())
+        })
+        .await
+        .expect_err("the hard flow timeout should cancel the operation");
+
+    assert_eq!(error.kind(), CasErrorKind::MaxTotalElapsedExceeded);
+    assert_eq!(error.context().max_total_elapsed(), Some(Duration::from_secs(30)));
+}
+
 /// A flow timeout is ignored by synchronous CAS execution.
 #[test]
 fn test_execute_sync_ignores_flow_timeout_configuration() {
@@ -788,6 +998,38 @@ fn test_execute_sync_ignores_flow_timeout_configuration() {
         .execute_result(&state, |current: &usize| CasDecision::finish(*current + 1))
         .expect("synchronous execution has no hard flow timeout");
     assert_eq!(*success.output(), 6);
+}
+
+/// Verifies async timeout abort policy surfaces `AttemptTimeout`.
+///
+/// # Parameters
+/// This test has no parameters.
+///
+/// # Returns
+/// This test returns nothing.
+#[cfg(feature = "tokio")]
+#[tokio::test(start_paused = true)]
+async fn test_execute_async_timeout_abort_returns_attempt_timeout() {
+    let state = AtomicRef::from_value(5usize);
+    let executor = CasExecutor::<usize, TestError>::builder()
+        .max_attempts(3)
+        .no_delay()
+        .attempt_timeout(Some(Duration::from_millis(10)))
+        .abort_on_timeout()
+        .build()
+        .expect("executor should build");
+
+    let error = executor
+        .execute_async(&state, |_current: Arc<usize>| async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            CasDecision::<usize, (), TestError>::finish(())
+        })
+        .await
+        .expect_err("timeout should abort");
+
+    assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
+    assert_eq!(error.attempts(), 1);
+    assert_eq!(error.current().map(|current| **current), Some(5));
 }
 
 /// Verifies the executor constructors and debug representation preserve config.

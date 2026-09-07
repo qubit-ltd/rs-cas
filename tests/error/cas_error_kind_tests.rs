@@ -14,7 +14,6 @@ fn test_cas_error_kind_debug_clone_copy_and_equality() {
         CasErrorKind::Abort,
         CasErrorKind::Conflict,
         CasErrorKind::RetryExhausted,
-        CasErrorKind::RetryInfrastructure,
         CasErrorKind::AttemptTimeout,
         CasErrorKind::MaxOperationElapsedExceeded,
         CasErrorKind::MaxTotalElapsedExceeded,
