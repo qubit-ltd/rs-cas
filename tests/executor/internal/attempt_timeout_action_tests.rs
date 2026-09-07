@@ -6,14 +6,21 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+#[cfg(feature = "tokio")]
 use std::sync::Arc;
+#[cfg(feature = "tokio")]
 use std::time::Duration;
 
+#[cfg(feature = "tokio")]
 use qubit_atomic::AtomicRef;
+#[cfg(feature = "tokio")]
 use qubit_cas::CasDecision;
+#[cfg(feature = "tokio")]
 use qubit_cas::CasErrorKind;
+#[cfg(feature = "tokio")]
 use qubit_cas::CasExecutor;
 
+#[cfg(feature = "tokio")]
 use crate::support::TestError;
 
 /// Verifies retry-on-timeout continues with a later attempt.
