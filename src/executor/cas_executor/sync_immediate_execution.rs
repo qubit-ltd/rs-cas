@@ -19,8 +19,7 @@ where
     E: 'static,
     O: Function<T, CasDecision<T, R, E>>,
 {
-    // Keep the generic adapter as the semantic fallback until the dedicated
-    // loop is fully characterized; the selector and public contract already
-    // ensure immediate configurations have an isolated implementation point.
+    // Keep immediate execution behind a dedicated dispatch point so its
+    // allocation and loop strategy can evolve without changing the public API.
     executor.execute_result_generic(state, operation)
 }
