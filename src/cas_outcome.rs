@@ -131,10 +131,10 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The inner [`CasSuccess<T, R>`] on success.
-    #[must_use]
     ///
     /// # Panics
     /// Panics with the given message if the outcome contains an error.
+    #[must_use]
     #[inline(always)]
     pub fn expect(self, message: &str) -> CasSuccess<T, R> {
         self.result.expect(message)
@@ -150,10 +150,10 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The inner [`CasError<T, E>`] on error.
-    #[must_use]
     ///
     /// # Panics
     /// Panics with the given message if the outcome is successful.
+    #[must_use]
     #[inline(always)]
     pub fn expect_err(self, message: &str) -> CasError<T, E>
     where
