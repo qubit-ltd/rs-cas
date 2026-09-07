@@ -7,14 +7,19 @@
 // =============================================================================
 //! Lifecycle dispatch and event wiring for CAS executions.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use super::CasExecutor;
 use crate::error::CasAttemptFailure;
-use crate::event::{CasEvent, CasHooks};
+use crate::event::CasEvent;
+use crate::event::CasHooks;
 use crate::executor::internal::CasReportFinishContext;
-use crate::observability::{CasAlert, CasObservabilityConfig, CasObservabilityMode};
-use crate::report::{CasExecutionReport, CasReportBuilder};
+use crate::observability::CasAlert;
+use crate::observability::CasObservabilityConfig;
+use crate::observability::CasObservabilityMode;
+use crate::report::CasExecutionReport;
+use crate::report::CasReportBuilder;
 
 /// Returns whether lifecycle events should be emitted.
 pub(super) fn should_emit_events(
@@ -30,8 +35,10 @@ pub(super) fn dispatch_event(
     hook: &crate::event::CasEventHook,
     event: CasEvent,
 ) {
+    use std::panic::AssertUnwindSafe;
+    use std::panic::catch_unwind;
+
     use qubit_function::Consumer;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
     match observability.listener_panic_policy() {
         crate::observability::ListenerPanicPolicy::Propagate => hook.accept(&event),
         crate::observability::ListenerPanicPolicy::Isolate => {
@@ -46,8 +53,10 @@ pub(super) fn dispatch_alert(
     hook: &Option<crate::event::CasAlertHook>,
     alert: CasAlert,
 ) {
+    use std::panic::AssertUnwindSafe;
+    use std::panic::catch_unwind;
+
     use qubit_function::Consumer;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
     if let Some(hook) = hook {
         match observability.listener_panic_policy() {
             crate::observability::ListenerPanicPolicy::Propagate => hook.accept(&alert),
@@ -64,17 +73,12 @@ impl<T, E> CasExecutor<T, E> {
     /// # Parameters
     /// - `hooks`: Per-execution hooks (checked for event hook presence).
     /// - `report_builder`: Used to obtain the start instant for the event.
-    pub(super) fn emit_started(
-        &self,
-        hooks: &CasHooks,
-        report_builder: &Arc<Mutex<CasReportBuilder>>,
-    ) where
+    pub(super) fn emit_started(&self, hooks: &CasHooks, report_builder: &Arc<Mutex<CasReportBuilder>>)
+    where
         T: 'static,
         E: 'static,
     {
-        if hooks.event_hook().is_none()
-            || self.observability.mode() == CasObservabilityMode::ReportOnly
-        {
+        if hooks.event_hook().is_none() || self.observability.mode() == CasObservabilityMode::ReportOnly {
             return;
         }
         let started_at = report_builder
@@ -131,9 +135,7 @@ impl<T, E> CasExecutor<T, E> {
                 event_hook
                     .as_ref()
                     .expect("event hook should exist when events are emitted"),
-                CasEvent::ExecutionFinished {
-                    report: report.clone(),
-                },
+                CasEvent::ExecutionFinished { report: report.clone() },
             );
         }
         let alert_hook = hooks.alert_hook();
@@ -159,9 +161,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// The [`CasAttemptFailureKind`] for event emission.
     #[inline]
-    pub(super) fn failure_kind(
-        failure: &CasAttemptFailure<T, E>,
-    ) -> crate::error::CasAttemptFailureKind {
+    pub(super) fn failure_kind(failure: &CasAttemptFailure<T, E>) -> crate::error::CasAttemptFailureKind {
         failure.kind()
     }
 

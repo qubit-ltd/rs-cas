@@ -30,10 +30,7 @@ fn retry_facade_preserves_policy_type_identity() {
     let executor = CasExecutor::<usize, &'static str>::from_policy(policy.clone());
 
     assert_eq!(executor.policy(), &policy);
-    assert!(matches!(
-        RetryTimeoutScope::Attempt,
-        RetryTimeoutScope::Attempt
-    ));
+    assert!(matches!(RetryTimeoutScope::Attempt, RetryTimeoutScope::Attempt));
 }
 
 #[test]

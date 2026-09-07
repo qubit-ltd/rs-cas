@@ -7,23 +7,28 @@
 // =============================================================================
 //! Finalization of retry executions into public CAS outcomes.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
-use qubit_retry::{RetryContext, RetryError, RetrySuccess};
+use qubit_retry::RetryContext;
+use qubit_retry::RetryError;
+use qubit_retry::RetrySuccess;
 
 use super::CasExecutor;
 use crate::cas_outcome::CasOutcome;
 use crate::cas_success::CasSuccess;
-use crate::error::{CasAttemptFailure, CasError, CasErrorKind};
-use crate::event::{CasContext, CasHooks};
-use crate::executor::internal::{AttemptSuccess, CasReportFinishContext};
-use crate::report::{CasExecutionOutcome, CasReportBuilder};
+use crate::error::CasAttemptFailure;
+use crate::error::CasError;
+use crate::error::CasErrorKind;
+use crate::event::CasContext;
+use crate::event::CasHooks;
+use crate::executor::internal::AttemptSuccess;
+use crate::executor::internal::CasReportFinishContext;
+use crate::report::CasExecutionOutcome;
+use crate::report::CasReportBuilder;
 
 /// Enriches an attempt success with retry context.
-pub(super) fn enrich_success<T, R>(
-    success: AttemptSuccess<T, R>,
-    context: RetryContext,
-) -> CasSuccess<T, R> {
+pub(super) fn enrich_success<T, R>(success: AttemptSuccess<T, R>, context: RetryContext) -> CasSuccess<T, R> {
     let context = CasContext::new(&context);
     match success {
         AttemptSuccess::Updated {
@@ -31,9 +36,7 @@ pub(super) fn enrich_success<T, R>(
             current,
             output,
         } => CasSuccess::updated(previous, current, output, context),
-        AttemptSuccess::Finished { current, output } => {
-            CasSuccess::finished(current, output, context)
-        }
+        AttemptSuccess::Finished { current, output } => CasSuccess::finished(current, output, context),
     }
 }
 
@@ -45,9 +48,7 @@ pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
         CasErrorKind::RetryExhausted => CasExecutionOutcome::ErrorRetryExhausted,
         CasErrorKind::AttemptTimeout => CasExecutionOutcome::ErrorAttemptTimeout,
         CasErrorKind::RetryInfrastructure => CasExecutionOutcome::ErrorRetryInfrastructure,
-        CasErrorKind::MaxOperationElapsedExceeded => {
-            CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
-        }
+        CasErrorKind::MaxOperationElapsedExceeded => CasExecutionOutcome::ErrorMaxOperationElapsedExceeded,
         CasErrorKind::MaxTotalElapsedExceeded => CasExecutionOutcome::ErrorMaxTotalElapsedExceeded,
     }
 }

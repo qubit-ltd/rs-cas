@@ -7,19 +7,22 @@
 // =============================================================================
 //! Synchronous CAS execution entry points and attempt support.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use qubit_atomic::AtomicRef;
 use qubit_function::Function;
 
 use super::CasExecutor;
+use crate::CasError;
+use crate::CasHooks;
+use crate::CasOutcome;
+use crate::CasSuccess;
 use crate::cas_decision::CasDecision;
 use crate::error::CasAttemptFailure;
 use crate::executor::cas_executor::decision::apply_decision;
 use crate::executor::internal::AttemptSuccess;
-use crate::observability::ListenerPanicPolicy;
 use crate::report::CasReportBuilder;
-use crate::{CasError, CasHooks, CasOutcome, CasSuccess};
 
 impl<T, E> CasExecutor<T, E> {
     /// Executes one synchronous CAS operation.
@@ -59,20 +62,13 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
-    pub fn execute_result<R, O>(
-        &self,
-        state: &AtomicRef<T>,
-        operation: O,
-    ) -> Result<CasSuccess<T, R>, CasError<T, E>>
+    pub fn execute_result<R, O>(&self, state: &AtomicRef<T>, operation: O) -> Result<CasSuccess<T, R>, CasError<T, E>>
     where
         T: 'static,
         E: 'static,
         O: Function<T, CasDecision<T, R, E>>,
     {
-        let attempt = self
-            .result_retry()
-            .sync()
-            .run(|| run_sync_attempt(state, &operation));
+        let attempt = self.result_retry().sync().run(|| run_sync_attempt(state, &operation));
         match attempt {
             Ok(success) => {
                 // This adapter registers no completion observers; only retry context is
@@ -99,19 +95,14 @@ impl<T, E> CasExecutor<T, E> {
     /// Configured retry delays block the calling thread until execution ends.
     ///
     /// # Panics
-    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics from outer
-    /// `ExecutionStarted`/`ExecutionFinished` listeners and alert listeners
-    /// unwind through this call. Panics from retry-owned `AttemptFailed` and
-    /// `RetryRequested` listeners instead return a
+    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics
+    /// from outer `ExecutionStarted`/`ExecutionFinished` listeners and
+    /// alert listeners unwind through this call. Panics from retry-owned
+    /// `AttemptFailed` and `RetryRequested` listeners instead return a
     /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
-    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every listener
-    /// panic at dispatch and allows execution to continue.
-    pub fn execute_with_hooks<R, O>(
-        &self,
-        state: &AtomicRef<T>,
-        operation: O,
-        hooks: CasHooks,
-    ) -> CasOutcome<T, R, E>
+    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every
+    /// listener panic at dispatch and allows execution to continue.
+    pub fn execute_with_hooks<R, O>(&self, state: &AtomicRef<T>, operation: O, hooks: CasHooks) -> CasOutcome<T, R, E>
     where
         T: 'static,
         E: 'static,

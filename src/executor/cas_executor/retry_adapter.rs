@@ -7,13 +7,19 @@
 // =============================================================================
 //! Retry policy construction for CAS executions.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
-use qubit_retry::{AttemptFailure, Retry, RetryContext, RetryDecision};
+use qubit_retry::AttemptFailure;
+use qubit_retry::Retry;
+use qubit_retry::RetryContext;
+use qubit_retry::RetryDecision;
 
 use super::CasExecutor;
 use crate::error::CasAttemptFailure;
-use crate::event::{CasContext, CasEvent, CasHooks};
+use crate::event::CasContext;
+use crate::event::CasEvent;
+use crate::event::CasHooks;
 use crate::executor::cas_executor::retry_adapter;
 use crate::executor::internal::AttemptTimeoutAction;
 use crate::report::CasReportBuilder;
@@ -32,9 +38,7 @@ pub(super) fn retry_decision<T, E>(
         AttemptFailure::TimedOut {
             scope: RetryTimeoutScope::Attempt,
         } if attempt_timeout_action == AttemptTimeoutAction::Retry => RetryDecision::Retry,
-        AttemptFailure::TimedOut { .. } | AttemptFailure::Panicked { .. } => {
-            RetryDecision::UseDefault
-        }
+        AttemptFailure::TimedOut { .. } | AttemptFailure::Panicked { .. } => RetryDecision::UseDefault,
         _ => RetryDecision::UseDefault,
     }
 }
@@ -106,10 +110,8 @@ impl<T, E> CasExecutor<T, E> {
             )
             .rule(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
-                    let decision =
-                        super::retry_adapter::retry_decision(failure, attempt_timeout_action);
-                    if matches!(decision, RetryDecision::Retry)
-                        && Self::should_emit_events(&observability, &event_hook)
+                    let decision = super::retry_adapter::retry_decision(failure, attempt_timeout_action);
+                    if matches!(decision, RetryDecision::Retry) && Self::should_emit_events(&observability, &event_hook)
                     {
                         Self::dispatch_event(
                             &observability,
@@ -140,8 +142,7 @@ impl<T, E> CasExecutor<T, E> {
             let attempt_timeout_action = self.attempt_timeout_action;
             Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
                 .rule(
-                    move |failure: &AttemptFailure<CasAttemptFailure<T, E>>,
-                          _context: &RetryContext| {
+                    move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, _context: &RetryContext| {
                         retry_adapter::retry_decision(failure, attempt_timeout_action)
                     },
                 )

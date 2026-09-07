@@ -23,16 +23,14 @@ pub(super) fn apply_decision<T, R, E>(
     decision: CasDecision<T, R, E>,
 ) -> Result<AttemptSuccess<T, R>, CasAttemptFailure<T, E>> {
     match decision {
-        CasDecision::Update { next, output } => {
-            match state.compare_set(&current, Arc::clone(&next)) {
-                Ok(()) => Ok(AttemptSuccess::Updated {
-                    previous: current,
-                    current: next,
-                    output,
-                }),
-                Err(actual) => Err(CasAttemptFailure::conflict(actual)),
-            }
-        }
+        CasDecision::Update { next, output } => match state.compare_set(&current, Arc::clone(&next)) {
+            Ok(()) => Ok(AttemptSuccess::Updated {
+                previous: current,
+                current: next,
+                output,
+            }),
+            Err(actual) => Err(CasAttemptFailure::conflict(actual)),
+        },
         CasDecision::Finish { output } => Ok(AttemptSuccess::Finished { current, output }),
         CasDecision::Retry(error) => Err(CasAttemptFailure::retry(current, error)),
         CasDecision::Abort(error) => Err(CasAttemptFailure::abort(current, error)),

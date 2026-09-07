@@ -7,7 +7,8 @@
 // =============================================================================
 //! Tokio-gated asynchronous CAS execution entry points and attempts.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use qubit_atomic::AtomicRef;
 
@@ -15,11 +16,11 @@ use super::CasExecutor;
 use crate::cas_decision::CasDecision;
 use crate::cas_outcome::CasOutcome;
 use crate::cas_success::CasSuccess;
-use crate::error::{CasAttemptFailure, CasError};
+use crate::error::CasAttemptFailure;
+use crate::error::CasError;
 use crate::event::CasHooks;
 use crate::executor::cas_executor::decision::apply_decision;
 use crate::executor::internal::AttemptSuccess;
-use crate::observability::ListenerPanicPolicy;
 use crate::report::CasReportBuilder;
 
 impl<T, E> CasExecutor<T, E> {
@@ -32,19 +33,14 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// A terminal result together with the execution report.
     #[cfg(feature = "tokio")]
-    pub async fn execute_async<R, O, Fut>(
-        &self,
-        state: &AtomicRef<T>,
-        operation: O,
-    ) -> CasOutcome<T, R, E>
+    pub async fn execute_async<R, O, Fut>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
         T: 'static,
         E: 'static,
         O: Fn(Arc<T>) -> Fut,
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
-        self.execute_async_with_hooks(state, operation, CasHooks::new())
-            .await
+        self.execute_async_with_hooks(state, operation, CasHooks::new()).await
     }
 
     /// Executes one asynchronous CAS operation without constructing a report.
@@ -116,13 +112,13 @@ impl<T, E> CasExecutor<T, E> {
     /// A terminal result together with the execution report.
     ///
     /// # Panics
-    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics from outer
-    /// `ExecutionStarted`/`ExecutionFinished` listeners and alert listeners
-    /// unwind while this future is polled. Panics from retry-owned
-    /// `AttemptFailed` and `RetryRequested` listeners instead return a
-    /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
-    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every listener panic at
-    /// dispatch and allows execution to continue.
+    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics
+    /// from outer `ExecutionStarted`/`ExecutionFinished` listeners and
+    /// alert listeners unwind while this future is polled. Panics from
+    /// retry-owned `AttemptFailed` and `RetryRequested` listeners instead
+    /// return a [`crate::CasRetryFailure::CallbackFailed`] terminal error.
+    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every
+    /// listener panic at dispatch and allows execution to continue.
     #[cfg(feature = "tokio")]
     pub async fn execute_async_with_hooks<R, O, Fut>(
         &self,
