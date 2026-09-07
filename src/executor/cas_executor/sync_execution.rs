@@ -17,6 +17,7 @@ use crate::cas_decision::CasDecision;
 use crate::error::CasAttemptFailure;
 use crate::executor::cas_executor::decision::apply_decision;
 use crate::executor::internal::AttemptSuccess;
+use crate::observability::ListenerPanicPolicy;
 use crate::report::CasReportBuilder;
 use crate::{CasError, CasHooks, CasOutcome, CasSuccess};
 

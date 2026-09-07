@@ -19,6 +19,7 @@ use crate::error::{CasAttemptFailure, CasError};
 use crate::event::CasHooks;
 use crate::executor::cas_executor::decision::apply_decision;
 use crate::executor::internal::AttemptSuccess;
+use crate::observability::ListenerPanicPolicy;
 use crate::report::CasReportBuilder;
 
 impl<T, E> CasExecutor<T, E> {
