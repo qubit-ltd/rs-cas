@@ -7,10 +7,10 @@
 // =============================================================================
 
 use qubit_atomic::AtomicRef;
-use qubit_cas::constants::DEFAULT_CAS_MAX_ATTEMPTS;
 use qubit_cas::CasContext;
 use qubit_cas::CasDecision;
 use qubit_cas::CasExecutor;
+use qubit_cas::constants::DEFAULT_CAS_MAX_ATTEMPTS;
 
 use crate::support::NonCloneValue;
 use crate::support::TestError;
@@ -88,10 +88,7 @@ fn test_bounded_context_accessors_work() {
         Some(std::time::Duration::from_secs(3))
     );
     assert!(std::hint::black_box(context.total_elapsed()) >= context.last_attempt_elapsed());
-    assert_eq!(
-        std::hint::black_box(context.current_attempt_timeout()),
-        None
-    );
+    assert_eq!(std::hint::black_box(context.current_attempt_timeout()), None);
     assert_eq!(std::hint::black_box(context.next_delay()), None);
 }
 
@@ -114,23 +111,15 @@ fn test_context_accessor_function_pointers_work() {
     let max_retries: fn(&CasContext) -> u32 = CasContext::max_retries;
     let attempts: fn(&CasContext) -> u32 = CasContext::attempts;
     let max_attempts: fn(&CasContext) -> u32 = CasContext::max_attempts;
-    let max_operation_elapsed: fn(&CasContext) -> Option<std::time::Duration> =
-        CasContext::max_operation_elapsed;
-    let max_total_elapsed: fn(&CasContext) -> Option<std::time::Duration> =
-        CasContext::max_total_elapsed;
+    let max_operation_elapsed: fn(&CasContext) -> Option<std::time::Duration> = CasContext::max_operation_elapsed;
+    let max_total_elapsed: fn(&CasContext) -> Option<std::time::Duration> = CasContext::max_total_elapsed;
     let total_elapsed: fn(&CasContext) -> std::time::Duration = CasContext::total_elapsed;
-    let current_attempt: fn(&CasContext) -> Option<std::num::NonZeroU32> =
-        CasContext::current_attempt;
-    let last_attempt_elapsed: fn(&CasContext) -> std::time::Duration =
-        CasContext::last_attempt_elapsed;
-    let current_attempt_timeout: fn(&CasContext) -> Option<std::time::Duration> =
-        CasContext::current_attempt_timeout;
+    let current_attempt: fn(&CasContext) -> Option<std::num::NonZeroU32> = CasContext::current_attempt;
+    let last_attempt_elapsed: fn(&CasContext) -> std::time::Duration = CasContext::last_attempt_elapsed;
+    let current_attempt_timeout: fn(&CasContext) -> Option<std::time::Duration> = CasContext::current_attempt_timeout;
     let next_delay: fn(&CasContext) -> Option<std::time::Duration> = CasContext::next_delay;
 
-    assert_eq!(
-        max_retries(&context),
-        DEFAULT_CAS_MAX_ATTEMPTS.saturating_sub(1)
-    );
+    assert_eq!(max_retries(&context), DEFAULT_CAS_MAX_ATTEMPTS.saturating_sub(1));
     assert_eq!(attempts(&context), 1);
     assert_eq!(max_attempts(&context), DEFAULT_CAS_MAX_ATTEMPTS);
     assert_eq!(max_operation_elapsed(&context), None);

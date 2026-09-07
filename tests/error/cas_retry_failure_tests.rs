@@ -52,15 +52,9 @@ fn test_cas_retry_failure_accessors_preserve_terminal_details() {
 
     assert_eq!(exhausted.limit(), Some(RetryLimitKind::Attempts));
     assert_eq!(timed_out.timeout_scope(), Some(RetryTimeoutScope::Flow));
-    assert_eq!(
-        cancelled.cancellation_phase(),
-        Some(RetryCancellationPhase::Backoff)
-    );
+    assert_eq!(cancelled.cancellation_phase(), Some(RetryCancellationPhase::Backoff));
     assert_eq!(callback_failed.callback_failure(), Some(&callback));
-    assert_eq!(
-        infrastructure_failed.infrastructure_failure(),
-        Some(&infrastructure)
-    );
+    assert_eq!(infrastructure_failed.infrastructure_failure(), Some(&infrastructure));
     assert_eq!(CasRetryFailure::Aborted.limit(), None);
     assert_eq!(CasRetryFailure::Aborted.timeout_scope(), None);
     assert_eq!(CasRetryFailure::Aborted.cancellation_phase(), None);
@@ -103,12 +97,10 @@ fn test_cas_retry_failure_accessor_function_pointers_work() {
     };
 
     let limit: fn(&CasRetryFailure) -> Option<RetryLimitKind> = CasRetryFailure::limit;
-    let timeout_scope: fn(&CasRetryFailure) -> Option<RetryTimeoutScope> =
-        CasRetryFailure::timeout_scope;
+    let timeout_scope: fn(&CasRetryFailure) -> Option<RetryTimeoutScope> = CasRetryFailure::timeout_scope;
     let cancellation_phase: fn(&CasRetryFailure) -> Option<RetryCancellationPhase> =
         CasRetryFailure::cancellation_phase;
-    let callback_failure: fn(&CasRetryFailure) -> Option<&RetryCallbackFailure> =
-        CasRetryFailure::callback_failure;
+    let callback_failure: fn(&CasRetryFailure) -> Option<&RetryCallbackFailure> = CasRetryFailure::callback_failure;
     let infrastructure_failure: fn(&CasRetryFailure) -> Option<&RetryInfrastructureFailure> =
         CasRetryFailure::infrastructure_failure;
 
@@ -119,10 +111,7 @@ fn test_cas_retry_failure_accessor_function_pointers_work() {
         Some(RetryCancellationPhase::BeforeAttempt)
     );
     assert_eq!(callback_failure(&callback_failed), Some(&callback));
-    assert_eq!(
-        infrastructure_failure(&infrastructure_failed),
-        Some(&infrastructure)
-    );
+    assert_eq!(infrastructure_failure(&infrastructure_failed), Some(&infrastructure));
     assert_eq!(limit(&CasRetryFailure::Aborted), None);
     assert_eq!(timeout_scope(&CasRetryFailure::Aborted), None);
     assert_eq!(cancellation_phase(&CasRetryFailure::Aborted), None);
