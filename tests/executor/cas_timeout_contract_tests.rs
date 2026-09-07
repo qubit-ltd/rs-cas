@@ -103,7 +103,7 @@ async fn cas_timeout_contract_explicit_flow_timeout() {
         ));
         assert_eq!(error.attempts(), 1);
         assert!(error.current().is_some());
-        assert_eq!(executor.policy().limits().max_total_elapsed(), None);
+        assert_eq!(executor.policy().admission_limits().total_time_budget(), None);
     }
 }
 

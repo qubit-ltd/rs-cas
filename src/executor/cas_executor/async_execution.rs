@@ -76,10 +76,10 @@ impl<T, E> CasExecutor<T, E> {
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let mut async_retry = self.result_retry().asynchronous();
         if let Some(timeout) = self.attempt_timeout {
-            async_retry = async_retry.attempt_timeout(timeout);
+            async_retry = async_retry.hard_attempt_timeout(timeout);
         }
         if let Some(timeout) = self.flow_timeout() {
-            async_retry = async_retry.flow_timeout(timeout);
+            async_retry = async_retry.hard_flow_timeout(timeout);
         }
         let attempt = async_retry
             .run(|| run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt)))
@@ -139,10 +139,10 @@ impl<T, E> CasExecutor<T, E> {
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let mut async_retry = retry.asynchronous();
         if let Some(timeout) = self.attempt_timeout {
-            async_retry = async_retry.attempt_timeout(timeout);
+            async_retry = async_retry.hard_attempt_timeout(timeout);
         }
         if let Some(timeout) = self.flow_timeout() {
-            async_retry = async_retry.flow_timeout(timeout);
+            async_retry = async_retry.hard_flow_timeout(timeout);
         }
         let attempt = async_retry
             .run(|| run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt)))

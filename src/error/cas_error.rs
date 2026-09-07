@@ -15,7 +15,7 @@ use qubit_retry::AttemptFailure;
 use qubit_retry::RetryCallbackFailure;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryError;
-use qubit_retry::RetryFailure;
+use qubit_retry::RetryErrorReason;
 use qubit_retry::RetryLimitKind;
 use qubit_retry::RetryTimeoutScope;
 
@@ -56,57 +56,47 @@ impl<T, E> CasError<T, E> {
     /// A [`CasError`] wrapper.
     #[inline]
     pub(crate) fn new(inner: RetryError<CasAttemptFailure<T, E>>, timeout_current: Option<Arc<T>>) -> Self {
-        let (failure, retry_context, diagnostics) = inner.into_parts();
-        Self::from_retry_parts(failure, retry_context, diagnostics, timeout_current)
+        let (reason, last_failure, retry_context, diagnostics) = inner.into_parts();
+        Self::from_retry_parts(reason, last_failure, retry_context, diagnostics, timeout_current)
     }
 
     /// Converts structured retry terminal parts into one CAS error.
     fn from_retry_parts(
-        failure: RetryFailure<CasAttemptFailure<T, E>>,
+        reason: RetryErrorReason,
+        last_failure: Option<AttemptFailure<CasAttemptFailure<T, E>>>,
         retry_context: RetryContext,
-        diagnostics: Vec<RetryCallbackFailure>,
+        diagnostics: Box<[RetryCallbackFailure]>,
         mut timeout_current: Option<Arc<T>>,
     ) -> Self {
         let context = CasContext::new(&retry_context);
-        let (failure, last_failure) = match failure {
-            RetryFailure::Aborted { last_failure, .. } => (
+        let (failure, last_failure) = match reason {
+            RetryErrorReason::Aborted => (
                 CasRetryFailure::Aborted,
-                Self::map_attempt_failure(last_failure, &mut timeout_current),
+                Self::map_attempt_failure(
+                    last_failure.expect("aborted CAS retry must retain an attempt"),
+                    &mut timeout_current,
+                ),
             ),
-            RetryFailure::Exhausted {
-                limit, last_failure, ..
-            } => (
+            RetryErrorReason::Exhausted { limit } => (
                 CasRetryFailure::Exhausted { limit },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            RetryFailure::TimedOut {
-                scope, last_failure, ..
-            } => (
+            RetryErrorReason::TimedOut { scope } => (
                 CasRetryFailure::TimedOut { scope },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            RetryFailure::Cancelled {
-                phase, last_failure, ..
-            } => (
+            RetryErrorReason::Cancelled { phase } => (
                 CasRetryFailure::Cancelled { phase },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            RetryFailure::CallbackFailed {
-                callback, last_failure, ..
-            } => (
+            RetryErrorReason::CallbackFailed { callback } => (
                 CasRetryFailure::CallbackFailed { callback },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            RetryFailure::Infrastructure {
-                failure, last_failure, ..
-            } => (
+            RetryErrorReason::Infrastructure { failure } => (
                 CasRetryFailure::Infrastructure { failure },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            // Cargo.toml pins the published contract to exactly 0.22.0. A
-            // substituted path source can nevertheless keep that package
-            // version while adding a non-exhaustive variant, so degrade to a
-            // safe structural terminal instead of panicking at runtime.
             _ => (CasRetryFailure::Unknown, None),
         };
         let kind = Self::classify_kind(&failure, last_failure.as_ref());
@@ -231,7 +221,7 @@ impl<T, E> CasError<T, E> {
         CasRetryFailure,
         CasContext,
         Option<CasAttemptFailure<T, E>>,
-        Vec<RetryCallbackFailure>,
+        Box<[RetryCallbackFailure]>,
     ) {
         let CasErrorDetails {
             failure,

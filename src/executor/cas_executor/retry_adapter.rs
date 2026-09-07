@@ -14,6 +14,7 @@ use qubit_retry::AttemptFailure;
 use qubit_retry::Retry;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
+use qubit_retry::RetryFallback;
 
 use super::CasExecutor;
 use crate::error::CasAttemptFailure;
@@ -67,6 +68,7 @@ impl<T, E> CasExecutor<T, E> {
         let observer_report_builder = Arc::clone(&report_builder);
 
         Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
+            .fallback(RetryFallback::Retry)
             .observer(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
                     let kind = match failure {
@@ -141,6 +143,7 @@ impl<T, E> CasExecutor<T, E> {
         self.result_retry.get_or_init(|| {
             let attempt_timeout_action = self.attempt_timeout_action;
             Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
+                .fallback(RetryFallback::Retry)
                 .rule(
                     move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, _context: &RetryContext| {
                         retry_adapter::retry_decision(failure, attempt_timeout_action)

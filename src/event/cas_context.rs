@@ -57,11 +57,11 @@ impl CasContext {
             attempts: context.attempts(),
             current_attempt: context.current_attempt(),
             max_attempts: context.max_attempts(),
-            max_operation_elapsed: context.max_operation_elapsed(),
-            max_total_elapsed: context.max_total_elapsed(),
+            max_operation_elapsed: context.operation_time_budget(),
+            max_total_elapsed: context.total_time_budget(),
             total_elapsed: context.total_elapsed(),
             last_attempt_elapsed: context.last_attempt_elapsed(),
-            current_attempt_timeout: context.current_attempt_timeout(),
+            current_attempt_timeout: context.current_hard_attempt_timeout(),
             next_delay: context.next_delay(),
         }
     }

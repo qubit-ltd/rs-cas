@@ -82,8 +82,8 @@ impl<T, E> CasExecutor<T, E> {
                 let (success, context, _diagnostics) = success.into_parts();
                 let attempts_total = context.attempts();
                 let max_attempts = context.max_attempts();
-                let max_operation_elapsed = context.max_operation_elapsed();
-                let max_total_elapsed = context.max_total_elapsed();
+                let max_operation_elapsed = context.operation_time_budget();
+                let max_total_elapsed = context.total_time_budget();
                 let outcome = match success {
                     AttemptSuccess::Updated { .. } => CasExecutionOutcome::SuccessUpdated,
                     AttemptSuccess::Finished { .. } => CasExecutionOutcome::SuccessFinished,

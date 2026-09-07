@@ -35,7 +35,8 @@ use qubit_retry::RetryCancellationToken;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
 use qubit_retry::RetryError;
-use qubit_retry::RetryFailure;
+use qubit_retry::RetryErrorReason;
+use qubit_retry::RetryFallback;
 use qubit_retry::RetryInfrastructureFailure;
 use qubit_retry::RetryLimitKind;
 use qubit_retry::RetryObserver;
@@ -67,7 +68,7 @@ impl RetryObserver<CasAttemptFailure<usize, TestError>> for PanickingStartedObse
 struct PanickingTerminalObserver;
 
 impl RetryObserver<CasAttemptFailure<i32, String>> for PanickingTerminalObserver {
-    fn on_terminal_failure(&self, _failure: &RetryFailure<CasAttemptFailure<i32, String>>, _context: &RetryContext) {
+    fn on_terminal_failure(&self, _reason: &RetryErrorReason, _context: &RetryContext) {
         panic!("CAS terminal observer failed");
     }
 }
@@ -76,6 +77,7 @@ impl RetryObserver<CasAttemptFailure<i32, String>> for PanickingTerminalObserver
 #[test]
 fn test_cas_error_preserves_completion_diagnostics() {
     let error = Retry::builder(terminal_test_policy(1))
+        .fallback(RetryFallback::Retry)
         .observer(PanickingTerminalObserver)
         .build()
         .sync()
@@ -100,7 +102,7 @@ fn test_cas_error_preserves_completion_diagnostics() {
     ));
     assert_eq!(context.attempts(), 1);
     assert!(matches!(last_failure, Some(CasAttemptFailure::Retry { error, .. }) if error == "busy"));
-    assert_eq!(diagnostics, expected);
+    assert_eq!(diagnostics.as_ref(), expected.as_slice());
 }
 
 /// Verifies retry error mapping consumes the business failure while preserving
@@ -108,6 +110,7 @@ fn test_cas_error_preserves_completion_diagnostics() {
 #[test]
 fn test_retry_error_map_error_preserves_terminal_details() {
     let retry_error: RetryError<CasAttemptFailure<i32, String>> = Retry::builder(terminal_test_policy(1))
+        .fallback(RetryFallback::Retry)
         .observer(PanickingTerminalObserver)
         .build()
         .sync()
@@ -133,20 +136,17 @@ fn test_retry_error_map_error_preserves_terminal_details() {
         },
         CasAttemptFailure::Timeout { current } => CasAttemptFailure::Timeout { current },
     });
-    let (failure, context, completion_failures) = mapped.into_parts();
+    let (reason, failure, context, completion_failures) = mapped.into_parts();
 
     assert_eq!(context, original_context);
     assert_eq!(context.attempts(), 1);
-    assert_eq!(completion_failures, original_completion_failures);
+    assert_eq!(completion_failures.as_ref(), original_completion_failures.as_slice());
     assert_eq!(completion_failures[0].phase(), RetryCallbackPhase::TerminalFailure);
-    let RetryFailure::Exhausted {
-        limit, last_failure, ..
-    } = failure
-    else {
+    let RetryErrorReason::Exhausted { limit } = reason else {
         panic!("expected attempt exhaustion");
     };
     assert_eq!(limit, RetryLimitKind::Attempts);
-    let Some(AttemptFailure::Error(CasAttemptFailure::Retry { current, error })) = last_failure else {
+    let Some(AttemptFailure::Error(CasAttemptFailure::Retry { current, error })) = failure else {
         panic!("expected a mapped retryable CAS failure");
     };
     assert_eq!(*current, 7);
@@ -179,6 +179,7 @@ fn test_cas_error_maps_aborted_terminal() {
 #[test]
 fn test_cas_error_maps_exhausted_terminal() {
     let retry_error = Retry::builder(terminal_test_policy(1))
+        .fallback(RetryFallback::Retry)
         .build()
         .sync()
         .run(|| {
@@ -208,7 +209,7 @@ async fn test_cas_error_maps_timed_out_terminal_without_business_error() {
     let retry_error = Retry::<CasAttemptFailure<usize, TestError>>::builder(terminal_test_policy(1))
         .build()
         .asynchronous()
-        .attempt_timeout(Duration::from_millis(1))
+        .hard_attempt_timeout(Duration::from_millis(1))
         .run(std::future::pending::<Result<(), CasAttemptFailure<usize, TestError>>>)
         .await
         .expect_err("the pending attempt should time out");
@@ -293,6 +294,7 @@ fn test_cas_error_maps_infrastructure_terminal_without_reclassification() {
             .build()
             .expect("timer failure policy should be valid"),
     )
+    .fallback(RetryFallback::Retry)
     .build()
     .sync()
     .timer(timer)

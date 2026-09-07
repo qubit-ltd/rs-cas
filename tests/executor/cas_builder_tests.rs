@@ -29,7 +29,7 @@ fn test_build_exposes_pure_policy_and_attempt_timeout() {
         .build()
         .expect("CAS policy should be valid");
 
-    assert_eq!(executor.policy().limits().max_attempts().get(), 3);
+    assert_eq!(executor.policy().admission_limits().max_attempts().get(), 3);
     assert_eq!(
         executor.policy().backoff().maximum_delay(),
         Some(Duration::from_millis(2))
@@ -55,7 +55,7 @@ fn cas_timeout_contract_builder_keeps_explicit_timeout_independent() {
     let soft = Duration::from_secs(9);
     let hard = Duration::from_secs(3);
     let policy = RetryPolicy::builder()
-        .max_total_elapsed(soft)
+        .total_time_budget(soft)
         .build()
         .expect("retry policy should build");
     let executor = CasExecutor::<usize, TestError>::builder()
@@ -119,7 +119,7 @@ fn test_builder_configuration_methods_compose() {
         .build()
         .expect("composed builder should build");
 
-    assert_eq!(executor.policy().limits().max_attempts().get(), 4);
+    assert_eq!(executor.policy().admission_limits().max_attempts().get(), 4);
     assert_eq!(executor.flow_timeout(), Some(Duration::from_secs(4)));
     assert_eq!(
         executor.observability().listener_panic_policy(),

@@ -1043,10 +1043,13 @@ fn test_executor_constructors_and_debug_work() {
     let reliability = CasExecutor::<usize, TestError>::reliability_first();
     let selected = CasExecutor::<usize, TestError>::with_strategy(CasStrategy::ReliabilityFirst);
 
-    assert!(latency.policy().limits().max_attempts().get() > 0);
-    assert!(contention.policy().limits().max_attempts().get() > 0);
-    assert!(reliability.policy().limits().max_attempts().get() > 0);
-    assert_eq!(selected.policy().limits(), reliability.policy().limits());
+    assert!(latency.policy().admission_limits().max_attempts().get() > 0);
+    assert!(contention.policy().admission_limits().max_attempts().get() > 0);
+    assert!(reliability.policy().admission_limits().max_attempts().get() > 0);
+    assert_eq!(
+        selected.policy().admission_limits(),
+        reliability.policy().admission_limits()
+    );
     assert!(format!("{latency:?}").contains("CasExecutor"));
 }
 

@@ -22,5 +22,5 @@ pub(in crate::error) struct CasErrorDetails {
     pub(in crate::error) context: CasContext,
 
     /// Completion callback failures retained without changing the CAS outcome.
-    pub(in crate::error) diagnostics: Vec<RetryCallbackFailure>,
+    pub(in crate::error) diagnostics: Box<[RetryCallbackFailure]>,
 }

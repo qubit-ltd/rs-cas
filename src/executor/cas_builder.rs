@@ -81,9 +81,9 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     pub fn policy(mut self, policy: RetryPolicy) -> Self {
-        self.max_attempts = policy.limits().max_attempts().get();
-        self.max_operation_elapsed = policy.limits().max_operation_elapsed();
-        self.max_total_elapsed = policy.limits().max_total_elapsed();
+        self.max_attempts = policy.admission_limits().max_attempts().get();
+        self.max_operation_elapsed = policy.admission_limits().operation_time_budget();
+        self.max_total_elapsed = policy.admission_limits().total_time_budget();
         self.backoff = Ok(policy.backoff().clone());
         self
     }
@@ -344,8 +344,8 @@ impl<T, E> CasBuilder<T, E> {
         let backoff = self.backoff?;
         let policy = RetryPolicy::builder()
             .max_attempts(self.max_attempts)
-            .max_operation_elapsed_opt(self.max_operation_elapsed)
-            .max_total_elapsed_opt(self.max_total_elapsed)
+            .operation_time_budget_opt(self.max_operation_elapsed)
+            .total_time_budget_opt(self.max_total_elapsed)
             .backoff(backoff)
             .build()?;
         Ok(CasExecutor::new(
