@@ -38,7 +38,6 @@ impl Default for CasHooks {
     ///
     /// # Returns
     /// A [`CasHooks`] value with every hook unset.
-    #[must_use]
     #[inline]
     fn default() -> Self {
         Self {

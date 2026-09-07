@@ -116,12 +116,12 @@ impl<T, E> CasExecutor<T, E> {
     /// A terminal result together with the execution report.
     ///
     /// # Panics
-    /// With [`ListenerPanicPolicy::Propagate`], panics from outer
+    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics from outer
     /// `ExecutionStarted`/`ExecutionFinished` listeners and alert listeners
     /// unwind while this future is polled. Panics from retry-owned
     /// `AttemptFailed` and `RetryRequested` listeners instead return a
     /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
-    /// [`ListenerPanicPolicy::Isolate`] catches every listener panic at
+    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every listener panic at
     /// dispatch and allows execution to continue.
     #[cfg(feature = "tokio")]
     pub async fn execute_async_with_hooks<R, O, Fut>(

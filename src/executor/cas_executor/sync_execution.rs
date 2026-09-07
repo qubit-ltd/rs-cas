@@ -99,12 +99,12 @@ impl<T, E> CasExecutor<T, E> {
     /// Configured retry delays block the calling thread until execution ends.
     ///
     /// # Panics
-    /// With [`ListenerPanicPolicy::Propagate`], panics from outer
+    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics from outer
     /// `ExecutionStarted`/`ExecutionFinished` listeners and alert listeners
     /// unwind through this call. Panics from retry-owned `AttemptFailed` and
     /// `RetryRequested` listeners instead return a
     /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
-    /// [`ListenerPanicPolicy::Isolate`] catches every listener
+    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every listener
     /// panic at dispatch and allows execution to continue.
     pub fn execute_with_hooks<R, O>(
         &self,
