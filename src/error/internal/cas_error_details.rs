@@ -7,6 +7,8 @@
 // =============================================================================
 //! Compact heap-owned details retained by terminal CAS errors.
 
+use qubit_retry::RetryCallbackFailure;
+
 use crate::error::CasRetryFailure;
 use crate::event::CasContext;
 
@@ -18,4 +20,7 @@ pub(in crate::error) struct CasErrorDetails {
 
     /// Copied CAS context captured when execution stopped.
     pub(in crate::error) context: CasContext,
+
+    /// Completion callback failures retained without changing the CAS outcome.
+    pub(in crate::error) diagnostics: Vec<RetryCallbackFailure>,
 }

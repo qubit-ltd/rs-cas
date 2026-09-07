@@ -72,6 +72,37 @@ impl RetryObserver<CasAttemptFailure<i32, String>> for PanickingTerminalObserver
     }
 }
 
+/// Domain conversion preserves completion diagnostics through clone and parts.
+#[test]
+fn test_cas_error_preserves_completion_diagnostics() {
+    let error = Retry::builder(terminal_test_policy(1))
+        .observer(PanickingTerminalObserver)
+        .build()
+        .sync()
+        .run(|| {
+            Err::<(), _>(CasAttemptFailure::Retry {
+                current: Arc::new(7),
+                error: "busy".to_owned(),
+            })
+        })
+        .expect_err("single attempt exhausts");
+    let expected = error.completion_callback_failures().to_vec();
+    let error = CasError::from(error);
+    assert_eq!(error.completion_callback_failures(), expected);
+    let clone = error.clone();
+    let (kind, failure, context, last_failure, diagnostics) = clone.into_parts();
+    assert_eq!(kind, CasErrorKind::RetryExhausted);
+    assert!(matches!(
+        failure,
+        CasRetryFailure::Exhausted {
+            limit: RetryLimitKind::Attempts
+        }
+    ));
+    assert_eq!(context.attempts(), 1);
+    assert!(matches!(last_failure, Some(CasAttemptFailure::Retry { error, .. }) if error == "busy"));
+    assert_eq!(diagnostics, expected);
+}
+
 /// Verifies retry error mapping consumes the business failure while preserving
 /// its terminal classification, context, and completion diagnostics.
 #[test]
@@ -102,7 +133,7 @@ fn test_retry_error_map_error_preserves_terminal_details() {
         },
         CasAttemptFailure::Timeout { current } => CasAttemptFailure::Timeout { current },
     });
-    let (failure, context, completion_failures) = mapped.into_parts_with_diagnostics();
+    let (failure, context, completion_failures) = mapped.into_parts();
 
     assert_eq!(context, original_context);
     assert_eq!(context.attempts(), 1);

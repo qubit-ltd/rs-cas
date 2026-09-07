@@ -273,7 +273,9 @@ impl<T, E> CasExecutor<T, E> {
             .run(|| self.run_sync_attempt(state, &operation));
         match attempt {
             Ok(success) => {
-                let (success, context) = success.into_parts();
+                // This adapter registers no completion observers; only retry context is
+                // projected.
+                let (success, context, _diagnostics) = success.into_parts();
                 Ok(self.enrich_success(success, context))
             }
             Err(error) => Err(CasError::new(error, None)),
@@ -377,7 +379,9 @@ impl<T, E> CasExecutor<T, E> {
             .await;
         match attempt {
             Ok(success) => {
-                let (success, context) = success.into_parts();
+                // This adapter registers no completion observers; only retry context is
+                // projected.
+                let (success, context, _diagnostics) = success.into_parts();
                 Ok(self.enrich_success(success, context))
             }
             Err(error) => {
@@ -676,7 +680,9 @@ impl<T, E> CasExecutor<T, E> {
     {
         match attempt {
             Ok(success) => {
-                let (success, context) = success.into_parts();
+                // This adapter registers no completion observers; only retry context is
+                // projected.
+                let (success, context, _diagnostics) = success.into_parts();
                 let attempts_total = context.attempts();
                 let max_attempts = context.max_attempts();
                 let max_operation_elapsed = context.max_operation_elapsed();

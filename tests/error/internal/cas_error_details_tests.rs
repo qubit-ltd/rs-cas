@@ -36,7 +36,8 @@ fn test_cas_error_details_preserve_owned_terminal_parts() {
         })
         .expect_err("abort should fail");
 
-    let (kind, failure, context, last_failure) = error.into_parts();
+    let (kind, failure, context, last_failure, diagnostics) = error.into_parts();
+    assert!(diagnostics.is_empty());
     assert_eq!(kind, CasErrorKind::Abort);
     assert_eq!(failure, CasRetryFailure::Aborted);
     assert_eq!(context.attempts(), 1);

@@ -12,6 +12,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use qubit_retry::AttemptFailure;
+use qubit_retry::RetryCallbackFailure;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryError;
 use qubit_retry::RetryFailure;
@@ -47,14 +48,15 @@ impl<T, E> CasError<T, E> {
     /// A [`CasError`] wrapper.
     #[inline]
     pub(crate) fn new(inner: RetryError<CasAttemptFailure<T, E>>, timeout_current: Option<Arc<T>>) -> Self {
-        let (failure, retry_context) = inner.into_parts();
-        Self::from_retry_parts(failure, retry_context, timeout_current)
+        let (failure, retry_context, diagnostics) = inner.into_parts();
+        Self::from_retry_parts(failure, retry_context, diagnostics, timeout_current)
     }
 
     /// Converts structured retry terminal parts into one CAS error.
     fn from_retry_parts(
         failure: RetryFailure<CasAttemptFailure<T, E>>,
         retry_context: RetryContext,
+        diagnostics: Vec<RetryCallbackFailure>,
         mut timeout_current: Option<Arc<T>>,
     ) -> Self {
         let context = CasContext::new(&retry_context);
@@ -93,7 +95,7 @@ impl<T, E> CasError<T, E> {
                 CasRetryFailure::Infrastructure { failure },
                 last_failure.and_then(|failure| Self::map_attempt_failure(failure, &mut timeout_current)),
             ),
-            // Cargo.toml pins the published contract to exactly 0.21.0. A
+            // Cargo.toml pins the published contract to exactly 0.22.0. A
             // substituted path source can nevertheless keep that package
             // version while adding a non-exhaustive variant, so degrade to a
             // safe structural terminal instead of panicking at runtime.
@@ -102,7 +104,11 @@ impl<T, E> CasError<T, E> {
         let kind = Self::classify_kind(&failure, last_failure.as_ref());
         Self {
             kind,
-            details: Box::new(CasErrorDetails { failure, context }),
+            details: Box::new(CasErrorDetails {
+                failure,
+                context,
+                diagnostics,
+            }),
             last_failure,
         }
     }
@@ -152,6 +158,18 @@ impl<T, E> CasError<T, E> {
         self.details.context
     }
 
+    /// Returns diagnostics from completion observers after the outcome was
+    /// frozen.
+    ///
+    /// # Returns
+    /// Callback failures in observer registration order; these do not change
+    /// the terminal CAS classification or retained application failure.
+    #[must_use = "inspect retained retry completion diagnostics"]
+    #[inline(always)]
+    pub fn completion_callback_failures(&self) -> &[RetryCallbackFailure] {
+        &self.details.diagnostics
+    }
+
     /// Returns the number of attempts that were executed.
     ///
     /// # Returns
@@ -176,7 +194,7 @@ impl<T, E> CasError<T, E> {
     }
 
     /// Consumes this error and returns the retained application-level CAS
-    /// failure.
+    /// failure, discarding context and completion diagnostics.
     ///
     /// # Returns
     /// `Some(CasAttemptFailure<T, E>)` for a retained application CAS failure,
@@ -193,7 +211,8 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Returns
     /// The classified kind, structured retry terminal failure, terminal
-    /// context, and optional owned application CAS failure. The optional
+    /// context, optional owned application CAS failure, and completion callback
+    /// diagnostics. The optional
     /// failure includes a timeout only when a state snapshot was available.
     #[must_use = "consuming the error returns its structured terminal details"]
     #[inline(always)]
@@ -204,9 +223,14 @@ impl<T, E> CasError<T, E> {
         CasRetryFailure,
         CasContext,
         Option<CasAttemptFailure<T, E>>,
+        Vec<RetryCallbackFailure>,
     ) {
-        let CasErrorDetails { failure, context } = *self.details;
-        (self.kind, failure, context, self.last_failure)
+        let CasErrorDetails {
+            failure,
+            context,
+            diagnostics,
+        } = *self.details;
+        (self.kind, failure, context, self.last_failure, diagnostics)
     }
 
     /// Returns the current state associated with the last failure.
@@ -287,6 +311,7 @@ impl<T, E> fmt::Debug for CasError<T, E> {
             .field("kind", &self.kind())
             .field("failure", &self.failure())
             .field("context", &self.context())
+            .field("completion_callback_failures", &self.completion_callback_failures())
             .finish()
     }
 }
