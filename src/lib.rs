@@ -24,6 +24,7 @@ pub mod event;
 pub mod executor;
 pub mod observability;
 pub mod report;
+pub mod retry;
 pub mod strategy;
 
 pub use cas_decision::CasDecision;

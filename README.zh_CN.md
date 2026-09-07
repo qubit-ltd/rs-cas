@@ -54,8 +54,15 @@ qubit-cas = "0.11"
 `qubit-cas` 使用 `qubit_atomic::AtomicRef<T>` 保存共享状态。应用代码如果需要构造或
 持有该状态，应直接依赖 `qubit-atomic`。
 
-高级 builder 方法会暴露 `qubit-retry` 的选项类型；使用这些方法时应直接依赖
-`qubit-retry`。
+高级 builder 方法通过 `qubit_cas::retry` facade 暴露重试选项类型，因此只需要声明
+`qubit-cas` 依赖即可配置这些方法：
+
+```rust
+use qubit_cas::retry::{BackoffPolicy, RetryPolicy};
+```
+
+该 facade 保留底层 `qubit-retry` 类型身份，并遵循本版本使用的
+`qubit-retry` 0.22.0 契约。
 
 启用异步执行：
 

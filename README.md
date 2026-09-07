@@ -64,8 +64,15 @@ qubit-cas = "0.11"
 Add `qubit-atomic` as a direct dependency when your application constructs or
 stores that state.
 
-Advanced builder methods expose `qubit-retry` option types. Add
-`qubit-retry` as a direct dependency when configuring those methods.
+Advanced builder methods expose retry option types through the `qubit_cas::retry`
+facade, so configuring them only requires the `qubit-cas` dependency:
+
+```rust
+use qubit_cas::retry::{BackoffPolicy, RetryPolicy};
+```
+
+The facade preserves the underlying `qubit-retry` type identities and is pinned
+to the `qubit-retry` 0.22.0 contract used by this release.
 
 Enable asynchronous execution with:
 
