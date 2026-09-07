@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   rust-ci:
-    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    # rs-ci main resolved at 2026-09-07; upgrade only after auditing the workflow diff.
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@128d7bed407e70e03c24e00eda731264438bc035
     with:
       coverage_enforce_thresholds: "1"
-    secrets: inherit
