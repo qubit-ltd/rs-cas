@@ -12,11 +12,13 @@ use qubit_cas::CasErrorKind;
 fn test_cas_error_kind_debug_clone_copy_and_equality() {
     let kinds = [
         CasErrorKind::Abort,
-        CasErrorKind::Conflict,
+        CasErrorKind::ConflictExhausted,
         CasErrorKind::RetryExhausted,
         CasErrorKind::AttemptTimeout,
-        CasErrorKind::MaxOperationElapsedExceeded,
-        CasErrorKind::MaxTotalElapsedExceeded,
+        CasErrorKind::FlowTimeout,
+        CasErrorKind::OperationBudgetExceeded,
+        CasErrorKind::TotalBudgetExceeded,
+        CasErrorKind::RetryInfrastructure,
     ];
 
     for kind in kinds {

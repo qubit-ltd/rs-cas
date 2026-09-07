@@ -62,10 +62,9 @@ impl<T, E> CasExecutor<T, E> {
     {
         let event_hook = hooks.event_hook();
         let attempt_timeout_action = self.attempt_timeout_action;
-        let observability = self.observability.clone();
         let observer_event_hook = event_hook.clone();
-        let observer_observability = observability.clone();
         let observer_report_builder = Arc::clone(&report_builder);
+        let retry_report_builder = Arc::clone(&report_builder);
 
         Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
             .fallback(RetryFallback::Retry)
@@ -95,10 +94,8 @@ impl<T, E> CasExecutor<T, E> {
                         _ => None,
                     };
                     if let Some(kind) = kind
-                        && Self::should_emit_events(&observer_observability, &observer_event_hook)
-                    {
-                        Self::dispatch_event(
-                            &observer_observability,
+                        && Self::should_emit_events(&observer_event_hook)
+                        && let Some(listener_failure) = Self::dispatch_event(
                             observer_event_hook
                                 .as_ref()
                                 .expect("event hook should exist when events are emitted"),
@@ -106,24 +103,34 @@ impl<T, E> CasExecutor<T, E> {
                                 context: CasContext::new(context),
                                 kind,
                             },
-                        );
+                        )
+                    {
+                        observer_report_builder
+                            .lock()
+                            .expect("CAS report builder should be lockable")
+                            .record_listener_failure(listener_failure);
                     }
                 },
             )
             .rule(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
                     let decision = super::retry_adapter::retry_decision(failure, attempt_timeout_action);
-                    if matches!(decision, RetryDecision::Retry) && Self::should_emit_events(&observability, &event_hook)
-                    {
-                        Self::dispatch_event(
-                            &observability,
+                    if matches!(decision, RetryDecision::Retry)
+                        && Self::should_emit_events(&event_hook)
+                        && let Some(listener_failure) = Self::dispatch_event(
                             event_hook
                                 .as_ref()
                                 .expect("event hook should exist when events are emitted"),
-                            CasEvent::RetryRequested {
+                            CasEvent::RetryScheduled {
                                 context: CasContext::new(context),
+                                delay: context.next_delay().unwrap_or_default(),
                             },
-                        );
+                        )
+                    {
+                        retry_report_builder
+                            .lock()
+                            .expect("CAS report builder should be lockable")
+                            .record_listener_failure(listener_failure);
                     }
                     decision
                 },

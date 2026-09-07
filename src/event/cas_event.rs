@@ -42,9 +42,11 @@ pub enum CasEvent {
     /// This is an intent event, including on the final allowed attempt. Budget
     /// checks may reject the request; use the terminal report's attempts_total
     /// to count admitted operations rather than counting this event.
-    RetryRequested {
+    RetryScheduled {
         /// Context captured after the failed attempt.
         context: CasContext,
+        /// Delay selected before the next attempt.
+        delay: std::time::Duration,
     },
 
     /// The execution finished and produced a report.

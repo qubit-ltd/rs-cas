@@ -14,7 +14,6 @@ use qubit_cas::CasDecision;
 use qubit_cas::CasEvent;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
-use qubit_cas::CasObservabilityConfig;
 use qubit_function::Consumer;
 
 use crate::support::TestError;
@@ -58,7 +57,6 @@ fn test_hooks_accept_function_traits() {
     let executor = CasExecutor::<usize, TestError>::builder()
         .max_attempts(2)
         .no_delay()
-        .observability(CasObservabilityConfig::event_stream())
         .build()
         .expect("executor should build");
 

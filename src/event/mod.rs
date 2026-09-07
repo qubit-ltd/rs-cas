@@ -12,9 +12,13 @@ mod cas_context;
 mod cas_event;
 mod cas_event_hook;
 mod cas_hooks;
+mod cas_listener_failure;
+mod cas_listener_kind;
 
 pub use cas_alert_hook::CasAlertHook;
 pub use cas_context::CasContext;
 pub use cas_event::CasEvent;
 pub use cas_event_hook::CasEventHook;
 pub use cas_hooks::CasHooks;
+pub use cas_listener_failure::CasListenerFailure;
+pub use cas_listener_kind::CasListenerKind;

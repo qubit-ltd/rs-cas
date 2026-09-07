@@ -20,8 +20,6 @@ use qubit_cas::CasDecision;
 use qubit_cas::CasEvent;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
-use qubit_cas::CasObservabilityConfig;
-use qubit_cas::ContentionThresholds;
 
 const ITERATIONS: usize = 200_000;
 const WARMUP_RUNS: usize = 2;
@@ -39,29 +37,11 @@ fn run_group(group: &'static str, force_conflict: bool) {
     println!("## {group}");
 
     let raw = measure_raw(force_conflict);
-    let result_only = measure_result_executor(benchmark_executor(CasObservabilityConfig::default()), force_conflict);
-    let report_only = measure_executor(
-        benchmark_executor(CasObservabilityConfig::default()),
-        CasHooks::new(),
-        force_conflict,
-    );
-    let event_empty = measure_executor(
-        benchmark_executor(CasObservabilityConfig::event_stream()),
-        CasHooks::new(),
-        force_conflict,
-    );
-    let event_light = measure_executor(
-        benchmark_executor(CasObservabilityConfig::event_stream()),
-        light_event_hook(),
-        force_conflict,
-    );
-    let alert_light = measure_executor(
-        benchmark_executor(CasObservabilityConfig::event_stream_with_alert(
-            ContentionThresholds::new(2, 1, 0.5),
-        )),
-        light_alert_hooks(),
-        force_conflict,
-    );
+    let result_only = measure_result_executor(benchmark_executor(), force_conflict);
+    let report_only = measure_executor(benchmark_executor(), CasHooks::new(), force_conflict);
+    let event_empty = measure_executor(benchmark_executor(), CasHooks::new(), force_conflict);
+    let event_light = measure_executor(benchmark_executor(), light_event_hook(), force_conflict);
+    let alert_light = measure_executor(benchmark_executor(), light_alert_hooks(), force_conflict);
 
     print_row("raw_cas_floor", &raw, None, None);
     print_row("result_only", &result_only, Some(raw.ops_per_sec), None);
@@ -86,11 +66,10 @@ fn run_group(group: &'static str, force_conflict: bool) {
     );
 }
 
-fn benchmark_executor(observability: CasObservabilityConfig) -> CasExecutor<usize, &'static str> {
+fn benchmark_executor() -> CasExecutor<usize, &'static str> {
     CasExecutor::<usize, &'static str>::builder()
         .max_attempts(100)
         .no_delay()
-        .observability(observability)
         .build()
         .expect("benchmark retry policy should be valid")
 }
@@ -153,9 +132,12 @@ fn run_result_executor_sample(
 fn light_alert_hooks() -> CasHooks {
     let alerts = Arc::new(AtomicUsize::new(0));
     let alert_count = Arc::clone(&alerts);
-    light_event_hook().on_alert(move |alert: &CasAlert| {
-        alert_count.fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
-    })
+    light_event_hook().on_contention_alert(
+        qubit_cas::ContentionThresholds::new(2, 1, 0.5),
+        move |alert: &CasAlert| {
+            alert_count.fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
+        },
+    )
 }
 
 fn light_event_hook() -> CasHooks {

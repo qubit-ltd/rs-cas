@@ -31,6 +31,8 @@ pub struct CasHooks {
     on_event: Option<CasEventHook>,
     /// Hook invoked when configured alert thresholds are crossed.
     on_alert: Option<CasAlertHook>,
+    /// Optional thresholds used to trigger contention alerts.
+    contention_thresholds: Option<crate::observability::ContentionThresholds>,
 }
 
 impl Default for CasHooks {
@@ -43,6 +45,7 @@ impl Default for CasHooks {
         Self {
             on_event: None,
             on_alert: None,
+            contention_thresholds: None,
         }
     }
 }
@@ -91,6 +94,17 @@ impl CasHooks {
         self
     }
 
+    /// Registers a contention alert hook and its thresholds.
+    #[must_use]
+    pub fn on_contention_alert<C>(mut self, thresholds: crate::observability::ContentionThresholds, hook: C) -> Self
+    where
+        C: Consumer<CasAlert> + Send + Sync + 'static,
+    {
+        self.on_alert = Some(ArcConsumer::new(hook));
+        self.contention_thresholds = Some(thresholds);
+        self
+    }
+
     /// Returns the registered lifecycle event hook.
     ///
     /// # Returns
@@ -107,5 +121,9 @@ impl CasHooks {
     #[inline(always)]
     pub(crate) fn alert_hook(&self) -> Option<CasAlertHook> {
         self.on_alert.clone()
+    }
+
+    pub(crate) fn contention_thresholds(&self) -> Option<crate::observability::ContentionThresholds> {
+        self.contention_thresholds
     }
 }

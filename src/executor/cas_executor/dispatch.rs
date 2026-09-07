@@ -14,56 +14,49 @@ use super::CasExecutor;
 use crate::error::CasAttemptFailure;
 use crate::event::CasEvent;
 use crate::event::CasHooks;
+use crate::event::CasListenerFailure;
+use crate::event::CasListenerKind;
 use crate::executor::internal::CasReportFinishContext;
 use crate::observability::CasAlert;
-use crate::observability::CasObservabilityConfig;
-use crate::observability::CasObservabilityMode;
 use crate::report::CasExecutionReport;
 use crate::report::CasReportBuilder;
 
 /// Returns whether lifecycle events should be emitted.
-pub(super) fn should_emit_events(
-    observability: &CasObservabilityConfig,
-    hook: &Option<crate::event::CasEventHook>,
-) -> bool {
-    observability.mode() != CasObservabilityMode::ReportOnly && hook.is_some()
+pub(super) fn should_emit_events(hook: &Option<crate::event::CasEventHook>) -> bool {
+    hook.is_some()
 }
 
 /// Dispatches one lifecycle event according to listener panic policy.
-pub(super) fn dispatch_event(
-    observability: &CasObservabilityConfig,
-    hook: &crate::event::CasEventHook,
-    event: CasEvent,
-) {
+pub(super) fn dispatch_event(hook: &crate::event::CasEventHook, event: CasEvent) -> Option<CasListenerFailure> {
     use std::panic::AssertUnwindSafe;
     use std::panic::catch_unwind;
 
     use qubit_function::Consumer;
-    match observability.listener_panic_policy() {
-        crate::observability::ListenerPanicPolicy::Propagate => hook.accept(&event),
-        crate::observability::ListenerPanicPolicy::Isolate => {
-            let _ = catch_unwind(AssertUnwindSafe(|| hook.accept(&event)));
-        }
-    }
+    catch_unwind(AssertUnwindSafe(|| hook.accept(&event)))
+        .err()
+        .map(|payload| CasListenerFailure::from_panic(listener_kind(&event), payload))
 }
 
 /// Dispatches one optional alert according to listener panic policy.
-pub(super) fn dispatch_alert(
-    observability: &CasObservabilityConfig,
-    hook: &Option<crate::event::CasAlertHook>,
-    alert: CasAlert,
-) {
+pub(super) fn dispatch_alert(hook: &Option<crate::event::CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
     use std::panic::AssertUnwindSafe;
     use std::panic::catch_unwind;
 
     use qubit_function::Consumer;
     if let Some(hook) = hook {
-        match observability.listener_panic_policy() {
-            crate::observability::ListenerPanicPolicy::Propagate => hook.accept(&alert),
-            crate::observability::ListenerPanicPolicy::Isolate => {
-                let _ = catch_unwind(AssertUnwindSafe(|| hook.accept(&alert)));
-            }
-        }
+        return catch_unwind(AssertUnwindSafe(|| hook.accept(&alert)))
+            .err()
+            .map(|payload| CasListenerFailure::from_panic(CasListenerKind::ContentionAlert, payload));
+    }
+    None
+}
+
+fn listener_kind(event: &CasEvent) -> CasListenerKind {
+    match event {
+        CasEvent::ExecutionStarted { .. } => CasListenerKind::ExecutionStarted,
+        CasEvent::AttemptFailed { .. } => CasListenerKind::AttemptFailed,
+        CasEvent::RetryScheduled { .. } => CasListenerKind::RetryScheduled,
+        CasEvent::ExecutionFinished { .. } => CasListenerKind::ExecutionFinished,
     }
 }
 
@@ -78,7 +71,7 @@ impl<T, E> CasExecutor<T, E> {
         T: 'static,
         E: 'static,
     {
-        if hooks.event_hook().is_none() || self.observability.mode() == CasObservabilityMode::ReportOnly {
+        if hooks.event_hook().is_none() {
             return;
         }
         let started_at = report_builder
@@ -86,13 +79,17 @@ impl<T, E> CasExecutor<T, E> {
             .expect("CAS report builder should be lockable")
             .started_at();
         let event_hook = hooks.event_hook();
-        Self::dispatch_event(
-            &self.observability,
+        if let Some(failure) = Self::dispatch_event(
             event_hook
                 .as_ref()
                 .expect("event hook should exist when events are emitted"),
             CasEvent::ExecutionStarted { started_at },
-        );
+        ) {
+            report_builder
+                .lock()
+                .expect("CAS report builder should be lockable")
+                .record_listener_failure(failure);
+        }
     }
 
     /// Finishes and emits one execution report (and optional alert).
@@ -129,28 +126,36 @@ impl<T, E> CasExecutor<T, E> {
                 ctx.outcome,
             );
         let event_hook = hooks.event_hook();
-        if Self::should_emit_events(&self.observability, &event_hook) {
-            Self::dispatch_event(
-                &self.observability,
+        if Self::should_emit_events(&event_hook) {
+            let listener_failure = Self::dispatch_event(
                 event_hook
                     .as_ref()
                     .expect("event hook should exist when events are emitted"),
                 CasEvent::ExecutionFinished { report: report.clone() },
             );
+            if let Some(failure) = listener_failure {
+                report_builder
+                    .lock()
+                    .expect("CAS report builder should be lockable")
+                    .record_listener_failure(failure);
+            }
         }
         let alert_hook = hooks.alert_hook();
-        if self.observability.mode() == CasObservabilityMode::EventStreamWithAlert
-            && let Some(thresholds) = self.observability.contention_thresholds()
+        if let Some(thresholds) = hooks.contention_thresholds()
             && alert_hook.is_some()
             && report.is_contention_hot(&thresholds)
+            && let Some(failure) = Self::dispatch_alert(&alert_hook, CasAlert::contention(report.clone(), thresholds))
         {
-            Self::dispatch_alert(
-                &self.observability,
-                &alert_hook,
-                CasAlert::contention(report.clone(), thresholds),
-            );
+            report_builder
+                .lock()
+                .expect("CAS report builder should be lockable")
+                .record_listener_failure(failure);
         }
-        report
+        let failures = report_builder
+            .lock()
+            .expect("CAS report builder should be lockable")
+            .listener_failures();
+        report.with_listener_failures(failures)
     }
 
     /// Converts one attempt failure into its lightweight event kind.
@@ -168,49 +173,38 @@ impl<T, E> CasExecutor<T, E> {
     /// Dispatches one lifecycle event to a registered hook.
     ///
     /// # Parameters
-    /// - `observability`: Configuration controlling listener panic behavior.
     /// - `hook`: Listener that receives the event.
     /// - `event`: Lifecycle event to dispatch.
     ///
     /// # Panics
-    /// With [`ListenerPanicPolicy::Propagate`], exposes a listener panic to the
-    /// boundary owning this dispatch. Retry-owned boundaries convert that
-    /// panic to a structured callback failure; outer CAS boundaries unwind.
-    pub(super) fn dispatch_event(
-        observability: &CasObservabilityConfig,
-        hook: &crate::event::CasEventHook,
-        event: CasEvent,
-    ) where
+    /// Listener panics are isolated and do not change the CAS result.
+    pub(super) fn dispatch_event(hook: &crate::event::CasEventHook, event: CasEvent) -> Option<CasListenerFailure>
+    where
         T: 'static,
         E: 'static,
     {
-        super::dispatch::dispatch_event(observability, hook, event)
+        super::dispatch::dispatch_event(hook, event)
     }
 
     /// Returns whether lifecycle event construction and dispatch are needed.
     #[inline]
-    pub(super) fn should_emit_events(
-        observability: &CasObservabilityConfig,
-        hook: &Option<crate::event::CasEventHook>,
-    ) -> bool {
-        super::dispatch::should_emit_events(observability, hook)
+    pub(super) fn should_emit_events(hook: &Option<crate::event::CasEventHook>) -> bool {
+        super::dispatch::should_emit_events(hook)
     }
 
     /// Dispatches one alert if an alert listener is registered.
     ///
     /// # Parameters
-    /// - `observability`: Configuration controlling listener panic behavior.
     /// - `hook`: Optional listener that receives the alert.
     /// - `alert`: Contention alert to dispatch.
     ///
     /// # Panics
     /// Exposes alert listener panics to the owning CAS execution boundary when
-    /// [`ListenerPanicPolicy::Propagate`] is configured.
+    /// Listener panics are isolated and recorded in the report.
     pub(super) fn dispatch_alert(
-        observability: &CasObservabilityConfig,
         hook: &Option<crate::event::CasAlertHook>,
         alert: CasAlert,
-    ) {
-        super::dispatch::dispatch_alert(observability, hook, alert)
+    ) -> Option<CasListenerFailure> {
+        super::dispatch::dispatch_alert(hook, alert)
     }
 }

@@ -10,5 +10,3 @@ mod cas_attempt_failure_kind_tests;
 mod cas_attempt_failure_tests;
 mod cas_error_kind_tests;
 mod cas_error_tests;
-mod cas_retry_failure_tests;
-mod internal;

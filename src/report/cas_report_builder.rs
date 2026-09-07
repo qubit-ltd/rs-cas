@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use super::CasExecutionOutcome;
 use super::CasExecutionReport;
+use crate::event::CasListenerFailure;
 
 /// Mutable accumulator used internally while one CAS flow is running.
 #[derive(Debug, Clone)]
@@ -21,6 +22,7 @@ pub(crate) struct CasReportBuilder {
     retry_errors: u32,
     aborts: u32,
     timeouts: u32,
+    listener_failures: Vec<CasListenerFailure>,
 }
 
 impl CasReportBuilder {
@@ -38,6 +40,7 @@ impl CasReportBuilder {
             retry_errors: 0,
             aborts: 0,
             timeouts: 0,
+            listener_failures: Vec::new(),
         }
     }
 
@@ -83,6 +86,15 @@ impl CasReportBuilder {
         self.timeouts = self.timeouts.saturating_add(1);
     }
 
+    /// Records an isolated listener failure.
+    pub(crate) fn record_listener_failure(&mut self, failure: CasListenerFailure) {
+        self.listener_failures.push(failure);
+    }
+
+    pub(crate) fn listener_failures(&self) -> Vec<CasListenerFailure> {
+        self.listener_failures.clone()
+    }
+
     /// Finishes the accumulator into an immutable report.
     ///
     /// # Parameters
@@ -119,5 +131,6 @@ impl CasReportBuilder {
             max_total_elapsed,
             outcome,
         )
+        .with_listener_failures(self.listener_failures.clone())
     }
 }

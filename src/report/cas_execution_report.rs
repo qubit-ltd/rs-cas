@@ -11,6 +11,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use super::CasExecutionOutcome;
+use crate::event::CasListenerFailure;
 use crate::observability::ContentionThresholds;
 
 /// Immutable report describing one completed CAS execution.
@@ -46,6 +47,7 @@ pub struct CasExecutionReport {
     max_total_elapsed: Option<Duration>,
     /// Terminal outcome.
     outcome: CasExecutionOutcome,
+    listener_failures: Vec<CasListenerFailure>,
 }
 
 impl CasExecutionReport {
@@ -99,6 +101,7 @@ impl CasExecutionReport {
             max_operation_elapsed,
             max_total_elapsed,
             outcome,
+            listener_failures: Vec::new(),
         }
     }
 
@@ -224,6 +227,17 @@ impl CasExecutionReport {
     #[inline(always)]
     pub fn outcome(&self) -> CasExecutionOutcome {
         self.outcome
+    }
+
+    /// Returns listener panic diagnostics captured during completion.
+    #[must_use]
+    pub fn listener_failures(&self) -> &[CasListenerFailure] {
+        &self.listener_failures
+    }
+
+    pub(crate) fn with_listener_failures(mut self, failures: Vec<CasListenerFailure>) -> Self {
+        self.listener_failures = failures;
+        self
     }
 
     /// Returns conflicts divided by total attempts.
