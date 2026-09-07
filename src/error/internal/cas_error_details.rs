@@ -1,26 +1,11 @@
-// =============================================================================
-//    Copyright (c) 2025 - 2026 Haixing Hu.
-//
-//    SPDX-License-Identifier: Apache-2.0
-//
-//    Licensed under the Apache License, Version 2.0.
-// =============================================================================
-//! Compact heap-owned details retained by terminal CAS errors.
+//! Private storage for terminal CAS diagnostics.
 
-use qubit_retry::RetryCallbackFailure;
-
-use crate::error::CasRetryFailure;
+use crate::error::CasTermination;
 use crate::event::CasContext;
 
-/// Heap-stored retry details that keep `CasError` compact in `Result` values.
-#[derive(Clone)]
-pub(in crate::error) struct CasErrorDetails {
-    /// Structured terminal failure selected by the retry layer.
-    pub(in crate::error) failure: CasRetryFailure,
-
-    /// Copied CAS context captured when execution stopped.
-    pub(in crate::error) context: CasContext,
-
-    /// Completion callback failures retained without changing the CAS outcome.
-    pub(in crate::error) diagnostics: Box<[RetryCallbackFailure]>,
+/// Compact, non-generic details shared by a CAS error.
+#[derive(Debug, Clone)]
+pub(crate) struct CasErrorDetails {
+    pub(crate) termination: CasTermination,
+    pub(crate) context: CasContext,
 }

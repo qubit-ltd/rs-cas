@@ -18,9 +18,7 @@ use qubit_retry::RetryPolicyError;
 use super::cas_executor::CasExecutor;
 use super::internal::AttemptTimeoutAction;
 use crate::constants::DEFAULT_CAS_MAX_ATTEMPTS;
-use crate::observability::CasObservabilityConfig;
-use crate::observability::ContentionThresholds;
-use crate::observability::ListenerPanicPolicy;
+use crate::error::CasBuildError;
 use crate::strategy::CasStrategy;
 
 /// Builder for [`CasExecutor`](crate::CasExecutor).
@@ -48,8 +46,7 @@ pub struct CasBuilder<T, E = BoxError> {
     attempt_timeout: Option<Duration>,
     /// Action selected after a configured attempt timeout.
     attempt_timeout_action: AttemptTimeoutAction,
-    /// Observability settings.
-    observability: CasObservabilityConfig,
+    immediate_backoff: bool,
     /// Marker preserving the executor type parameters.
     marker: PhantomData<fn() -> (T, E)>,
 }
@@ -68,24 +65,9 @@ impl<T, E> CasBuilder<T, E> {
             backoff: Ok(BackoffPolicy::immediate()),
             attempt_timeout: None,
             attempt_timeout_action: AttemptTimeoutAction::Abort,
-            observability: CasObservabilityConfig::default(),
+            immediate_backoff: true,
             marker: PhantomData,
         }
-    }
-
-    /// Replaces the pure retry policy used by the executor.
-    ///
-    /// # Parameters
-    /// - `policy`: Retry continuation and backoff policy to install.
-    ///
-    /// # Returns
-    /// The updated builder.
-    pub fn policy(mut self, policy: RetryPolicy) -> Self {
-        self.max_attempts = policy.admission_limits().max_attempts().get();
-        self.max_operation_elapsed = policy.admission_limits().operation_time_budget();
-        self.max_total_elapsed = policy.admission_limits().total_time_budget();
-        self.backoff = Ok(policy.backoff().clone());
-        self
     }
 
     /// Sets the maximum total attempts.
@@ -150,26 +132,14 @@ impl<T, E> CasBuilder<T, E> {
         self
     }
 
-    /// Sets the complete retry backoff policy.
-    ///
-    /// # Parameters
-    /// - `backoff`: Backoff and jitter policy used between attempts.
-    ///
-    /// # Returns
-    /// The updated builder.
-    #[inline(always)]
-    pub fn backoff(mut self, backoff: BackoffPolicy) -> Self {
-        self.backoff = Ok(backoff);
-        self
-    }
-
     /// Uses immediate retries with no sleep.
     ///
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn no_delay(self) -> Self {
-        self.backoff(BackoffPolicy::immediate())
+    pub fn no_delay(mut self) -> Self {
+        self.backoff = Ok(BackoffPolicy::immediate());
+        self
     }
 
     /// Uses one fixed retry delay.
@@ -180,8 +150,10 @@ impl<T, E> CasBuilder<T, E> {
     /// # Returns
     /// The updated builder.
     #[inline(always)]
-    pub fn fixed_delay(self, delay: Duration) -> Self {
-        self.backoff(BackoffPolicy::fixed(delay))
+    pub fn fixed_delay(mut self, delay: Duration) -> Self {
+        self.backoff = Ok(BackoffPolicy::fixed(delay));
+        self.immediate_backoff = false;
+        self
     }
 
     /// Uses one random retry delay range.
@@ -195,6 +167,7 @@ impl<T, E> CasBuilder<T, E> {
     #[inline(always)]
     pub fn random_delay(mut self, min: Duration, max: Duration) -> Self {
         self.backoff = BackoffPolicy::uniform(min, max);
+        self.immediate_backoff = false;
         self
     }
 
@@ -224,6 +197,7 @@ impl<T, E> CasBuilder<T, E> {
     pub fn exponential_backoff_with_multiplier(self, initial: Duration, max: Duration, multiplier: f64) -> Self {
         let mut builder = self;
         builder.backoff = BackoffPolicy::exponential(initial, multiplier, max);
+        builder.immediate_backoff = false;
         builder
     }
 
@@ -237,6 +211,7 @@ impl<T, E> CasBuilder<T, E> {
     #[inline(always)]
     pub fn jitter_factor(mut self, factor: f64) -> Self {
         self.backoff = self.backoff.and_then(|backoff| backoff.with_bounded_jitter(factor));
+        self.immediate_backoff = false;
         self
     }
 
@@ -293,67 +268,28 @@ impl<T, E> CasBuilder<T, E> {
         }
     }
 
-    /// Installs observability configuration.
-    ///
-    /// # Parameters
-    /// - `observability`: Observability settings to use.
-    ///
-    /// # Returns
-    /// The updated builder.
-    #[inline(always)]
-    pub fn observability(mut self, observability: CasObservabilityConfig) -> Self {
-        self.observability = observability;
-        self
-    }
-
-    /// Enables contention alerting with the supplied thresholds.
-    ///
-    /// # Parameters
-    /// - `thresholds`: Thresholds used to classify hot contention.
-    ///
-    /// # Returns
-    /// The updated builder.
-    #[inline(always)]
-    pub fn alert_on_contention(mut self, thresholds: ContentionThresholds) -> Self {
-        self.observability = self.observability.with_contention_thresholds(thresholds);
-        self
-    }
-
-    /// Catches listener panics at dispatch instead of exposing them to their
-    /// owning execution boundaries.
-    ///
-    /// # Returns
-    /// The updated builder.
-    #[inline(always)]
-    pub fn isolate_listener_panics(mut self) -> Self {
-        self.observability = self
-            .observability
-            .with_listener_panic_policy(ListenerPanicPolicy::Isolate);
-        self
-    }
-
     /// Builds one executor after validating the settings.
     ///
     /// # Returns
     /// A validated [`CasExecutor`].
     ///
     /// # Errors
-    /// Returns [`RetryPolicyError`] when the configured retry settings are
-    /// invalid.
-    pub fn build(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
-        let backoff = self.backoff?;
+    /// Returns a [`CasBuildError`] when a setting is invalid.
+    pub fn build(self) -> Result<CasExecutor<T, E>, CasBuildError> {
+        let backoff = self.backoff.map_err(map_retry_policy_error)?;
         let policy = RetryPolicy::builder()
             .max_attempts(self.max_attempts)
             .operation_time_budget_opt(self.max_operation_elapsed)
             .total_time_budget_opt(self.max_total_elapsed)
             .backoff(backoff)
-            .build()?;
+            .build()
+            .map_err(map_retry_policy_error)?;
         Ok(CasExecutor::new(
             policy,
             self.attempt_timeout,
             self.flow_timeout,
             self.attempt_timeout_action,
-            self.observability,
+            self.immediate_backoff,
         ))
     }
 
@@ -361,7 +297,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] suitable for contended writers.
-    pub fn build_contention_adaptive(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
+    pub fn build_contention_adaptive(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         self.strategy(CasStrategy::ContentionAdaptive).build()
     }
 
@@ -369,7 +305,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for low latency.
-    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
+    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         self.strategy(CasStrategy::LatencyFirst).build()
     }
 
@@ -377,9 +313,13 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for long retry windows.
-    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, RetryPolicyError> {
+    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         self.strategy(CasStrategy::ReliabilityFirst).build()
     }
+}
+
+fn map_retry_policy_error(error: RetryPolicyError) -> CasBuildError {
+    CasBuildError::new("retry_policy", error.to_string())
 }
 
 impl<T, E> Default for CasBuilder<T, E> {

@@ -20,6 +20,8 @@ mod finalization;
 mod retry_adapter;
 #[path = "cas_executor/sync_execution.rs"]
 mod sync_execution;
+#[path = "cas_executor/sync_immediate_execution.rs"]
+mod sync_immediate_execution;
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -32,7 +34,6 @@ use qubit_retry::RetryPolicy;
 use super::cas_builder::CasBuilder;
 use super::internal::AttemptTimeoutAction;
 use crate::error::CasAttemptFailure;
-use crate::observability::CasObservabilityConfig;
 use crate::strategy::CasStrategy;
 
 /// Executor for retry-aware compare-and-swap workflows.
@@ -46,8 +47,8 @@ pub struct CasExecutor<T, E = BoxError> {
     attempt_timeout: Option<std::time::Duration>,
     /// Action selected after a configured attempt timeout.
     attempt_timeout_action: AttemptTimeoutAction,
-    /// Observability settings shared by executions.
-    observability: CasObservabilityConfig,
+    /// Whether the validated backoff is immediate.
+    immediate_backoff: bool,
     /// Result-only retry definition initialized on its first use.
     result_retry: Arc<OnceLock<Retry<CasAttemptFailure<T, E>>>>,
     /// Marker preserving `T` and `E`.
@@ -72,7 +73,6 @@ impl<T, E> std::fmt::Debug for CasExecutor<T, E> {
             .field("flow_timeout", &self.flow_timeout)
             .field("attempt_timeout", &self.attempt_timeout)
             .field("attempt_timeout_action", &self.attempt_timeout_action)
-            .field("observability", &self.observability)
             .finish()
     }
 }
@@ -85,20 +85,6 @@ impl<T, E> CasExecutor<T, E> {
     #[inline(always)]
     pub fn builder() -> CasBuilder<T, E> {
         CasBuilder::new()
-    }
-
-    /// Creates an executor from a pure retry policy.
-    ///
-    /// # Parameters
-    /// - `policy`: Retry continuation and backoff policy to install.
-    ///
-    /// # Returns
-    /// A configured executor using the supplied retry policy.
-    pub fn from_policy(policy: RetryPolicy) -> Self {
-        Self::builder()
-            .policy(policy)
-            .build()
-            .expect("an existing retry policy is already validated")
     }
 
     /// Creates an executor tuned for low-latency workloads.
@@ -152,7 +138,6 @@ impl<T, E> CasExecutor<T, E> {
     /// - `attempt_timeout`: Optional hard timeout for async attempts.
     /// - `flow_timeout`: Optional hard timeout for asynchronous retry flows.
     /// - `attempt_timeout_action`: Action selected for attempt timeouts.
-    /// - `observability`: Observability settings shared by executions.
     ///
     /// # Returns
     /// A configured executor.
@@ -162,26 +147,17 @@ impl<T, E> CasExecutor<T, E> {
         attempt_timeout: Option<std::time::Duration>,
         flow_timeout: Option<std::time::Duration>,
         attempt_timeout_action: AttemptTimeoutAction,
-        observability: CasObservabilityConfig,
+        immediate_backoff: bool,
     ) -> Self {
         Self {
             policy,
             flow_timeout,
             attempt_timeout,
             attempt_timeout_action,
-            observability,
+            immediate_backoff,
             result_retry: Arc::new(OnceLock::new()),
             marker: PhantomData,
         }
-    }
-
-    /// Returns the immutable retry policy used by this executor.
-    ///
-    /// # Returns
-    /// Shared retry policy.
-    #[inline(always)]
-    pub fn policy(&self) -> &RetryPolicy {
-        &self.policy
     }
 
     /// Returns the optional hard timeout for each async attempt.
@@ -199,14 +175,5 @@ impl<T, E> CasExecutor<T, E> {
     #[inline(always)]
     pub fn flow_timeout(&self) -> Option<std::time::Duration> {
         self.flow_timeout
-    }
-
-    /// Returns observability settings used by this executor.
-    ///
-    /// # Returns
-    /// Shared observability configuration.
-    #[inline(always)]
-    pub fn observability(&self) -> &CasObservabilityConfig {
-        &self.observability
     }
 }

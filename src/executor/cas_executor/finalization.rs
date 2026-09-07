@@ -44,12 +44,13 @@ pub(super) fn enrich_success<T, R>(success: AttemptSuccess<T, R>, context: Retry
 pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
     match kind {
         CasErrorKind::Abort => CasExecutionOutcome::ErrorAbort,
-        CasErrorKind::Conflict => CasExecutionOutcome::ErrorConflictExhausted,
+        CasErrorKind::ConflictExhausted => CasExecutionOutcome::ErrorConflictExhausted,
         CasErrorKind::RetryExhausted => CasExecutionOutcome::ErrorRetryExhausted,
         CasErrorKind::AttemptTimeout => CasExecutionOutcome::ErrorAttemptTimeout,
+        CasErrorKind::FlowTimeout => CasExecutionOutcome::ErrorFlowTimeout,
         CasErrorKind::RetryInfrastructure => CasExecutionOutcome::ErrorRetryInfrastructure,
-        CasErrorKind::MaxOperationElapsedExceeded => CasExecutionOutcome::ErrorMaxOperationElapsedExceeded,
-        CasErrorKind::MaxTotalElapsedExceeded => CasExecutionOutcome::ErrorMaxTotalElapsedExceeded,
+        CasErrorKind::OperationBudgetExceeded => CasExecutionOutcome::ErrorOperationBudgetExceeded,
+        CasErrorKind::TotalBudgetExceeded => CasExecutionOutcome::ErrorTotalBudgetExceeded,
     }
 }
 

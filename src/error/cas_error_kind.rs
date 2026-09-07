@@ -13,15 +13,17 @@ pub enum CasErrorKind {
     /// The operation explicitly aborted.
     Abort,
     /// Retry limits were exhausted by compare-and-swap conflicts.
-    Conflict,
+    ConflictExhausted,
     /// Retry limits were exhausted by retryable business failures.
     RetryExhausted,
-    /// A timeout aborted the flow or exhausted retry limits.
+    /// A single attempt timed out.
     AttemptTimeout,
+    /// The hard whole-flow timeout fired.
+    FlowTimeout,
     /// The retry layer failed while scheduling or stopping retry work.
     RetryInfrastructure,
     /// The cumulative user operation elapsed-time budget expired.
-    MaxOperationElapsedExceeded,
+    OperationBudgetExceeded,
     /// The monotonic total retry-flow elapsed-time budget expired.
-    MaxTotalElapsedExceeded,
+    TotalBudgetExceeded,
 }

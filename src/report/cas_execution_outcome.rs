@@ -22,10 +22,12 @@ pub enum CasExecutionOutcome {
     ErrorRetryExhausted,
     /// The flow stopped because an async attempt timed out.
     ErrorAttemptTimeout,
+    /// The hard whole-flow timeout fired.
+    ErrorFlowTimeout,
     /// Retry infrastructure failed while scheduling or stopping work.
     ErrorRetryInfrastructure,
     /// The cumulative user operation elapsed-time budget was exceeded.
-    ErrorMaxOperationElapsedExceeded,
+    ErrorOperationBudgetExceeded,
     /// The monotonic total retry-flow elapsed-time budget was exceeded.
-    ErrorMaxTotalElapsedExceeded,
+    ErrorTotalBudgetExceeded,
 }

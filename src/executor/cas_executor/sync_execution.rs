@@ -62,7 +62,11 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
-    pub fn execute_result<R, O>(&self, state: &AtomicRef<T>, operation: O) -> Result<CasSuccess<T, R>, CasError<T, E>>
+    pub(super) fn execute_result_generic<R, O>(
+        &self,
+        state: &AtomicRef<T>,
+        operation: O,
+    ) -> Result<CasSuccess<T, R>, CasError<T, E>>
     where
         T: 'static,
         E: 'static,
@@ -80,6 +84,21 @@ impl<T, E> CasExecutor<T, E> {
         }
     }
 
+    /// Executes one immediate synchronous CAS operation through the
+    /// allocation-free CAS loop.
+    pub fn execute_result<R, O>(&self, state: &AtomicRef<T>, operation: O) -> Result<CasSuccess<T, R>, CasError<T, E>>
+    where
+        T: 'static,
+        E: 'static,
+        O: Function<T, CasDecision<T, R, E>>,
+    {
+        if self.immediate_backoff {
+            super::sync_immediate_execution::execute(self, state, operation)
+        } else {
+            self.execute_result_generic(state, operation)
+        }
+    }
+
     /// Executes one synchronous CAS operation with lifecycle hooks.
     ///
     /// # Parameters
@@ -94,14 +113,8 @@ impl<T, E> CasExecutor<T, E> {
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
     ///
-    /// # Panics
-    /// With [`crate::observability::ListenerPanicPolicy::Propagate`], panics
-    /// from outer `ExecutionStarted`/`ExecutionFinished` listeners and
-    /// alert listeners unwind through this call. Panics from retry-owned
-    /// `AttemptFailed` and `RetryRequested` listeners instead return a
-    /// [`crate::CasRetryFailure::CallbackFailed`] terminal error.
-    /// [`crate::observability::ListenerPanicPolicy::Isolate`] catches every
-    /// listener panic at dispatch and allows execution to continue.
+    /// Listener panics are isolated and recorded in the execution report;
+    /// they do not alter the CAS terminal result.
     pub fn execute_with_hooks<R, O>(&self, state: &AtomicRef<T>, operation: O, hooks: CasHooks) -> CasOutcome<T, R, E>
     where
         T: 'static,
