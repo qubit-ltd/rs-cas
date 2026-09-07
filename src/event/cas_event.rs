@@ -14,6 +14,14 @@ use crate::error::CasAttemptFailureKind;
 use crate::report::CasExecutionReport;
 
 /// Lifecycle event emitted by a CAS execution.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasEvent;
+///
+/// let _layout = std::mem::size_of::<CasEvent>();
+/// ```
 #[derive(Debug, Clone)]
 pub enum CasEvent {
     /// The execution started before the first attempt.

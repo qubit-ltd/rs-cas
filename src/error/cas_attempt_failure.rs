@@ -13,6 +13,14 @@ use std::sync::Arc;
 use super::cas_attempt_failure_kind::CasAttemptFailureKind;
 
 /// Failure produced by one CAS attempt.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasAttemptFailure;
+///
+/// let _layout = std::mem::size_of::<CasAttemptFailure<usize, ()>>();
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CasAttemptFailure<T, E> {
     /// Compare-and-swap failed because another writer changed the state first.
@@ -99,6 +107,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// Shared reference to the current state.
+    #[must_use]
     #[inline(always)]
     pub fn current(&self) -> &Arc<T> {
         match self {
@@ -113,6 +122,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// The [`CasAttemptFailureKind`] matching this failure variant.
+    #[must_use]
     #[inline(always)]
     pub fn kind(&self) -> CasAttemptFailureKind {
         match self {
@@ -128,6 +138,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     /// # Returns
     /// `Some(&E)` for [`CasAttemptFailure::Retry`] and
     /// [`CasAttemptFailure::Abort`], or `None` otherwise.
+    #[must_use]
     #[inline(always)]
     pub fn error(&self) -> Option<&E> {
         match self {
@@ -140,6 +151,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Conflict`].
+    #[must_use]
     #[inline(always)]
     pub fn is_conflict(&self) -> bool {
         matches!(self, Self::Conflict { .. })
@@ -149,6 +161,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Retry`].
+    #[must_use]
     #[inline(always)]
     pub fn is_retry(&self) -> bool {
         matches!(self, Self::Retry { .. })
@@ -158,6 +171,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Abort`].
+    #[must_use]
     #[inline(always)]
     pub fn is_abort(&self) -> bool {
         matches!(self, Self::Abort { .. })
@@ -167,6 +181,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// `true` for [`CasAttemptFailure::Timeout`].
+    #[must_use]
     #[inline(always)]
     pub fn is_timeout(&self) -> bool {
         matches!(self, Self::Timeout { .. })

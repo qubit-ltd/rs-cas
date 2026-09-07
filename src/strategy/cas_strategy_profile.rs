@@ -10,6 +10,15 @@
 use std::time::Duration;
 
 /// Human-readable profile for one CAS strategy.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasStrategy;
+///
+/// let profile = CasStrategy::ReliabilityFirst.profile();
+/// assert!(profile.max_total_elapsed().is_some());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CasStrategyProfile {
     /// Maximum attempts used by the strategy.
@@ -43,6 +52,8 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// Maximum number of attempts (including initial) for this strategy.
+    #[must_use]
+    #[inline(always)]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -51,6 +62,8 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// User operation time budget for the entire CAS flow.
+    #[must_use]
+    #[inline(always)]
     pub fn max_operation_elapsed(&self) -> Duration {
         self.max_operation_elapsed
     }
@@ -60,6 +73,8 @@ impl CasStrategyProfile {
     /// # Returns
     /// `Some(Duration)` when the strategy caps whole-flow time (including retry
     /// sleeps), or `None` when only the operation-time budget applies.
+    #[must_use]
+    #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -68,6 +83,8 @@ impl CasStrategyProfile {
     ///
     /// # Returns
     /// `true` for strategies that insert delays between retries.
+    #[must_use]
+    #[inline(always)]
     pub fn uses_backoff(&self) -> bool {
         self.uses_backoff
     }

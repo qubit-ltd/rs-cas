@@ -26,6 +26,14 @@ use super::internal::CasErrorDetails;
 use crate::event::CasContext;
 
 /// Terminal CAS error returned by [`crate::CasExecutor`].
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasError;
+///
+/// let _layout = std::mem::size_of::<CasError<usize, ()>>();
+/// ```
 #[derive(Clone)]
 pub struct CasError<T, E> {
     /// Cached high-level CAS error kind.

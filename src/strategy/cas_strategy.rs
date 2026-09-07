@@ -27,6 +27,14 @@ use crate::constants::RELIABILITY_FIRST_MAX_ELAPSED;
 use crate::constants::RELIABILITY_FIRST_MAX_TOTAL_ELAPSED;
 
 /// Built-in CAS execution strategy.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasStrategy;
+///
+/// assert!(CasStrategy::LatencyFirst.profile().max_attempts() > 0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CasStrategy {
     /// Optimizes for low latency with immediate retries and a smaller budget.
@@ -55,6 +63,7 @@ impl CasStrategy {
     /// A [`CasStrategyProfile`] containing the parameters used by this
     /// strategy (max attempts, elapsed budgets, and backoff usage).
     #[inline]
+    #[must_use]
     pub fn profile(self) -> CasStrategyProfile {
         match self {
             Self::LatencyFirst => CasStrategyProfile::new(

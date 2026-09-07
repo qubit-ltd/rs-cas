@@ -20,6 +20,12 @@ use crate::report::CasExecutionReport;
 ///
 /// # Examples
 ///
+/// ```
+/// use qubit_cas::CasOutcome;
+///
+/// let _layout = std::mem::size_of::<CasOutcome<usize, (), ()>>();
+/// ```
+///
 /// ```compile_fail
 /// #![deny(unused_must_use)]
 ///
@@ -59,6 +65,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Reference to the inner [`Result<CasSuccess<T, R>, CasError<T, E>>`].
+    #[must_use]
     #[inline(always)]
     pub fn result(&self) -> &Result<CasSuccess<T, R>, CasError<T, E>> {
         &self.result
@@ -68,6 +75,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Reference to the [`CasExecutionReport`] captured during execution.
+    #[must_use]
     #[inline(always)]
     pub fn report(&self) -> &CasExecutionReport {
         &self.report
@@ -77,6 +85,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// `true` if the terminal result is [`Ok`].
+    #[must_use]
     #[inline(always)]
     pub fn is_ok(&self) -> bool {
         self.result.is_ok()
@@ -86,6 +95,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// `true` if the terminal result is [`Err`].
+    #[must_use]
     #[inline(always)]
     pub fn is_err(&self) -> bool {
         self.result.is_err()
@@ -95,6 +105,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The owned [`Result<CasSuccess<T, R>, CasError<T, E>>`].
+    #[must_use]
     #[inline(always)]
     pub fn into_result(self) -> Result<CasSuccess<T, R>, CasError<T, E>> {
         self.result
@@ -104,6 +115,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// Tuple of the terminal result and the execution report.
+    #[must_use]
     #[inline(always)]
     pub fn into_parts(self) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
         (self.result, self.report)
@@ -119,6 +131,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The inner [`CasSuccess<T, R>`] on success.
+    #[must_use]
     ///
     /// # Panics
     /// Panics with the given message if the outcome contains an error.
@@ -137,6 +150,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The inner [`CasError<T, E>`] on error.
+    #[must_use]
     ///
     /// # Panics
     /// Panics with the given message if the outcome is successful.

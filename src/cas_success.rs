@@ -12,6 +12,14 @@ use std::sync::Arc;
 use crate::event::CasContext;
 
 /// Successful result returned by [`crate::CasExecutor`].
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasSuccess;
+///
+/// let _layout = std::mem::size_of::<CasSuccess<usize, ()>>();
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CasSuccess<T, R> {
     /// The executor installed a new state by compare-and-swap.
@@ -88,6 +96,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// `true` for [`CasSuccess::Updated`], `false` for
     /// [`CasSuccess::Finished`].
+    #[must_use]
     #[inline(always)]
     pub fn is_updated(&self) -> bool {
         matches!(self, Self::Updated { .. })
@@ -98,6 +107,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// `Some(&Arc<T>)` for [`CasSuccess::Updated`], or `None` when no write
     /// occurred.
+    #[must_use]
     #[inline(always)]
     pub fn previous(&self) -> Option<&Arc<T>> {
         match self {
@@ -110,6 +120,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// Shared reference to the current state.
+    #[must_use]
     #[inline(always)]
     pub fn current(&self) -> &Arc<T> {
         match self {
@@ -121,6 +132,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// Shared reference to the business output.
+    #[must_use]
     #[inline(always)]
     pub fn output(&self) -> &R {
         match self {
@@ -132,6 +144,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// The owned business output.
+    #[must_use]
     #[inline(always)]
     pub fn into_output(self) -> R {
         match self {
@@ -143,6 +156,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// Retry context for the completed flow.
+    #[must_use]
     #[inline(always)]
     pub fn context(&self) -> CasContext {
         match self {

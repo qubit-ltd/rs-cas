@@ -16,6 +16,15 @@ use super::CasEventHook;
 use crate::observability::CasAlert;
 
 /// Per-execution hooks for observing CAS lifecycle events.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasHooks;
+///
+/// let hooks = CasHooks::new();
+/// assert_eq!(std::mem::size_of_val(&hooks), std::mem::size_of::<CasHooks>());
+/// ```
 #[derive(Clone)]
 pub struct CasHooks {
     /// Hook invoked for lifecycle events.
@@ -29,6 +38,7 @@ impl Default for CasHooks {
     ///
     /// # Returns
     /// A [`CasHooks`] value with every hook unset.
+    #[must_use]
     #[inline]
     fn default() -> Self {
         Self {
@@ -55,6 +65,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// The updated hook set.
+    #[must_use]
     #[inline(always)]
     pub fn on_event<C>(mut self, hook: C) -> Self
     where
@@ -71,6 +82,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// The updated hook set.
+    #[must_use]
     #[inline(always)]
     pub fn on_alert<C>(mut self, hook: C) -> Self
     where

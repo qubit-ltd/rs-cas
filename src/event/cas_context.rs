@@ -13,6 +13,14 @@ use std::time::Duration;
 use qubit_retry::RetryContext;
 
 /// Context captured for CAS lifecycle events.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_cas::CasContext;
+///
+/// let _layout = std::mem::size_of::<CasContext>();
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CasContext {
     /// Number of operations that actually started.
