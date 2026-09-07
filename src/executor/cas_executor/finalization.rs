@@ -3,23 +3,23 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Finalization boundary for CAS execution.
-//!
-//! Report ownership and public outcome construction stay on `CasExecutor`,
-//! while pure projections live here so sync and async paths share them.
+//! Finalization of retry executions into public CAS outcomes.
 
-use qubit_retry::RetryContext;
+use std::sync::{Arc, Mutex};
 
+use qubit_retry::{RetryContext, RetryError, RetrySuccess};
+
+use super::CasExecutor;
+use crate::cas_outcome::CasOutcome;
 use crate::cas_success::CasSuccess;
-use crate::error::CasErrorKind;
-use crate::event::CasContext;
-use crate::executor::internal::AttemptSuccess;
-use crate::report::CasExecutionOutcome;
+use crate::error::{CasAttemptFailure, CasError, CasErrorKind};
+use crate::event::{CasContext, CasHooks};
+use crate::executor::internal::{AttemptSuccess, CasReportFinishContext};
+use crate::report::{CasExecutionOutcome, CasReportBuilder};
 
-/// Enriches one attempt success with retry context.
+/// Enriches an attempt success with retry context.
 pub(super) fn enrich_success<T, R>(
     success: AttemptSuccess<T, R>,
     context: RetryContext,
@@ -37,7 +37,7 @@ pub(super) fn enrich_success<T, R>(
     }
 }
 
-/// Converts a terminal error kind into a report outcome.
+/// Maps a terminal CAS error kind to its report outcome.
 pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
     match kind {
         CasErrorKind::Abort => CasExecutionOutcome::ErrorAbort,
@@ -49,5 +49,81 @@ pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
             CasExecutionOutcome::ErrorMaxOperationElapsedExceeded
         }
         CasErrorKind::MaxTotalElapsedExceeded => CasExecutionOutcome::ErrorMaxTotalElapsedExceeded,
+    }
+}
+
+impl<T, E> CasExecutor<T, E> {
+    /// Finalizes one retry execution into the public CAS result type.
+    ///
+    /// # Parameters
+    /// - `attempt`: Retry-layer terminal success or error.
+    /// - `hooks`: Hook registrations for the current execution.
+    /// - `attempt_snapshot`: Last async operation snapshot, when an async
+    ///   execution needs to preserve it for a timeout error.
+    ///
+    /// # Returns
+    /// Public CAS success or error.
+    pub(super) fn finish_execution<R>(
+        &self,
+        attempt: Result<RetrySuccess<AttemptSuccess<T, R>>, RetryError<CasAttemptFailure<T, E>>>,
+        hooks: CasHooks,
+        attempt_snapshot: Option<Arc<Mutex<Option<Arc<T>>>>>,
+        report_builder: Arc<Mutex<CasReportBuilder>>,
+    ) -> CasOutcome<T, R, E>
+    where
+        T: 'static,
+        E: 'static,
+    {
+        match attempt {
+            Ok(success) => {
+                // This adapter registers no completion observers; only retry context is
+                // projected.
+                let (success, context, _diagnostics) = success.into_parts();
+                let attempts_total = context.attempts();
+                let max_attempts = context.max_attempts();
+                let max_operation_elapsed = context.max_operation_elapsed();
+                let max_total_elapsed = context.max_total_elapsed();
+                let outcome = match success {
+                    AttemptSuccess::Updated { .. } => CasExecutionOutcome::SuccessUpdated,
+                    AttemptSuccess::Finished { .. } => CasExecutionOutcome::SuccessFinished,
+                };
+                let success = super::finalization::enrich_success(success, context);
+                let report = self.finish_report(
+                    &hooks,
+                    report_builder,
+                    CasReportFinishContext::new(
+                        attempts_total,
+                        max_attempts,
+                        max_operation_elapsed,
+                        max_total_elapsed,
+                        outcome,
+                    ),
+                );
+                CasOutcome::new(Ok(success), report)
+            }
+            Err(error) => {
+                let timeout_current = attempt_snapshot.and_then(|snapshot| {
+                    snapshot
+                        .lock()
+                        .expect("CAS attempt snapshot slot should be lockable")
+                        .clone()
+                });
+                let error = CasError::new(error, timeout_current);
+                let context = error.context();
+                let outcome = super::finalization::error_outcome(error.kind());
+                let report = self.finish_report(
+                    &hooks,
+                    report_builder,
+                    CasReportFinishContext::new(
+                        context.attempts(),
+                        context.max_attempts(),
+                        context.max_operation_elapsed(),
+                        context.max_total_elapsed(),
+                        outcome,
+                    ),
+                );
+                CasOutcome::new(Err(error), report)
+            }
+        }
     }
 }
