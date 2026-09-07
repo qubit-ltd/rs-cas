@@ -91,7 +91,7 @@ fn test_cas_alert_threshold_accessor_function_pointer() {
             .push(thresholds_accessor(alert));
     });
 
-    CasExecutor::<usize, TestError>::builder()
+    let _ = CasExecutor::<usize, TestError>::builder()
         .max_attempts(1)
         .observability(CasObservabilityConfig::event_stream_with_alert(thresholds))
         .build()
