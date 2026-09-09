@@ -1,8 +1,13 @@
+#[cfg(feature = "tokio")]
 use std::time::Duration;
 
+#[cfg(feature = "tokio")]
 use qubit_atomic::AtomicRef;
+#[cfg(feature = "tokio")]
 use qubit_cas::CasDecision;
+#[cfg(feature = "tokio")]
 use qubit_cas::CasErrorKind;
+#[cfg(feature = "tokio")]
 use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutor;
 

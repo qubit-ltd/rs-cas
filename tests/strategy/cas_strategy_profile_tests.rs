@@ -8,8 +8,8 @@
 
 use qubit_cas::CasStrategy;
 use qubit_cas::CasStrategyProfile;
-use qubit_cas::constants::CONTENTION_ADAPTIVE_MAX_ELAPSED;
-use qubit_cas::constants::CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED;
+use qubit_cas::constants::CONTENTION_BACKOFF_MAX_ELAPSED;
+use qubit_cas::constants::CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED;
 use qubit_cas::constants::LATENCY_FIRST_MAX_ATTEMPTS;
 use qubit_cas::constants::LATENCY_FIRST_MAX_ELAPSED;
 use qubit_cas::constants::LATENCY_FIRST_MAX_TOTAL_ELAPSED;
@@ -25,12 +25,12 @@ fn test_cas_strategy_profile_accessors() {
     assert_eq!(latency.max_total_elapsed(), Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED));
     assert!(!latency.uses_backoff());
 
-    let contention = CasStrategy::ContentionAdaptive.profile();
+    let contention = CasStrategy::ContentionBackoff.profile();
     assert!(contention.max_attempts() > 0);
-    assert_eq!(contention.max_operation_elapsed(), CONTENTION_ADAPTIVE_MAX_ELAPSED);
+    assert_eq!(contention.max_operation_elapsed(), CONTENTION_BACKOFF_MAX_ELAPSED);
     assert_eq!(
         contention.max_total_elapsed(),
-        Some(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED)
+        Some(CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED)
     );
     assert!(contention.uses_backoff());
 

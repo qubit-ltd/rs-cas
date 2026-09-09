@@ -13,7 +13,8 @@
 It combines atomic updates, contention-aware retry, business decisions, optional
 timeouts, and structured reports in one reusable `CasExecutor`.
 
-Use it when concurrent writers must not lose updates and an operation can be
+For example, concurrent orders can decrement inventory without one writer
+overwriting another successful reservation. Use it when concurrent writers must not lose updates and an operation can be
 replayed from the latest snapshot. Keep the operation deterministic and make
 side effects idempotent; CAS may invoke it more than once.
 
@@ -21,12 +22,13 @@ side effects idempotent; CAS may invoke it more than once.
 
 ```toml
 [dependencies]
-qubit-cas = "0.12"
+qubit-cas = "0.13"
 qubit-atomic = "0.13"
 ```
 
-Enable asynchronous execution with `features = ["tokio"]`. Advanced retry
-configuration is available through [`qubit_cas::retry`](https://docs.rs/qubit-cas/latest/qubit_cas/retry/index.html).
+Enable asynchronous execution with `features = ["tokio"]`. Configure attempts,
+budgets, backoff, and timeouts directly on `CasExecutor::builder()`; no retry
+implementation types are needed.
 
 ## Quick start
 
@@ -70,16 +72,35 @@ fn main() {
 | Numeric allocation-free hot path | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
 Read the [user guide](doc/user_guide.md), [design](doc/design.md), and
-[0.11 migration note](doc/migration-0.11.md). The [API documentation](https://docs.rs/qubit-cas)
+[0.13 migration note](doc/migration-0.13.md). The [API documentation](https://docs.rs/qubit-cas)
 contains the complete Rustdoc. `qubit-fast-cas` is a separate compact `u64`
 state-machine crate without reports, hooks, async execution, or business retry.
+
+
+Result-only execution skips reports and events; `update` still allocates an `Arc`
+for the replacement snapshot. Timeouts are cooperative and cannot preempt blocking
+code. Cancellation does not undo committed state or external side effects.
+`CasError::diagnostic()` and `completion_diagnostics()` preserve infrastructure
+and callback details, separately from the business `error()`.
+
+See the [Chinese guide](doc/user_guide.zh_CN.md). Standard state machines can inject
+an executor with `StateMachineBuilder::cas_executor`; compact integer states keep
+using the separate fast-cas crate.
 
 ## Testing
 
 ```bash
+# Run tests with the default feature set
 cargo test
+
+# Run tests with all declared features
 cargo test --all-features
+
+# Project CI checks
 ./ci-check.sh
+
+# Check code coverage
+./coverage.sh
 ```
 
 ## License
@@ -91,8 +112,9 @@ full license text.
 
 ## Contributing
 
-Contributions are welcome. Keep public API documentation and tests current, run
-`./align-ci.sh`, and run `./ci-check.sh` before submitting a pull request.
+Contributions are welcome. Please follow the Rust API guidelines, keep public
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
 
 ## Author
 

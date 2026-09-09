@@ -1,71 +1,71 @@
 # Qubit CAS 设计
 
-本文描述当前实现及其不变量。英文版本见 [`design.md`](design.md)。
+本文描述 qubit-cas 0.13。[English](design.md)。
 
-## 模块边界
+## 职责划分
 
-- `cas_decision` 定义强类型 operation 结果。
-- `executor` 负责 builder 校验、重试准入、同步/异步执行，以及投影为公开成功/错误值。
-- `event` 定义执行上下文与生命周期 hooks。
-- `report`、`observability` 和 `strategy` 分别负责聚合、事件策略和预设配置。
-- `error` 负责 attempt 失败、retry 终态投影和诊断信息。
+CasDecision 表达更新、完成、重试和终止。CasExecutor 将决策适配到唯一的
+Retry/TokioRetry 执行内核。Builder 负责校验配置，executor 通过共享 OnceLock
+缓存仅返回结果的 retry 配置；克隆 executor 不要求 T 或 E 实现 Clone。
 
-公共 API 仍从 crate 根导出。为便于维护，可以拆分内部模块，但不应改变这层接口。
+CAS 层负责快照提交与领域终态，retry 层负责准入、退避、时钟和超时优先级。
+实现不再包含独立 immediate 循环或重复的退避分派标记。
 
-## 两条执行路径
+## 提交不变量
 
-Rich 执行会为单次调用构造报告，并可分发事件和告警。result-only 执行跳过这些构造，
-但返回相同的业务结果和终态错误语义。两条路径使用相同的状态快照和决策规则。只有在
-不需要挂接单次 hooks 或报告状态时，才可以复用缓存的 retry 对象。
+Update 在 compare_set 成功时线性化，返回的新旧快照及 output 均来自该次成功尝试。
+冲突尝试的 output 被丢弃，下一次尝试重新读取状态并计算。值相等的新快照提交仍属于 Update。
+Finish 的线性化点是其使用的快照读取，不会重新验证当前状态。
 
-## 决策投影
+返回快照不保证在返回后仍是全局最新值。Operation 必须可重放；外部副作用需要独立的幂等机制，
+或放在成功提交后执行。CAS 不提供跨资源事务。
 
-| Operation 决策 | Retry 层 | CAS 结果 |
-| --- | --- | --- |
-| `Update(next, output)` 且 CAS 成功 | 成功 | 带旧/当前状态的 `CasSuccess` |
-| `Finish(output)` | 成功 | 不替换状态的 `CasSuccess` |
-| `Retry(error)` | 可重试失败 | 重试或 `RetryExhausted` |
-| CAS 冲突 | 可重试失败 | 重试或 `Conflict` |
-| `Abort(error)` | 终态失败 | `Abort` |
-| 超时或 retry 基础设施失败 | 终态失败 | `CasErrorKind` 与 `CasRetryFailure` |
+## 执行与观测
 
-Rich 与 result-only 路径必须共享同一个分类器。修改此表时，必须同时补充同步、异步和
-错误映射测试。
+Result-only 路径不构造报告、不发送 hook 事件。完整路径创建每次执行独立的报告和 retry observer。
+两条路径共享决策提交、重试分类及错误映射。Hooks 属于单次执行，不在持有报告锁时调用。
+在 unwind 构建中，listener panic 被捕获并记录到返回报告；operation 的 panic 向外传播。
 
-## 线性化与状态所有权
+完成事件和告警收到的是调用自身回调之前的报告快照；调用者收到的最终报告还包括这些回调的失败。
+不同执行之间不保证全局事件顺序。内部 observer 不注册 completion callbacks，
+成功路径的 retry completion diagnostics 应为空，投影边界通过 debug_assert 检查这个不变量。
 
-更新在线性化成功的 compare-and-swap 处生效；finish 在线程观测快照时线性化。返回的
-`CasSuccess` 持有或引用与该时刻对应的快照，不保证返回后该快照仍是全局最新值。
-operation closure 可被重放，不能依赖某个副作用恰好只发生一次。
+## 预算与取消边界
 
-## 超时状态与优先级
+操作与总耗时软预算只阻止后续尝试，不撤销已准入的成功结果。操作耗时包含 CAS 适配工作。
+Flow timeout 是独立的合作式异步 deadline，覆盖尝试及退避，但不覆盖开始/结束 hooks 的全部成本。
+同步入口忽略两种硬 timeout，阻塞的 operation 也不能被强制中断。
 
-`max_operation_elapsed` 测量用户 operation 时间。`max_total_elapsed` 是软续试预算，
-可以在当前准入 operation 完成后拒绝下一次尝试。`flow_timeout` 是异步硬墙钟边界，
-`attempt_timeout` 限制一次异步 attempt。错误投影保留超时范围，并在可用时保留超时前
-观测到的最新状态。同步执行忽略 `flow_timeout`。
+异步入口只有配置 timeout 时才借用栈内 Mutex 快照槽，不持锁跨 await。
+未配置 timeout 时既不加这把锁，也不为诊断额外保留快照引用。Finalization 接收
+Option<Arc<T>>，不再接收槽本身。丢弃 future 会丢弃进行中的 operation，不回滚已提交状态或外部效果。
 
-## 报告与 hooks
+尝试超时保留该次开始时的快照；退避超时保留已有失败；第一次尝试前停止可以没有快照。
+终止时不会重新读取状态，避免把新快照和旧错误拼在一起。
 
-报告 builder 累计尝试次数、冲突次数、耗时、终态分类和状态/输出上下文。事件在生命周期
-边界发出，与 retry 准入回调相互独立。Hooks 只属于一次执行。listener panic 行为遵循
-CAS 配置的策略；retry 控制回调失败仍作为 retry 诊断保留。执行发生重试时，不能假设
-某个 hook 只运行一次。
+## 错误边界
 
-## 错误投影与 retry 契约
+CasErrorKind 提供简洁分类，CasTermination 描述停止原因，last_failure 保留最后一次业务/CAS 失败。
+三者相互独立：预算超限或流程超时优先于最后一次业务错误。CasDiagnostic 保留 CAS 自有类别和
+完整基础设施文本；completion_diagnostics 按顺序保留终态冻结后的回调失败。
+诊断文本不作为稳定的解析协议。公共 API 不要求 retry 类型，也没有 From<RetryError> 兼容桥梁。
 
-`CasRetryFailure` 镜像固定 `qubit-retry` 0.22 的终态细节，使调用方可以读取限额、超时范围、
-取消、回调失败和基础设施错误而不丢失上下文。retry 类型通过 `qubit_cas::retry` 重导出，
-把应用依赖边界保持在 `qubit-cas`。升级 retry 时必须同步更新适配器、映射测试、锁文件和迁移说明。
+## 预设与下游
 
-## 线程安全与异步不变量
+ContentionBackoff 是固定指数退避加 jitter，不会学习竞争率。Strategy 覆盖次数、软预算和退避，
+保留异步 timeout 配置；后续 setter 覆盖单个字段。普通 builder 默认五次尝试，
+LatencyFirst 则是 100 次尝试并带时间预算的另一套预设。
 
-执行器配置构造后不可变，可以跨线程复用。每次执行的报告和 hook 状态与其他执行隔离。
-异步执行不能在 await 期间持有同步 mutex；硬流程超时同时适用于 rich 和 result-only
-异步路径。
+qubit-state-machine 0.8 的标准 builder 接受配置好的 CasExecutor，成功回调仍只在提交后执行。
+Fast 版和 qubit-progress 继续使用独立的 qubit-fast-cas。
 
-## 性能假设与扩展约束
+## 性能与验证
 
-result-only 是低开销路径。Report-only 避免每次 attempt 构造事件；事件流和告警会按尝试
-次数增加工作量。新增策略必须保持决策表、预算语义和可重放契约。新增公开类型必须补充
-Rustdoc 与行为测试；新增序列化或诊断结构时还需要迁移说明。
+预热后的 result-only Finish 记账不分配堆内存；owned Update 仍需为快照分配 Arc，
+报告、deadline 和用户操作还可能增加分配。分配测试区分构造、首次缓存初始化、热执行、
+owned/预分配更新和有无异步 timeout。
+
+竞争基准使用 1/2/4/8 个写者、三种预设，记录成功吞吐、冲突数、失败调用和包含失败的
+p50/p95/p99 延迟；不会通过无限重试隐藏耗尽的调用。绝对耗时取决于机器，不作为共享 CI 的时间门槛。
+
+参阅[用户指南](user_guide.zh_CN.md)和[迁移说明](migration-0.13.zh_CN.md)。

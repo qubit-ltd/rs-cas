@@ -7,8 +7,8 @@
 // =============================================================================
 
 use qubit_cas::CasStrategy;
-use qubit_cas::constants::CONTENTION_ADAPTIVE_MAX_ATTEMPTS;
-use qubit_cas::constants::CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED;
+use qubit_cas::constants::CONTENTION_BACKOFF_MAX_ATTEMPTS;
+use qubit_cas::constants::CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED;
 use qubit_cas::constants::LATENCY_FIRST_MAX_ATTEMPTS;
 use qubit_cas::constants::LATENCY_FIRST_MAX_TOTAL_ELAPSED;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_ATTEMPTS;
@@ -30,11 +30,11 @@ fn test_strategy_profiles_expose_expected_values() {
     assert_eq!(latency.max_total_elapsed(), Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED));
     assert!(!latency.uses_backoff());
 
-    let contention = CasStrategy::ContentionAdaptive.profile();
-    assert_eq!(contention.max_attempts(), CONTENTION_ADAPTIVE_MAX_ATTEMPTS);
+    let contention = CasStrategy::ContentionBackoff.profile();
+    assert_eq!(contention.max_attempts(), CONTENTION_BACKOFF_MAX_ATTEMPTS);
     assert_eq!(
         contention.max_total_elapsed(),
-        Some(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED)
+        Some(CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED)
     );
     assert!(contention.uses_backoff());
 

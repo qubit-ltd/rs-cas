@@ -10,12 +10,12 @@
 use std::time::Duration;
 
 use super::CasStrategyProfile;
-use crate::constants::CONTENTION_ADAPTIVE_INITIAL_DELAY;
-use crate::constants::CONTENTION_ADAPTIVE_JITTER_FACTOR;
-use crate::constants::CONTENTION_ADAPTIVE_MAX_ATTEMPTS;
-use crate::constants::CONTENTION_ADAPTIVE_MAX_DELAY;
-use crate::constants::CONTENTION_ADAPTIVE_MAX_ELAPSED;
-use crate::constants::CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED;
+use crate::constants::CONTENTION_BACKOFF_INITIAL_DELAY;
+use crate::constants::CONTENTION_BACKOFF_JITTER_FACTOR;
+use crate::constants::CONTENTION_BACKOFF_MAX_ATTEMPTS;
+use crate::constants::CONTENTION_BACKOFF_MAX_DELAY;
+use crate::constants::CONTENTION_BACKOFF_MAX_ELAPSED;
+use crate::constants::CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED;
 use crate::constants::LATENCY_FIRST_MAX_ATTEMPTS;
 use crate::constants::LATENCY_FIRST_MAX_ELAPSED;
 use crate::constants::LATENCY_FIRST_MAX_TOTAL_ELAPSED;
@@ -40,7 +40,7 @@ pub enum CasStrategy {
     /// Optimizes for low latency with immediate retries and a smaller budget.
     LatencyFirst,
     /// Optimizes for hot contention with exponential backoff and jitter.
-    ContentionAdaptive,
+    ContentionBackoff,
     /// Optimizes for eventual success with a larger retry window.
     ReliabilityFirst,
 }
@@ -72,10 +72,10 @@ impl CasStrategy {
                 Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED),
                 false,
             ),
-            Self::ContentionAdaptive => CasStrategyProfile::new(
-                CONTENTION_ADAPTIVE_MAX_ATTEMPTS,
-                CONTENTION_ADAPTIVE_MAX_ELAPSED,
-                Some(CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED),
+            Self::ContentionBackoff => CasStrategyProfile::new(
+                CONTENTION_BACKOFF_MAX_ATTEMPTS,
+                CONTENTION_BACKOFF_MAX_ELAPSED,
+                Some(CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED),
                 true,
             ),
             Self::ReliabilityFirst => CasStrategyProfile::new(
@@ -96,10 +96,10 @@ impl CasStrategy {
     pub(crate) fn backoff(self) -> Option<(Duration, Duration, f64)> {
         match self {
             Self::LatencyFirst => None,
-            Self::ContentionAdaptive => Some((
-                CONTENTION_ADAPTIVE_INITIAL_DELAY,
-                CONTENTION_ADAPTIVE_MAX_DELAY,
-                CONTENTION_ADAPTIVE_JITTER_FACTOR,
+            Self::ContentionBackoff => Some((
+                CONTENTION_BACKOFF_INITIAL_DELAY,
+                CONTENTION_BACKOFF_MAX_DELAY,
+                CONTENTION_BACKOFF_JITTER_FACTOR,
             )),
             Self::ReliabilityFirst => Some((
                 RELIABILITY_FIRST_INITIAL_DELAY,

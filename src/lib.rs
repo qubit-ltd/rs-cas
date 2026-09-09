@@ -32,6 +32,8 @@ pub use cas_success::CasSuccess;
 pub use error::CasAttemptFailure;
 pub use error::CasAttemptFailureKind;
 pub use error::CasBuildError;
+pub use error::CasDiagnostic;
+pub use error::CasDiagnosticKind;
 pub use error::CasError;
 pub use error::CasErrorKind;
 pub use error::CasLimitKind;
@@ -50,3 +52,6 @@ pub use report::CasExecutionOutcome;
 pub use report::CasExecutionReport;
 pub use strategy::CasStrategy;
 pub use strategy::CasStrategyProfile;
+
+#[cfg(test)]
+mod tests;

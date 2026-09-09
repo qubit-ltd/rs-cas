@@ -63,11 +63,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
-    pub(super) fn execute_result_generic<R, O>(
-        &self,
-        state: &AtomicRef<T>,
-        operation: O,
-    ) -> Result<CasSuccess<T, R>, CasError<T, E>>
+    pub fn execute_result<R, O>(&self, state: &AtomicRef<T>, operation: O) -> Result<CasSuccess<T, R>, CasError<T, E>>
     where
         T: 'static,
         E: 'static,
@@ -78,25 +74,11 @@ impl<T, E> CasExecutor<T, E> {
             Ok(success) => {
                 // This adapter registers no completion observers; only retry context is
                 // projected.
-                let (success, context, _diagnostics) = success.into_parts();
+                let (success, context, diagnostics) = success.into_parts();
+                debug_assert!(diagnostics.is_empty(), "CAS installs no completion callbacks");
                 Ok(super::finalization::enrich_success(success, context))
             }
             Err(error) => Err(CasError::new(error, None)),
-        }
-    }
-
-    /// Executes one immediate synchronous CAS operation through the
-    /// allocation-free CAS loop.
-    pub fn execute_result<R, O>(&self, state: &AtomicRef<T>, operation: O) -> Result<CasSuccess<T, R>, CasError<T, E>>
-    where
-        T: 'static,
-        E: 'static,
-        O: Function<T, CasDecision<T, R, E>>,
-    {
-        if self.immediate_backoff {
-            super::sync_immediate_execution::execute(self, state, operation)
-        } else {
-            self.execute_result_generic(state, operation)
         }
     }
 

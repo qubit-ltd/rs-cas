@@ -12,29 +12,29 @@ use std::time::Duration;
 /// Default maximum attempts for CAS execution.
 pub const DEFAULT_CAS_MAX_ATTEMPTS: u32 = 5;
 
-/// Maximum attempts for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_MAX_ATTEMPTS: u32 = 64;
+/// Maximum attempts for the contention-backoff strategy.
+pub const CONTENTION_BACKOFF_MAX_ATTEMPTS: u32 = 64;
 
-/// Initial retry delay for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_INITIAL_DELAY: Duration = Duration::from_micros(50);
+/// Initial retry delay for the contention-backoff strategy.
+pub const CONTENTION_BACKOFF_INITIAL_DELAY: Duration = Duration::from_micros(50);
 
-/// Maximum retry delay for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_MAX_DELAY: Duration = Duration::from_millis(5);
+/// Maximum retry delay for the contention-backoff strategy.
+pub const CONTENTION_BACKOFF_MAX_DELAY: Duration = Duration::from_millis(5);
 
-/// Cumulative user operation elapsed-time budget for the contention-adaptive
+/// Cumulative user operation elapsed-time budget for the contention-backoff
 /// strategy.
-pub const CONTENTION_ADAPTIVE_MAX_ELAPSED: Duration = Duration::from_millis(50);
+pub const CONTENTION_BACKOFF_MAX_ELAPSED: Duration = Duration::from_millis(50);
 
-/// Monotonic total retry-flow elapsed-time ceiling for the contention-adaptive
+/// Monotonic total retry-flow elapsed-time ceiling for the contention-backoff
 /// strategy.
 ///
 /// Includes user operation time, retry sleeps, and control-path listener work.
-/// The value is above [`CONTENTION_ADAPTIVE_MAX_ELAPSED`]
+/// The value is above [`CONTENTION_BACKOFF_MAX_ELAPSED`]
 /// so exponential backoff can use part of the wall-time budget.
-pub const CONTENTION_ADAPTIVE_MAX_TOTAL_ELAPSED: Duration = Duration::from_millis(250);
+pub const CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED: Duration = Duration::from_millis(250);
 
-/// Jitter factor for the contention-adaptive strategy.
-pub const CONTENTION_ADAPTIVE_JITTER_FACTOR: f64 = 0.25;
+/// Jitter factor for the contention-backoff strategy.
+pub const CONTENTION_BACKOFF_JITTER_FACTOR: f64 = 0.25;
 
 /// Maximum attempts for the latency-first strategy.
 pub const LATENCY_FIRST_MAX_ATTEMPTS: u32 = 100;
