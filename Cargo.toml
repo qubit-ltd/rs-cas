@@ -41,7 +41,7 @@ tokio = { version = "1.52", features = ["time", "rt"], optional = true }
 qubit-atomic = "0.13"
 qubit-error = "0.2"
 qubit-function = "0.16"
-qubit-retry = { version = "0.23", path = "../rs-retry" }
+qubit-retry = "0.23"
 
 [dev-dependencies]
 qubit-clock = { version = "0.13", features = ["test-util"] }
