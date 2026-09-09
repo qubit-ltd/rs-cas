@@ -1,7 +1,23 @@
 # Qubit CAS User Guide
 
-This guide explains how to choose and operate `qubit-cas` in a production
-application. The Chinese version is [`user_guide.zh_CN.md`](user_guide.zh_CN.md).
+This guide covers `qubit-cas` 0.13 for Rust applications that update shared
+immutable snapshots. The Chinese version is [`user_guide.zh_CN.md`](user_guide.zh_CN.md).
+
+## Inventory reservation and setup
+
+Concurrent orders share remaining stock. Install these dependencies and run the
+README inventory example: stock moves from 3 to 2, and zero stock produces
+OutOfStock. Only the committed attempt's output reaches the caller. Send
+notifications or charge payments after successful execution. Even idempotent
+external I/O inside a retryable operation requires care: cancellation does not
+roll back its effects.
+
+```toml
+[dependencies]
+qubit-cas = { version = "0.13", features = ["tokio"] }
+qubit-atomic = "0.13"
+tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
+```
 
 ## 1. CAS model, snapshots, and linearization
 
@@ -30,21 +46,29 @@ per-execution events or alerts.
 
 ## 4. Strategies and builders
 
-`latency_first`, `contention_adaptive`, and `reliability_first` are starting
-points, not universal defaults. Measure the workload before changing a preset.
-The builder configures attempts, retry delay, jitter, elapsed budgets,
-observability, and asynchronous timeout behavior. Advanced retry types are
-available from `qubit_cas::retry`.
+`latency_first`, `contention_backoff`, and `reliability_first` provide presets.
+ContentionBackoff uses fixed exponential-backoff parameters and jitter; it does
+not learn from observed contention. A plain builder defaults to 5 attempts, no
+delay, and no soft budgets. LatencyFirst uses 100 attempts, a 5ms operation budget,
+and a 20ms total budget.
+
+Settings follow call order. `strategy` replaces attempts, soft budgets, and
+backoff, while preserving async timeouts and their action. Later setters such as
+`max_attempts` and `no_delay` replace the corresponding setting. Attempts include
+the initial operation.
 
 ## 5. Soft budgets and hard timeouts
 
-`max_operation_elapsed` limits accumulated user-operation time.\
-`max_total_elapsed` is a soft continuation budget covering retries, delays, and
-hooks: an already admitted operation may finish.\
-`flow_timeout` is an independent hard wall-clock timeout for asynchronous
-execution and has no effect on synchronous execution.\
-`attempt_timeout` bounds one asynchronous operation attempt; configure
-`retry_on_timeout()` when a timed-out attempt should be retried.
+`max_operation_elapsed` measures accumulated attempt time, including CAS adapter
+work. `max_total_elapsed` covers operations, backoff, and control callbacks in
+the retry flow. Both are soft admission budgets: an admitted operation may still
+commit successfully after the budget expires.
+
+`flow_timeout` covers async attempts and backoff, excluding the full cost of
+start/finish hooks. `attempt_timeout` bounds an async attempt. Timeout aborts by
+default; `retry_on_timeout()` permits retry. Synchronous entry points ignore
+both hard timeouts. Deadlines are cooperative: blocking calls or futures that
+never yield cannot be preempted reliably.
 
 ## 6. Synchronous and asynchronous execution
 
@@ -82,25 +106,40 @@ async fn main() {
 
 ## 7. Reports, events, alerts, and listener panics
 
-`CasExecutionReport` records attempts, conflicts, ratios, elapsed time, and the
-terminal outcome. `CasHooks` observes `CasEvent` values for one execution.
-`ReportOnly` is the default; `EventStream` adds events; and
-`EventStreamWithAlert` adds contention thresholds. Hooks run in the execution
-path, so keep them cheap and non-blocking. Configure the panic policy explicitly
-when a listener can fail; never use hooks for non-idempotent state mutation.
+`execute` returns a report. `execute_with_hooks` additionally supports events via
+`CasHooks::on_event` and threshold-based alerts via `on_contention_alert`. There
+is no separate observability-mode enum.
+
+Reports retain attempts, conflicts, business retries, timeouts, elapsed time,
+and the terminal outcome. Listeners run inline and must remain inexpensive and
+non-blocking. With unwinding enabled, listener panics are isolated and retained
+in the final report's `listener_failures()` without changing the business result.
+The finished event contains the report snapshot before that listener runs; it
+cannot include its own later panic. Operation panics propagate. Panic isolation
+does not apply to panic=abort builds.
 
 ## 8. Errors and diagnostic ownership
 
-Inspect `CasError::kind()` for control flow and `CasError::error()` for the
-preserved business error. `CasError::current()` may contain the last snapshot,
-including the snapshot retained before an async timeout. `CasRetryFailure`
-preserves retry limits, timeout scope, cancellation, callback failures, and
-infrastructure diagnostics for the pinned `qubit-retry` 0.22 contract.
+Use `kind()` for broad classification, `termination()` for attempts/budget/timeout
+termination, and `error()` for the original business error. The last failure is
+independent of termination: a flow timeout during backoff can still retain the
+preceding business retry error.
+
+`current()` is the snapshot associated with the last failure, not a freshly
+loaded value. An attempt timeout retains its starting snapshot; a backoff timeout
+keeps the preceding failure. Before the first attempt it may be None.
+
+`diagnostic()` retains CAS-owned Cancellation, Callback, Clock, Timer, or other
+infrastructure classifications with their diagnostic text. `completion_diagnostics()`
+retains callback failures after the terminal result was frozen, in order.
+Use the category in program logic; message wording is for troubleshooting only.
+Ordinary abort, conflict, budget, and timeout termination have no infrastructure
+diagnostic. Dropping a future does not return a cancellation CasError.
 
 ## 9. Performance and `qubit-fast-cas`
 
 Prefer result-only execution on hot paths that do not need reports. Prefer
-`ReportOnly` over event streaming, and send events to a non-blocking channel if
+`execute` over event streaming, and send events to a non-blocking channel if
 they must be exported. For a compact `u64` state machine that needs no reports,
 hooks, async support, or business retry, use
 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) instead.
@@ -109,10 +148,10 @@ hooks, async support, or business retry, use
 
 - Unexpected `RetryExhausted`: check whether the closure returns `retry` for a
   permanent business error.
-- Unexpected `MaxTotalElapsedExceeded`: remember that it is a soft continuation
-  budget; inspect the retained retry failure for the exact cause.
+- Unexpected `TotalBudgetExceeded`: remember that it is a soft continuation
+  budget; inspect termination and the retained last failure for the exact cause.
 - Unexpected `AttemptTimeout`: distinguish per-attempt timeout from `flow_timeout`.
-- High conflict ratio: use `ContentionAdaptive`, reduce shared hot-key scope,
+- High conflict ratio: use `ContentionBackoff`, reduce shared hot-key scope,
   or split the state into smaller immutable values.
 - Side effects repeated: move them after successful execution or make them
   idempotent with an external operation identifier.
@@ -121,3 +160,11 @@ The executor does not provide transactions across multiple atomic values, and
 it cannot make non-replayable operations safe. Use a lock or database
 transaction when the update requires a long critical section or external
 coordination.
+
+`update` allocates an Arc for each new snapshot; `update_arc` accepts a preallocated
+snapshot. Warm finish bookkeeping does not allocate, but this is not a claim that
+every CAS operation avoids allocation. Run `cargo bench --bench contention` to
+measure contention and tail latency.
+
+Return to the [README](../README.md), [API](https://docs.rs/qubit-cas), or
+[0.13 migration note](migration-0.13.md).

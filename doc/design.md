@@ -1,90 +1,93 @@
 # Qubit CAS Design
 
-This document describes the current implementation and its invariants. The
-Chinese version is [`design.zh_CN.md`](design.zh_CN.md).
+This document describes qubit-cas 0.13. [中文版](design.zh_CN.md).
 
-## Module boundaries
+## Responsibilities
 
-- `cas_decision` defines the typed operation result.
-- `executor` owns builder validation, retry admission, sync/async execution,
-  and projection to public success/error values.
-- `event` defines execution context and lifecycle hooks.
-- `report`, `observability`, and `strategy` own aggregation, event policy, and
-  preset configuration respectively.
-- `error` owns attempt failures, retry-terminal projection, and diagnostics.
+`CasDecision` represents update, finish, retry, and abort. `CasExecutor` adapts
+those decisions to the single Retry/TokioRetry control engine. The builder owns
+validated settings; the executor caches a result-only retry configuration in a
+shared OnceLock. Cloning configuration never requires T or E to implement Clone.
 
-The public API remains available from the crate root. Internal modules may be
-split for maintenance without changing that surface.
+The CAS adapter owns atomic snapshot publication and CAS-specific termination.
+The retry dependency owns admission, backoff, clocks, and timeout precedence.
+There is no separate immediate loop and no duplicate backoff-dispatch flag.
 
-## Two execution paths
+## Publication invariants
 
-Rich execution allocates a per-call report builder and can dispatch events and
-alerts. Result-only execution avoids that construction and returns the same
-business result and terminal error semantics. Both paths use the same state
-snapshot and decision rules. A cached retry object may be reused only when no
-per-call hooks or report state must be attached.
+Update linearizes at successful compare_set. Returned previous/current snapshots
+and output belong to that successful attempt. Conflicting attempts discard their
+output and reload state before recomputing. A same-value replacement remains an
+Update. Finish linearizes at its snapshot read and does not revalidate it.
 
-## Decision projection
+The snapshot is not promised to remain globally current after return. Operations
+must be replayable. External effects require separate idempotency or placement
+after success; CAS does not provide a transaction across resources.
 
-| Operation decision | Retry layer | CAS result |
-| --- | --- | --- |
-| `Update(next, output)` and successful CAS | success | `CasSuccess` with previous/current state |
-| `Finish(output)` | success | `CasSuccess` without a replacement state |
-| `Retry(error)` | retryable failure | retry or `RetryExhausted` |
-| CAS conflict | retryable failure | retry or `Conflict` |
-| `Abort(error)` | terminal failure | `Abort` |
-| timeout or retry infrastructure failure | terminal failure | mapped `CasErrorKind` plus `CasRetryFailure` |
+## Execution and observation
 
-The classifier must be shared by rich and result-only paths. Any change to the
-table requires corresponding sync, async, and error mapping tests.
+Result-only calls skip report construction and hook dispatch. Rich execution
+creates a per-execution report and retry observers. Both use the same decision
+projection, retry classifier, and terminal mapper. Hooks are per call and never
+run while holding the report mutex. Listener panics are caught with unwinding
+enabled and appended to the final returned report. Operation panics propagate.
 
-## Linearization and state ownership
+Finished-event and alert reports are snapshots taken before their callbacks.
+The final returned report additionally includes failures from those callbacks.
+No global event order is imposed across executions. Internal observers do not
+register completion callbacks; successful retry completion diagnostics must
+remain empty, checked by a debug assertion at the projection boundary.
 
-An update linearizes at the successful compare-and-swap. A finish linearizes at
-the observation of the snapshot. The returned `CasSuccess` owns or references
-the snapshot associated with that point; it does not promise that the snapshot
-remains globally current after return. The operation closure is replayable and
-must not rely on a side effect occurring exactly once.
+## Budget and cancellation boundaries
 
-## Timeout state and precedence
+Operation and total elapsed budgets prevent later attempts; they never revoke
+an admitted success. Attempt time includes CAS adapter work. Flow timeout is an
+independent cooperative async deadline spanning attempts and backoff, excluding
+the complete cost of start/finish hooks. Synchronous execution ignores hard
+attempt and flow timeouts. Blocking operation code cannot be forcibly interrupted.
 
-`max_operation_elapsed` measures user-operation time. `max_total_elapsed` is a
-soft continuation budget and can reject a future attempt after the current
-admitted operation completes. `flow_timeout` is a hard asynchronous wall-clock
-boundary. `attempt_timeout` bounds one async attempt. The error projection
-retains timeout scope and, when available, the latest state observed before the
-timeout. Synchronous execution ignores `flow_timeout`.
+Async operations borrow a stack-owned Mutex snapshot slot only when a timeout
+is configured. No guard crosses await. Without timeouts, the slot is not locked
+and no extra snapshot reference is retained for diagnostics. Finalization receives
+an owned optional Arc rather than the slot. Dropping the future drops its
+in-flight operation without rolling back committed or external effects.
 
-## Reports and hooks
+Attempt timeouts retain the attempt's original snapshot. Backoff timeouts retain
+the last failure. A flow stopped before its first attempt may have no snapshot.
+Finalization never loads a new value to attach to an older failure.
 
-The report builder accumulates attempts, conflicts, elapsed durations, terminal
-classification, and state/output context. Events are emitted at lifecycle
-boundaries and are distinct from retry admission callbacks. Hooks are scoped to
-one execution. Listener panic behavior follows the configured CAS policy;
-retry-control callback failures remain retry diagnostics. A hook must not be
-assumed to run exactly once for an operation that is retried.
+## Error boundary
 
-## Error projection and retry contract
+CasErrorKind is a compact classification, CasTermination states why execution
+ended, and last_failure retains the last business/CAS attempt. These are
+independent: a budget or flow timeout takes precedence over the last business
+error. CasDiagnostic retains a CAS-owned category and full infrastructure text;
+completion_diagnostics retains post-terminal callback failures in order.
+Message text is not a stable parsing protocol. Public APIs do not require retry
+implementation types and provide no From<RetryError> compatibility bridge.
 
-`CasRetryFailure` mirrors the pinned `qubit-retry` 0.22 terminal details so
-callers can inspect limits, timeout scope, cancellation, callback failures, and
-infrastructure errors without losing context. The retry types are re-exported
-through `qubit_cas::retry` to keep the application dependency boundary at
-`qubit-cas`. Updating retry requires updating this adapter, its mapping tests,
-lockfiles, and migration notes together.
+## Presets and downstream use
 
-## Thread safety and async invariants
+ContentionBackoff is fixed exponential backoff with jitter, not an adaptive
+controller. Strategy setters replace attempts, soft budgets, and backoff, but
+preserve async timeout configuration. Subsequent setters override individual
+fields. A plain builder defaults to five attempts; LatencyFirst is a different
+preset with 100 attempts and explicit time budgets.
 
-The executor configuration is immutable after construction and can be reused
-across threads. Per-execution report and hook state is isolated from other
-executions. Async execution must not hold a synchronous mutex across an await;
-hard flow timeout applies to both report-producing and result-only async paths.
+The standard qubit-state-machine 0.8 builder accepts a configured CasExecutor.
+Its success callback runs only after a committed transition. The fast variant
+and qubit-progress retain their separate qubit-fast-cas implementation.
 
-## Performance assumptions and extension constraints
+## Performance and validation
 
-Result-only execution is the low-overhead path. Report-only observability avoids
-per-attempt event construction; event streaming and alerts intentionally add
-work proportional to attempts. New strategies must preserve the decision table,
-budget semantics, and replay contract. New public types require Rustdoc and
-behavior tests, and any new serialized or diagnostic shape needs a migration
-note.
+Warm result-only finish bookkeeping avoids heap allocation. Owned Update still
+allocates the replacement Arc; report construction, deadlines, and user work can
+add allocations. Allocation tests distinguish constructor, first-use cache,
+warm execution, owned/preallocated updates, and async timeout configurations.
+
+The contention benchmark measures 1/2/4/8 writers, all three presets, successful
+throughput, conflict counts, failed calls, and p50/p95/p99 latency including failed
+calls. It does not hide exhausted calls behind unbounded retries. Absolute
+latency is machine-specific and not enforced as a shared-CI timing threshold.
+
+See the [user guide](user_guide.md) and [migration note](migration-0.13.md).
