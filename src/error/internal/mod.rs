@@ -10,3 +10,6 @@
 mod cas_error_details;
 
 pub(in crate::error) use cas_error_details::CasErrorDetails;
+
+mod retry_diagnostic;
+pub(in crate::error) use retry_diagnostic::reason_diagnostic;

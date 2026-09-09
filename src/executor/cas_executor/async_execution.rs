@@ -33,6 +33,13 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Cancellation
+    /// Dropping the future drops the in-flight operation without rolling back
+    /// committed state or external effects. Timeouts require yielding futures.
+    ///
+    /// # Panics
+    /// An operation panic propagates to the caller.
     #[cfg(feature = "tokio")]
     pub async fn execute_async<R, O, Fut>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
@@ -60,7 +67,12 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Cancellation
     /// Cancelling the returned future cancels the in-flight operation future.
-    /// Operations must therefore remain safe to retry or cancel.
+    /// Operations must therefore remain safe to retry or cancel. Cancellation
+    /// does not roll back committed state or external effects. Hard deadlines
+    /// cannot preempt blocking code or futures that never yield.
+    ///
+    /// # Panics
+    /// An operation panic propagates to the caller.
     #[cfg(feature = "tokio")]
     pub async fn execute_async_result<R, O, Fut>(
         &self,
@@ -73,8 +85,9 @@ impl<T, E> CasExecutor<T, E> {
         O: Fn(Arc<T>) -> Fut,
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
-        let attempt_snapshot = Arc::new(Mutex::new(None));
-        let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
+        let attempt_snapshot = Mutex::new(None);
+        let snapshot_slot =
+            (self.attempt_timeout.is_some() || self.flow_timeout().is_some()).then_some(&attempt_snapshot);
         let mut async_retry = TokioRetry::new(self.result_retry());
         if let Some(timeout) = self.attempt_timeout {
             async_retry = async_retry.hard_attempt_timeout(timeout);
@@ -83,20 +96,20 @@ impl<T, E> CasExecutor<T, E> {
             async_retry = async_retry.hard_flow_timeout(timeout);
         }
         let attempt = async_retry
-            .run(|| run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt)))
+            .run(|| run_async_attempt(state, &operation, snapshot_slot))
             .await;
         match attempt {
             Ok(success) => {
                 // This adapter registers no completion observers; only retry context is
                 // projected.
-                let (success, context, _diagnostics) = success.into_parts();
+                let (success, context, diagnostics) = success.into_parts();
+                debug_assert!(diagnostics.is_empty(), "CAS installs no completion callbacks");
                 Ok(super::finalization::enrich_success(success, context))
             }
             Err(error) => {
                 let timeout_current = attempt_snapshot
-                    .lock()
-                    .expect("CAS attempt snapshot slot should be lockable")
-                    .clone();
+                    .into_inner()
+                    .expect("CAS attempt snapshot slot should be lockable");
                 Err(CasError::new(error, timeout_current))
             }
         }
@@ -111,6 +124,13 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Cancellation
+    /// Dropping the future drops the in-flight operation without rolling back
+    /// committed state or external effects. Timeouts require yielding futures.
+    ///
+    /// # Panics
+    /// An operation panic propagates to the caller.
     ///
     /// Listener panics are isolated and recorded in the execution report;
     /// they do not alter the CAS terminal result.
@@ -127,11 +147,12 @@ impl<T, E> CasExecutor<T, E> {
         O: Fn(Arc<T>) -> Fut,
         Fut: std::future::Future<Output = CasDecision<T, R, E>>,
     {
-        let attempt_snapshot = Arc::new(Mutex::new(None));
+        let attempt_snapshot = Mutex::new(None);
+        let snapshot_slot =
+            (self.attempt_timeout.is_some() || self.flow_timeout().is_some()).then_some(&attempt_snapshot);
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
         let retry = self.build_retry(&hooks, Arc::clone(&report_builder));
-        let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
         let mut async_retry = TokioRetry::new(&retry);
         if let Some(timeout) = self.attempt_timeout {
             async_retry = async_retry.hard_attempt_timeout(timeout);
@@ -140,9 +161,12 @@ impl<T, E> CasExecutor<T, E> {
             async_retry = async_retry.hard_flow_timeout(timeout);
         }
         let attempt = async_retry
-            .run(|| run_async_attempt(state, &operation, Arc::clone(&attempt_snapshot_for_attempt)))
+            .run(|| run_async_attempt(state, &operation, snapshot_slot))
             .await;
-        self.finish_execution(attempt, hooks, Some(attempt_snapshot), report_builder)
+        let timeout_current = attempt_snapshot
+            .into_inner()
+            .expect("CAS attempt snapshot slot should be lockable");
+        self.finish_execution(attempt, hooks, timeout_current, report_builder)
     }
 }
 
@@ -151,16 +175,16 @@ impl<T, E> CasExecutor<T, E> {
 async fn run_async_attempt<T, R, E, O, Fut>(
     state: &AtomicRef<T>,
     operation: &O,
-    attempt_snapshot: Arc<Mutex<Option<Arc<T>>>>,
+    attempt_snapshot: Option<&Mutex<Option<Arc<T>>>>,
 ) -> Result<AttemptSuccess<T, R>, CasAttemptFailure<T, E>>
 where
     O: Fn(Arc<T>) -> Fut,
     Fut: std::future::Future<Output = CasDecision<T, R, E>>,
 {
     let current = state.load();
-    *attempt_snapshot
-        .lock()
-        .expect("CAS attempt snapshot slot should be lockable") = Some(Arc::clone(&current));
+    if let Some(slot) = attempt_snapshot {
+        *slot.lock().expect("CAS attempt snapshot slot should be lockable") = Some(Arc::clone(&current));
+    }
     let decision = operation(Arc::clone(&current)).await;
     apply_decision(state, current, decision)
 }

@@ -20,8 +20,6 @@ mod finalization;
 mod retry_adapter;
 #[path = "cas_executor/sync_execution.rs"]
 mod sync_execution;
-#[path = "cas_executor/sync_immediate_execution.rs"]
-mod sync_immediate_execution;
 
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -37,7 +35,6 @@ use crate::error::CasAttemptFailure;
 use crate::strategy::CasStrategy;
 
 /// Executor for retry-aware compare-and-swap workflows.
-#[derive(Clone)]
 pub struct CasExecutor<T, E = BoxError> {
     /// Pure policy used by the retry facades.
     policy: RetryPolicy,
@@ -47,12 +44,24 @@ pub struct CasExecutor<T, E = BoxError> {
     attempt_timeout: Option<std::time::Duration>,
     /// Action selected after a configured attempt timeout.
     attempt_timeout_action: AttemptTimeoutAction,
-    /// Whether the validated backoff is immediate.
-    immediate_backoff: bool,
     /// Result-only retry definition initialized on its first use.
     result_retry: Arc<OnceLock<RetryConfig<CasAttemptFailure<T, E>>>>,
     /// Marker preserving `T` and `E`.
     marker: PhantomData<fn() -> (T, E)>,
+}
+
+impl<T, E> Clone for CasExecutor<T, E> {
+    /// Shares the cached retry configuration without cloning application data.
+    fn clone(&self) -> Self {
+        Self {
+            policy: self.policy.clone(),
+            flow_timeout: self.flow_timeout,
+            attempt_timeout: self.attempt_timeout,
+            attempt_timeout_action: self.attempt_timeout_action,
+            result_retry: Arc::clone(&self.result_retry),
+            marker: PhantomData,
+        }
+    }
 }
 
 impl<T, E> std::fmt::Debug for CasExecutor<T, E> {
@@ -101,10 +110,10 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A configured executor. The built-in strategy is always valid.
-    pub fn contention_adaptive() -> Self {
+    pub fn contention_backoff() -> Self {
         Self::builder()
-            .build_contention_adaptive()
-            .expect("contention-adaptive CAS strategy must be valid")
+            .build_contention_backoff()
+            .expect("contention-backoff CAS strategy must be valid")
     }
 
     /// Creates an executor tuned for reliability-first workloads.
@@ -147,14 +156,12 @@ impl<T, E> CasExecutor<T, E> {
         attempt_timeout: Option<std::time::Duration>,
         flow_timeout: Option<std::time::Duration>,
         attempt_timeout_action: AttemptTimeoutAction,
-        immediate_backoff: bool,
     ) -> Self {
         Self {
             policy,
             flow_timeout,
             attempt_timeout,
             attempt_timeout_action,
-            immediate_backoff,
             result_retry: Arc::new(OnceLock::new()),
             marker: PhantomData,
         }
@@ -166,12 +173,13 @@ impl<T, E> CasExecutor<T, E> {
         self.attempt_timeout
     }
 
-    /// Returns the hard wall-clock boundary for asynchronous retry flows.
+    /// Returns the cooperative deadline for asynchronous attempts and backoff.
     ///
     /// # Returns
-    /// The end-to-end total elapsed budget, when configured. The operation
-    /// budget controls whether another attempt may start and never cancels an
-    /// admitted attempt.
+    /// `Some(Duration)` when a hard async flow timeout was configured; `None`
+    /// otherwise. It is independent of the soft total-time admission budget,
+    /// excludes the full cost of start/finish hooks, and cannot preempt
+    /// blocking operation code. Synchronous execution ignores this setting.
     #[inline(always)]
     pub fn flow_timeout(&self) -> Option<std::time::Duration> {
         self.flow_timeout

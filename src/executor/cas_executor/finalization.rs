@@ -60,7 +60,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Parameters
     /// - `attempt`: Retry-layer terminal success or error.
     /// - `hooks`: Hook registrations for the current execution.
-    /// - `attempt_snapshot`: Last async operation snapshot, when an async
+    /// - `timeout_current`: Last async operation snapshot, when an async
     ///   execution needs to preserve it for a timeout error.
     ///
     /// # Returns
@@ -69,7 +69,7 @@ impl<T, E> CasExecutor<T, E> {
         &self,
         attempt: Result<RetrySuccess<AttemptSuccess<T, R>>, RetryError<CasAttemptFailure<T, E>>>,
         hooks: CasHooks,
-        attempt_snapshot: Option<Arc<Mutex<Option<Arc<T>>>>>,
+        timeout_current: Option<Arc<T>>,
         report_builder: Arc<Mutex<CasReportBuilder>>,
     ) -> CasOutcome<T, R, E>
     where
@@ -80,7 +80,8 @@ impl<T, E> CasExecutor<T, E> {
             Ok(success) => {
                 // This adapter registers no completion observers; only retry context is
                 // projected.
-                let (success, context, _diagnostics) = success.into_parts();
+                let (success, context, diagnostics) = success.into_parts();
+                debug_assert!(diagnostics.is_empty(), "CAS installs no completion callbacks");
                 let attempts_total = context.attempts();
                 let max_attempts = context.max_attempts();
                 let max_operation_elapsed = context.operation_time_budget();
@@ -104,12 +105,6 @@ impl<T, E> CasExecutor<T, E> {
                 CasOutcome::new(Ok(success), report)
             }
             Err(error) => {
-                let timeout_current = attempt_snapshot.and_then(|snapshot| {
-                    snapshot
-                        .lock()
-                        .expect("CAS attempt snapshot slot should be lockable")
-                        .clone()
-                });
                 let error = CasError::new(error, timeout_current);
                 let context = error.context();
                 let outcome = super::finalization::error_outcome(error.kind());

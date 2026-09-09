@@ -39,7 +39,11 @@ fn run_group(group: &'static str, force_conflict: bool) {
     let raw = measure_raw(force_conflict);
     let result_only = measure_result_executor(benchmark_executor(), force_conflict);
     let report_only = measure_executor(benchmark_executor(), CasHooks::new(), force_conflict);
-    let event_empty = measure_executor(benchmark_executor(), CasHooks::new(), force_conflict);
+    let event_empty = measure_executor(
+        benchmark_executor(),
+        CasHooks::new().on_event(|_: &CasEvent| {}),
+        force_conflict,
+    );
     let event_light = measure_executor(benchmark_executor(), light_event_hook(), force_conflict);
     let alert_light = measure_executor(benchmark_executor(), light_alert_hooks(), force_conflict);
 
@@ -47,7 +51,7 @@ fn run_group(group: &'static str, force_conflict: bool) {
     print_row("result_only", &result_only, Some(raw.ops_per_sec), None);
     print_row("report_only", &report_only, Some(raw.ops_per_sec), None);
     print_row(
-        "event_stream_empty",
+        "event_noop_listener",
         &event_empty,
         Some(raw.ops_per_sec),
         Some(report_only.ops_per_sec),

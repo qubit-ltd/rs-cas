@@ -46,7 +46,6 @@ pub struct CasBuilder<T, E = BoxError> {
     attempt_timeout: Option<Duration>,
     /// Action selected after a configured attempt timeout.
     attempt_timeout_action: AttemptTimeoutAction,
-    immediate_backoff: bool,
     /// Marker preserving the executor type parameters.
     marker: PhantomData<fn() -> (T, E)>,
 }
@@ -65,7 +64,6 @@ impl<T, E> CasBuilder<T, E> {
             backoff: Ok(BackoffPolicy::immediate()),
             attempt_timeout: None,
             attempt_timeout_action: AttemptTimeoutAction::Abort,
-            immediate_backoff: true,
             marker: PhantomData,
         }
     }
@@ -152,7 +150,6 @@ impl<T, E> CasBuilder<T, E> {
     #[inline(always)]
     pub fn fixed_delay(mut self, delay: Duration) -> Self {
         self.backoff = Ok(BackoffPolicy::fixed(delay));
-        self.immediate_backoff = false;
         self
     }
 
@@ -167,7 +164,6 @@ impl<T, E> CasBuilder<T, E> {
     #[inline(always)]
     pub fn random_delay(mut self, min: Duration, max: Duration) -> Self {
         self.backoff = BackoffPolicy::uniform(min, max);
-        self.immediate_backoff = false;
         self
     }
 
@@ -197,7 +193,6 @@ impl<T, E> CasBuilder<T, E> {
     pub fn exponential_backoff_with_multiplier(self, initial: Duration, max: Duration, multiplier: f64) -> Self {
         let mut builder = self;
         builder.backoff = BackoffPolicy::exponential(initial, multiplier, max);
-        builder.immediate_backoff = false;
         builder
     }
 
@@ -211,7 +206,6 @@ impl<T, E> CasBuilder<T, E> {
     #[inline(always)]
     pub fn jitter_factor(mut self, factor: f64) -> Self {
         self.backoff = self.backoff.and_then(|backoff| backoff.with_bounded_jitter(factor));
-        self.immediate_backoff = false;
         self
     }
 
@@ -289,16 +283,15 @@ impl<T, E> CasBuilder<T, E> {
             self.attempt_timeout,
             self.flow_timeout,
             self.attempt_timeout_action,
-            self.immediate_backoff,
         ))
     }
 
-    /// Builds one executor with the contention-adaptive strategy.
+    /// Builds one executor with the contention-backoff strategy.
     ///
     /// # Returns
     /// A configured [`CasExecutor`] suitable for contended writers.
-    pub fn build_contention_adaptive(self) -> Result<CasExecutor<T, E>, CasBuildError> {
-        self.strategy(CasStrategy::ContentionAdaptive).build()
+    pub fn build_contention_backoff(self) -> Result<CasExecutor<T, E>, CasBuildError> {
+        self.strategy(CasStrategy::ContentionBackoff).build()
     }
 
     /// Builds one executor with the latency-first strategy.
