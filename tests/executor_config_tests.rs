@@ -81,6 +81,32 @@ fn test_strategy_and_individual_settings_follow_call_order() {
 }
 
 #[test]
+fn test_retry_policy_reports_installed_limits_without_execution() {
+    use std::time::Duration;
+
+    let executor = CasExecutor::<u8, ()>::builder()
+        .max_attempts(7)
+        .max_operation_elapsed(Some(Duration::from_millis(3)))
+        .max_total_elapsed(Some(Duration::from_millis(9)))
+        .no_delay()
+        .build()
+        .expect("valid policy");
+    let policy = executor.retry_policy();
+    assert_eq!(policy.admission_limits().max_attempts().get(), 7);
+    assert_eq!(
+        policy.admission_limits().operation_time_budget(),
+        Some(Duration::from_millis(3))
+    );
+    assert_eq!(
+        policy.admission_limits().total_time_budget(),
+        Some(Duration::from_millis(9))
+    );
+    assert!(std::ptr::eq(policy, executor.retry_policy()));
+    let cloned = executor.clone();
+    assert_eq!(cloned.retry_policy().admission_limits().max_attempts().get(), 7);
+}
+
+#[test]
 fn test_no_delay_replaces_fixed_delay_and_zero_fixed_is_equivalent() {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;

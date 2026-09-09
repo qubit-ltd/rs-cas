@@ -87,6 +87,16 @@ impl<T, E> std::fmt::Debug for CasExecutor<T, E> {
 }
 
 impl<T, E> CasExecutor<T, E> {
+    /// Returns the immutable retry policy used by this executor.
+    ///
+    /// This borrows configuration only; it does not execute a retry flow or
+    /// initialize any lazy execution state.
+    #[must_use = "inspect the configured retry policy"]
+    #[inline(always)]
+    pub fn retry_policy(&self) -> &RetryPolicy {
+        &self.policy
+    }
+
     /// Creates a CAS builder.
     ///
     /// # Returns
