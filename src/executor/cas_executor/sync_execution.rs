@@ -12,6 +12,7 @@ use std::sync::Mutex;
 
 use qubit_atomic::AtomicRef;
 use qubit_function::Function;
+use qubit_retry::Retry;
 
 use super::CasExecutor;
 use crate::CasError;
@@ -72,7 +73,7 @@ impl<T, E> CasExecutor<T, E> {
         E: 'static,
         O: Function<T, CasDecision<T, R, E>>,
     {
-        let attempt = self.result_retry().sync().run(|| run_sync_attempt(state, &operation));
+        let attempt = Retry::new(self.result_retry()).run(|| run_sync_attempt(state, &operation));
         match attempt {
             Ok(success) => {
                 // This adapter registers no completion observers; only retry context is
@@ -124,7 +125,7 @@ impl<T, E> CasExecutor<T, E> {
         let report_builder = Arc::new(Mutex::new(CasReportBuilder::start()));
         self.emit_started(&hooks, &report_builder);
         let retry = self.build_retry(&hooks, Arc::clone(&report_builder));
-        let attempt = retry.sync().run(|| run_sync_attempt(state, &operation));
+        let attempt = Retry::new(&retry).run(|| run_sync_attempt(state, &operation));
         self.finish_execution(attempt, hooks, None, report_builder)
     }
 }

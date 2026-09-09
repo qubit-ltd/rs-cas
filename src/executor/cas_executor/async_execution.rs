@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use qubit_atomic::AtomicRef;
+use qubit_retry::TokioRetry;
 
 use super::CasExecutor;
 use crate::cas_decision::CasDecision;
@@ -74,7 +75,7 @@ impl<T, E> CasExecutor<T, E> {
     {
         let attempt_snapshot = Arc::new(Mutex::new(None));
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
-        let mut async_retry = self.result_retry().tokio();
+        let mut async_retry = TokioRetry::new(self.result_retry());
         if let Some(timeout) = self.attempt_timeout {
             async_retry = async_retry.hard_attempt_timeout(timeout);
         }
@@ -131,7 +132,7 @@ impl<T, E> CasExecutor<T, E> {
         self.emit_started(&hooks, &report_builder);
         let retry = self.build_retry(&hooks, Arc::clone(&report_builder));
         let attempt_snapshot_for_attempt = Arc::clone(&attempt_snapshot);
-        let mut async_retry = retry.tokio();
+        let mut async_retry = TokioRetry::new(&retry);
         if let Some(timeout) = self.attempt_timeout {
             async_retry = async_retry.hard_attempt_timeout(timeout);
         }

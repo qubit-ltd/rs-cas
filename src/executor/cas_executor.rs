@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 
 use qubit_error::BoxError;
-use qubit_retry::Retry;
+use qubit_retry::RetryConfig;
 use qubit_retry::RetryPolicy;
 
 use super::cas_builder::CasBuilder;
@@ -50,7 +50,7 @@ pub struct CasExecutor<T, E = BoxError> {
     /// Whether the validated backoff is immediate.
     immediate_backoff: bool,
     /// Result-only retry definition initialized on its first use.
-    result_retry: Arc<OnceLock<Retry<CasAttemptFailure<T, E>>>>,
+    result_retry: Arc<OnceLock<RetryConfig<CasAttemptFailure<T, E>>>>,
     /// Marker preserving `T` and `E`.
     marker: PhantomData<fn() -> (T, E)>,
 }

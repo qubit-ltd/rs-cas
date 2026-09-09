@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use qubit_retry::AttemptFailure;
 use qubit_retry::BackoffStep;
-use qubit_retry::Retry;
+use qubit_retry::RetryConfig;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
 use qubit_retry::RetryFallback;
@@ -88,7 +88,7 @@ impl<T, E> CasExecutor<T, E> {
         &self,
         hooks: &CasHooks,
         report_builder: Arc<Mutex<CasReportBuilder>>,
-    ) -> Retry<CasAttemptFailure<T, E>>
+    ) -> RetryConfig<CasAttemptFailure<T, E>>
     where
         T: 'static,
         E: 'static,
@@ -98,7 +98,8 @@ impl<T, E> CasExecutor<T, E> {
         let observer_event_hook = event_hook.clone();
         let observer_report_builder = Arc::clone(&report_builder);
 
-        Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
+        RetryConfig::<CasAttemptFailure<T, E>>::builder()
+            .policy(self.policy.clone())
             .fallback(RetryFallback::Retry)
             .observer(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
@@ -156,20 +157,22 @@ impl<T, E> CasExecutor<T, E> {
                 },
             )
             .build()
+            .expect("validated CAS retry configuration")
     }
 
     /// Returns the cached retry definition used by result-only execution.
     ///
     /// # Returns
     /// An immutable retry definition initialized exactly once per executor.
-    pub(super) fn result_retry(&self) -> &Retry<CasAttemptFailure<T, E>>
+    pub(super) fn result_retry(&self) -> &RetryConfig<CasAttemptFailure<T, E>>
     where
         T: 'static,
         E: 'static,
     {
         self.result_retry.get_or_init(|| {
             let attempt_timeout_action = self.attempt_timeout_action;
-            Retry::<CasAttemptFailure<T, E>>::builder(self.policy.clone())
+            RetryConfig::<CasAttemptFailure<T, E>>::builder()
+                .policy(self.policy.clone())
                 .fallback(RetryFallback::Retry)
                 .rule(
                     move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, _context: &RetryContext| {
@@ -177,6 +180,7 @@ impl<T, E> CasExecutor<T, E> {
                     },
                 )
                 .build()
+                .expect("validated CAS retry configuration")
         })
     }
 }
