@@ -112,15 +112,16 @@ impl<T, R, E> CasDecision<T, R, E> {
     /// Creates an update decision from an `Arc<T>`.
     ///
     /// # Parameters
-    /// - `next`: Replacement state to install. The executor compares this exact
-    ///   allocation by pointer identity, not by `T` value equality.
+    /// - `next`: Replacement state allocation to publish after a successful
+    ///   compare-and-swap.
     /// - `output`: Business output returned on success.
     ///
     /// # Returns
-    /// A [`CasDecision::Update`] value retaining the supplied allocation.
-    /// Reusing an earlier `Arc` can therefore be affected by A-B-A changes;
-    /// do not mutate the pointee through interior mutability while it is a
-    /// shared CAS snapshot.
+    /// A [`CasDecision::Update`] value retaining the supplied allocation. The
+    /// executor compares its observed snapshot with the atomic current value
+    /// by pointer identity, not `T` value equality. Reusing an earlier `Arc`
+    /// can therefore be affected by A-B-A changes; do not mutate the pointee
+    /// through interior mutability while it is a shared CAS snapshot.
     #[inline(always)]
     pub fn update_arc(next: Arc<T>, output: R) -> Self {
         Self::Update { next, output }
