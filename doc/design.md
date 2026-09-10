@@ -1,6 +1,6 @@
 # Qubit CAS Design
 
-This document describes qubit-cas 0.13. [中文版](design.zh_CN.md).
+This document describes qubit-cas 0.14. [中文版](design.zh_CN.md).
 
 ## Responsibilities
 
@@ -38,6 +38,15 @@ No global event order is imposed across executions. Internal observers do not
 register completion callbacks; successful retry completion diagnostics must
 remain empty, checked by a debug assertion at the projection boundary.
 
+Alerts are registered only by `on_contention_alert`, which replaces thresholds
+and callback together. `RetryScheduled` follows accepted scheduling and selected
+backoff; it does not guarantee another attempt starts. Attempt exhaustion and
+scheduling-time budget rejection emit no such event.
+
+`CasRetryObserver` belongs to `executor/cas_executor/internal`; report accumulation
+belongs to `report/internal`. This keeps private implementation discoverable
+without widening executor helper visibility.
+
 ## Budget and cancellation boundaries
 
 Operation and total elapsed budgets prevent later attempts; they never revoke
@@ -74,7 +83,7 @@ preserve async timeout configuration. Subsequent setters override individual
 fields. A plain builder defaults to five attempts; LatencyFirst is a different
 preset with 100 attempts and explicit time budgets.
 
-The standard qubit-state-machine 0.8 builder accepts a configured CasExecutor.
+The standard qubit-state-machine 0.9 builder accepts a configured CasExecutor.
 Its success callback runs only after a committed transition. The fast variant
 and qubit-progress retain their separate qubit-fast-cas implementation.
 
@@ -90,4 +99,15 @@ throughput, conflict counts, failed calls, and p50/p95/p99 latency including fai
 calls. It does not hide exhausted calls behind unbounded retries. Absolute
 latency is machine-specific and not enforced as a shared-CI timing threshold.
 
-See the [user guide](user_guide.md) and [migration note](migration-0.13.md).
+See the [user guide](user_guide.md) and [migration note](migration-0.14.md).
+
+Installed configuration is read through four CAS getters: max_attempts,
+max_retries, max_operation_elapsed, and max_total_elapsed. Reads allocate nothing
+and do not initialize OnceLock. Public signatures do not expose RetryPolicy.
+AtomicRef, Function/Consumer, and default BoxError remain intentional public boundaries.
+
+The project CI hook executes current Rust examples extracted from both README
+files and both guides, and checks private Rustdoc. Historical migration snippets
+are not compiled as current examples. CAS package verification is distinct from
+downstream path/patch validation: publish CAS first, then validate downstream
+against the registry without local patches.

@@ -1,5 +1,7 @@
 # 迁移到 qubit-cas 0.13
 
+> 历史记录：本文仅描述 0.13 版本。当前 API 请参阅 [0.14 迁移说明](migration-0.14.zh_CN.md)。
+
 [English](migration-0.13.md)。
 
 本版本包含破坏性命名和依赖边界变更，请同时更新调用方；不保留 deprecated 兼容别名。

@@ -21,7 +21,7 @@
 
 ```toml
 [dependencies]
-qubit-cas = "0.13"
+qubit-cas = "0.14"
 qubit-atomic = "0.13"
 ```
 
@@ -32,7 +32,8 @@ qubit-atomic = "0.13"
 
 ```rust
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutor};
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutor;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Inventory { stock: u32 }
@@ -70,10 +71,9 @@ fn main() {
 | 数值型、无分配热路径 | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
 请阅读[用户指南](doc/user_guide.zh_CN.md)、[设计文档](doc/design.zh_CN.md)和
-[0.13 迁移说明](doc/migration-0.13.zh_CN.md)。完整 Rustdoc 见
+[0.14 迁移说明](doc/migration-0.14.zh_CN.md)。完整 Rustdoc 见
 [API 文档](https://docs.rs/qubit-cas)。`qubit-fast-cas` 是独立的紧凑 `u64` 状态机 crate，
 不提供报告、hooks、异步执行或业务重试。
-
 
 result-only 路径省去报告和事件成本；`update` 仍为新快照分配 `Arc`。超时是合作式的，
 不能抢占阻塞代码；已提交的状态和外部副作用不会被取消回滚。`CasError::diagnostic()`
@@ -81,6 +81,10 @@ result-only 路径省去报告和事件成本；`update` 仍为新快照分配 `
 
 英文教程见 [User Guide](doc/user_guide.md)。标准状态机可通过
 `StateMachineBuilder::cas_executor` 注入配置，紧凑整数状态继续使用独立的 fast-cas。
+
+0.14 通过 `max_attempts()`、`max_retries()`、`max_operation_elapsed()` 和
+`max_total_elapsed()` 读取实际配置。告警统一使用
+`on_contention_alert(thresholds, callback)`，重复注册会同时替换阈值和回调。
 
 ## 测试
 

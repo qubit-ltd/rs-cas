@@ -1,6 +1,6 @@
 # Qubit CAS User Guide
 
-This guide covers `qubit-cas` 0.13 for Rust applications that update shared
+This guide covers `qubit-cas` 0.14 for Rust applications that update shared
 immutable snapshots. The Chinese version is [`user_guide.zh_CN.md`](user_guide.zh_CN.md).
 
 ## Inventory reservation and setup
@@ -14,7 +14,7 @@ roll back its effects.
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.13", features = ["tokio"] }
+qubit-cas = { version = "0.14", features = ["tokio"] }
 qubit-atomic = "0.13"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
@@ -57,6 +57,32 @@ backoff, while preserving async timeouts and their action. Later setters such as
 `max_attempts` and `no_delay` replace the corresponding setting. Attempts include
 the initial operation.
 
+Executor getters read the installed attempt limits and soft budgets without
+executing CAS or initializing execution state. Backoff is configured on the
+builder; getters expose no retry policy object. This example overrides the
+attempt count while retaining the preset budgets:
+
+```rust
+use std::time::Duration;
+
+use qubit_cas::CasExecutor;
+use qubit_cas::CasStrategy;
+
+fn main() {
+    let executor = CasExecutor::<usize, ()>::builder()
+        .strategy(CasStrategy::LatencyFirst)
+        .max_attempts(7)
+        .build()
+        .expect("valid configuration");
+    assert_eq!(executor.max_attempts(), 7);
+    assert_eq!(executor.max_retries(), 6);
+    assert_eq!(executor.max_operation_elapsed(), Some(Duration::from_millis(5)));
+    assert_eq!(executor.max_total_elapsed(), Some(Duration::from_millis(20)));
+    assert_eq!(executor.attempt_timeout(), None);
+    assert_eq!(executor.flow_timeout(), None);
+}
+```
+
 ## 5. Soft budgets and hard timeouts
 
 `max_operation_elapsed` measures accumulated attempt time, including CAS adapter
@@ -78,8 +104,10 @@ decision semantics as its synchronous counterpart:
 
 ```rust
 use std::time::Duration;
+
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutor};
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutor;
 
 #[tokio::main]
 async fn main() {
@@ -118,6 +146,71 @@ The finished event contains the report snapshot before that listener runs; it
 cannot include its own later panic. Operation panics propagate. Panic isolation
 does not apply to panic=abort builds.
 
+### Alerts and event ordering
+
+Register alerts with `on_contention_alert(thresholds, callback)`; all three
+thresholds must be met. Each registration replaces both thresholds and callback.
+Pass `ContentionThresholds::default()` explicitly for default thresholds. This
+example forces one inventory conflict, then reserves from stock 7 to 6 and emits
+one alert:
+
+```rust
+use std::cell::Cell;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+use qubit_atomic::AtomicRef;
+use qubit_cas::CasAlert;
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutor;
+use qubit_cas::CasHooks;
+use qubit_cas::ContentionThresholds;
+
+fn main() {
+    let state = AtomicRef::from_value(3usize);
+    let first = Cell::new(true);
+    let alerts = Arc::new(AtomicUsize::new(0));
+    let observed = Arc::clone(&alerts);
+    let hooks = CasHooks::new().on_contention_alert(
+        ContentionThresholds::new(2, 1, 0.5),
+        move |alert: &CasAlert| {
+            assert_eq!(alert.report().conflicts(), 1);
+            observed.fetch_add(1, Ordering::SeqCst);
+        },
+    );
+    let executor = CasExecutor::<usize, ()>::builder().max_attempts(2).build().unwrap();
+    let outcome = executor.execute_with_hooks(&state, |current: &usize| {
+        if first.replace(false) {
+            state.store(Arc::new(7));
+        }
+        CasDecision::update(*current - 1, ())
+    }, hooks);
+    assert!(outcome.is_ok());
+    assert_eq!(outcome.report().attempts_total(), 2);
+    assert_eq!(*state.load(), 6);
+    assert_eq!(alerts.load(Ordering::SeqCst), 1);
+}
+```
+
+The `state.store` call only simulates another writer. Do not copy that side
+effect into a real business retry closure.
+
+`RetryScheduled` means scheduling checks passed and a delay was selected. A
+later deadline, cancellation, or admission check may still prevent the next
+operation. No `RetryScheduled` event is emitted after the final attempt or a scheduling-time
+budget rejection. Read terminal attempts to count executed operations.
+
+| Scenario | Event order | Executed attempts |
+| --- | --- | --- |
+| First attempt succeeds | Started → Finished | 1 |
+| One Retry then success | Started → AttemptFailed → RetryScheduled → Finished | 2 |
+| max_attempts=1, operation returns Retry | Started → AttemptFailed → Finished | 1 |
+| Total budget rejects the first retry delay | Started → AttemptFailed → Finished | 1 |
+| Flow timeout during a scheduled backoff | Started → AttemptFailed → RetryScheduled → Finished | 1 |
+
+Started/Finished abbreviate `ExecutionStarted`/`ExecutionFinished` in this table.
+
 ## 8. Errors and diagnostic ownership
 
 Use `kind()` for broad classification, `termination()` for attempts/budget/timeout
@@ -136,6 +229,35 @@ Use the category in program logic; message wording is for troubleshooting only.
 Ordinary abort, conflict, budget, and timeout termination have no infrastructure
 diagnostic. Dropping a future does not return a cancellation CasError.
 
+Insufficient stock is a business abort. Inspect the structured classification
+and retain the original error:
+
+```rust
+use qubit_atomic::AtomicRef;
+use qubit_cas::CasDecision;
+use qubit_cas::CasErrorKind;
+use qubit_cas::CasExecutor;
+use qubit_cas::CasTermination;
+
+fn main() {
+    let inventory = AtomicRef::from_value(0usize);
+    let error = CasExecutor::<usize, &'static str>::builder().build().unwrap()
+        .execute_result(&inventory, |stock: &usize| {
+            if *stock == 0 {
+                CasDecision::abort("out of stock")
+            } else {
+                CasDecision::update(*stock - 1, ())
+            }
+        })
+        .expect_err("empty inventory aborts");
+    assert_eq!(error.kind(), CasErrorKind::Abort);
+    assert_eq!(error.termination(), CasTermination::Aborted);
+    assert_eq!(error.error(), Some(&"out of stock"));
+    assert_eq!(**error.current().unwrap(), 0);
+    assert!(error.diagnostic().is_none());
+}
+```
+
 ## 9. Performance and `qubit-fast-cas`
 
 Prefer result-only execution on hot paths that do not need reports. Prefer
@@ -143,6 +265,11 @@ Prefer result-only execution on hot paths that do not need reports. Prefer
 they must be exported. For a compact `u64` state machine that needs no reports,
 hooks, async support, or business retry, use
 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) instead.
+
+The standard `qubit-state-machine` 0.9 path uses CAS 0.14 and accepts an executor
+through `StateMachineBuilder::cas_executor`. Fast-only builds do not depend on
+CAS. `AtomicRef`, `Function`/`Consumer`, and the default `BoxError` are intentional
+public collaboration boundaries; hiding retry types does not hide all upstream types.
 
 ## 10. Troubleshooting and limits
 
@@ -167,4 +294,4 @@ every CAS operation avoids allocation. Run `cargo bench --bench contention` to
 measure contention and tail latency.
 
 Return to the [README](../README.md), [API](https://docs.rs/qubit-cas), or
-[0.13 migration note](migration-0.13.md).
+[0.14 migration note](migration-0.14.md).

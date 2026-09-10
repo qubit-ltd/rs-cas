@@ -1,5 +1,7 @@
 # Migrating to qubit-cas 0.13
 
+> Historical note: this page describes version 0.13 only. See the [0.14 migration note](migration-0.14.md) for the current API.
+
 [中文版](migration-0.13.zh_CN.md).
 
 This release makes breaking naming and dependency-boundary changes. Update all

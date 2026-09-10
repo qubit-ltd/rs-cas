@@ -1,6 +1,6 @@
 # Qubit CAS 用户指南
 
-本指南适用于 `qubit-cas` 0.13，面向需要并发更新不可变状态的 Rust 应用开发者。英文版本见
+本指南适用于 `qubit-cas` 0.14，面向需要并发更新不可变状态的 Rust 应用开发者。英文版本见
 [`user_guide.md`](user_guide.md)。
 
 ## 库存预留场景与安装
@@ -11,7 +11,7 @@ OutOfStock。只有成功提交的 output 交给调用者。发送通知或扣�
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.13", features = ["tokio"] }
+qubit-cas = { version = "0.14", features = ["tokio"] }
 qubit-atomic = "0.13"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
@@ -44,6 +44,31 @@ builder 默认是 5 次尝试、无延迟、无软预算；LatencyFirst 是 100 
 配置按调用顺序最后写入生效：strategy 替换次数、软预算和退避，但保留异步 timeout/action；
 随后调用 max_attempts/no_delay 可覆盖对应配置。次数包括首次尝试。
 
+四个 executor getter 读取实际生效的次数和软预算，不执行 CAS，也不初始化执行缓存。
+退避在 builder 上配置；getter 不暴露 retry 内部策略对象。下面先选择延迟优先预设，
+再把次数改成 7，时间预算仍沿用预设：
+
+```rust
+use std::time::Duration;
+
+use qubit_cas::CasExecutor;
+use qubit_cas::CasStrategy;
+
+fn main() {
+    let executor = CasExecutor::<usize, ()>::builder()
+        .strategy(CasStrategy::LatencyFirst)
+        .max_attempts(7)
+        .build()
+        .expect("valid configuration");
+    assert_eq!(executor.max_attempts(), 7);
+    assert_eq!(executor.max_retries(), 6);
+    assert_eq!(executor.max_operation_elapsed(), Some(Duration::from_millis(5)));
+    assert_eq!(executor.max_total_elapsed(), Some(Duration::from_millis(20)));
+    assert_eq!(executor.attempt_timeout(), None);
+    assert_eq!(executor.flow_timeout(), None);
+}
+```
+
 ## 5. 软预算与硬超时
 
 `max_operation_elapsed` 限制尝试累计耗时（包括 CAS 适配工作）；`max_total_elapsed`
@@ -61,8 +86,10 @@ result-only 异步 operation 与同步版本具有相同的决策语义：
 
 ```rust
 use std::time::Duration;
+
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutor};
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutor;
 
 #[tokio::main]
 async fn main() {
@@ -97,6 +124,66 @@ async fn main() {
 完成事件携带调用该 listener 之前的报告快照，不能包含它自身稍后发生的 panic。
 用户 operation 的 panic 继续向外传播；panic=abort 构建不提供隔离保证。
 
+### 告警与事件时序
+
+只有 `on_contention_alert(thresholds, callback)` 能注册告警，三个阈值必须全部满足。
+重复调用时，阈值和回调一起替换；使用默认阈值时显式传入 `ContentionThresholds::default()`。
+下例模拟一次库存竞争，第二次尝试基于新库存 7 扣减到 6，并触发一次告警：
+
+```rust
+use std::cell::Cell;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+use qubit_atomic::AtomicRef;
+use qubit_cas::CasAlert;
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutor;
+use qubit_cas::CasHooks;
+use qubit_cas::ContentionThresholds;
+
+fn main() {
+    let state = AtomicRef::from_value(3usize);
+    let first = Cell::new(true);
+    let alerts = Arc::new(AtomicUsize::new(0));
+    let observed = Arc::clone(&alerts);
+    let hooks = CasHooks::new().on_contention_alert(
+        ContentionThresholds::new(2, 1, 0.5),
+        move |alert: &CasAlert| {
+            assert_eq!(alert.report().conflicts(), 1);
+            observed.fetch_add(1, Ordering::SeqCst);
+        },
+    );
+    let executor = CasExecutor::<usize, ()>::builder().max_attempts(2).build().unwrap();
+    let outcome = executor.execute_with_hooks(&state, |current: &usize| {
+        if first.replace(false) {
+            state.store(Arc::new(7));
+        }
+        CasDecision::update(*current - 1, ())
+    }, hooks);
+    assert!(outcome.is_ok());
+    assert_eq!(outcome.report().attempts_total(), 2);
+    assert_eq!(*state.load(), 6);
+    assert_eq!(alerts.load(Ordering::SeqCst), 1);
+}
+```
+
+这里的 `state.store` 仅用来模拟另一写者，不推荐在真实业务重试闭包中执行外部副作用。
+
+`RetryScheduled` 表示调度检查已通过并选定延迟，后续 deadline、取消或准入检查仍可能阻止
+下一次操作开始。最终次数耗尽或调度预算不足时不发送该事件；实际次数读取终态 attempts。
+
+| 场景 | 事件顺序 | 实际尝试次数 |
+| --- | --- | --- |
+| 第一次成功 | Started → Finished | 1 |
+| 一次 Retry 后成功 | Started → AttemptFailed → RetryScheduled → Finished | 2 |
+| max_attempts=1，返回 Retry | Started → AttemptFailed → Finished | 1 |
+| 第一次 Retry 的退避被总预算拒绝 | Started → AttemptFailed → Finished | 1 |
+| 已调度，但退避期间触发 flow timeout | Started → AttemptFailed → RetryScheduled → Finished | 1 |
+
+表中 Started/Finished 分别是 `ExecutionStarted`/`ExecutionFinished` 的简写。
+
 ## 8. 错误与诊断所有权
 
 使用 `kind()` 判断错误类别，`termination()` 区分次数/预算/超时终止原因，
@@ -110,11 +197,44 @@ async fn main() {
 `completion_diagnostics()` 按顺序保留终态冻结后的回调失败。程序判断使用 kind，message 仅用于排障，
 不依赖其文本格式。普通 Abort/冲突/预算/超时没有基础设施诊断。drop 取消 future 不会返回 CasError。
 
+库存不足属于业务终止，应检查结构化分类并读取原始错误：
+
+```rust
+use qubit_atomic::AtomicRef;
+use qubit_cas::CasDecision;
+use qubit_cas::CasErrorKind;
+use qubit_cas::CasExecutor;
+use qubit_cas::CasTermination;
+
+fn main() {
+    let inventory = AtomicRef::from_value(0usize);
+    let error = CasExecutor::<usize, &'static str>::builder().build().unwrap()
+        .execute_result(&inventory, |stock: &usize| {
+            if *stock == 0 {
+                CasDecision::abort("out of stock")
+            } else {
+                CasDecision::update(*stock - 1, ())
+            }
+        })
+        .expect_err("empty inventory aborts");
+    assert_eq!(error.kind(), CasErrorKind::Abort);
+    assert_eq!(error.termination(), CasTermination::Aborted);
+    assert_eq!(error.error(), Some(&"out of stock"));
+    assert_eq!(**error.current().unwrap(), 0);
+    assert!(error.diagnostic().is_none());
+}
+```
+
 ## 9. 性能与 `qubit-fast-cas`
 
 不需要报告的热路径优先使用 result-only 执行。需要报告时使用 `execute`；如果必须导出事件，
 请将事件投递到无阻塞 channel。对于不需要报告、hooks、异步支持和业务重试的紧凑 `u64`
 状态机，请使用独立的 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas)。
+
+标准状态机 `qubit-state-machine` 0.9 使用 CAS 0.14，支持通过
+`StateMachineBuilder::cas_executor` 注入配置。仅启用 fast 时不引入 CAS。
+`AtomicRef`、`Function`/`Consumer` 和默认错误类型 `BoxError` 是有意保留的公共协作边界；
+隐藏 retry 内部类型不代表隐藏全部上游类型。
 
 ## 10. 排障与限制
 
@@ -130,4 +250,4 @@ async fn main() {
 `update` 为每个新快照分配 Arc；`update_arc` 可复用预先分配的快照。热 finish 的执行器记账不分配，
 但不能把它推广成任意 CAS 操作无分配。运行 `cargo bench --bench contention` 评估竞争与尾延迟。
 
-返回 [README](../README.zh_CN.md)；参阅 [API](https://docs.rs/qubit-cas) 和 [0.13 迁移说明](migration-0.13.zh_CN.md)。
+返回 [README](../README.zh_CN.md)；参阅 [API](https://docs.rs/qubit-cas) 和 [0.14 迁移说明](migration-0.14.zh_CN.md)。

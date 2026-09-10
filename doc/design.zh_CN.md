@@ -1,6 +1,6 @@
 # Qubit CAS 设计
 
-本文描述 qubit-cas 0.13。[English](design.md)。
+本文描述 qubit-cas 0.14。[English](design.md)。
 
 ## 职责划分
 
@@ -30,6 +30,13 @@ Result-only 路径不构造报告、不发送 hook 事件。完整路径创建�
 不同执行之间不保证全局事件顺序。内部 observer 不注册 completion callbacks，
 成功路径的 retry completion diagnostics 应为空，投影边界通过 debug_assert 检查这个不变量。
 
+告警只通过 `on_contention_alert` 同时注册阈值与回调，重复注册整体替换。
+`RetryScheduled` 在调度检查通过并选定延迟后发送，不保证后续尝试一定开始；
+最终次数耗尽或调度预算不足时不发送。
+
+`CasRetryObserver` 归属 `executor/cas_executor/internal`，报告累加器归属 `report/internal`。
+私有模块负责适配与报告记账，不扩大执行器 helper 的可见性。
+
 ## 预算与取消边界
 
 操作与总耗时软预算只阻止后续尝试，不撤销已准入的成功结果。操作耗时包含 CAS 适配工作。
@@ -56,7 +63,7 @@ ContentionBackoff 是固定指数退避加 jitter，不会学习竞争率。Stra
 保留异步 timeout 配置；后续 setter 覆盖单个字段。普通 builder 默认五次尝试，
 LatencyFirst 则是 100 次尝试并带时间预算的另一套预设。
 
-qubit-state-machine 0.8 的标准 builder 接受配置好的 CasExecutor，成功回调仍只在提交后执行。
+qubit-state-machine 0.9 的标准 builder 接受配置好的 CasExecutor，成功回调仍只在提交后执行。
 Fast 版和 qubit-progress 继续使用独立的 qubit-fast-cas。
 
 ## 性能与验证
@@ -68,4 +75,12 @@ owned/预分配更新和有无异步 timeout。
 竞争基准使用 1/2/4/8 个写者、三种预设，记录成功吞吐、冲突数、失败调用和包含失败的
 p50/p95/p99 延迟；不会通过无限重试隐藏耗尽的调用。绝对耗时取决于机器，不作为共享 CI 的时间门槛。
 
-参阅[用户指南](user_guide.zh_CN.md)和[迁移说明](migration-0.13.zh_CN.md)。
+参阅[用户指南](user_guide.zh_CN.md)和[迁移说明](migration-0.14.zh_CN.md)。
+
+当前配置通过四个 CAS getter 读取：max_attempts、max_retries、max_operation_elapsed、
+max_total_elapsed；读取不分配、不初始化 OnceLock。公开签名不暴露 RetryPolicy。
+AtomicRef、Function/Consumer 和默认 BoxError 继续保留为公共协作边界。
+
+项目 CI hook 抽取两份 README 和两份用户手册的当前 Rust 示例并运行，同时检查私有 Rustdoc。
+历史迁移片段不按当前 API 编译。CAS 发布包验证与下游含 path/patch 的本地验证分开记录；
+正式发布先上传 CAS，随后才能进行下游无 patch 的 registry 验证。

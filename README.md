@@ -22,7 +22,7 @@ side effects idempotent; CAS may invoke it more than once.
 
 ```toml
 [dependencies]
-qubit-cas = "0.13"
+qubit-cas = "0.14"
 qubit-atomic = "0.13"
 ```
 
@@ -34,7 +34,8 @@ implementation types are needed.
 
 ```rust
 use qubit_atomic::AtomicRef;
-use qubit_cas::{CasDecision, CasExecutor};
+use qubit_cas::CasDecision;
+use qubit_cas::CasExecutor;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Inventory { stock: u32 }
@@ -72,10 +73,9 @@ fn main() {
 | Numeric allocation-free hot path | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
 Read the [user guide](doc/user_guide.md), [design](doc/design.md), and
-[0.13 migration note](doc/migration-0.13.md). The [API documentation](https://docs.rs/qubit-cas)
+[0.14 migration note](doc/migration-0.14.md). The [API documentation](https://docs.rs/qubit-cas)
 contains the complete Rustdoc. `qubit-fast-cas` is a separate compact `u64`
 state-machine crate without reports, hooks, async execution, or business retry.
-
 
 Result-only execution skips reports and events; `update` still allocates an `Arc`
 for the replacement snapshot. Timeouts are cooperative and cannot preempt blocking
@@ -86,6 +86,10 @@ and callback details, separately from the business `error()`.
 See the [Chinese guide](doc/user_guide.zh_CN.md). Standard state machines can inject
 an executor with `StateMachineBuilder::cas_executor`; compact integer states keep
 using the separate fast-cas crate.
+
+Version 0.14 exposes installed limits through `max_attempts()`, `max_retries()`,
+`max_operation_elapsed()`, and `max_total_elapsed()`. Register alerts through
+`on_contention_alert(thresholds, callback)`; repeated registration replaces both.
 
 ## Testing
 
