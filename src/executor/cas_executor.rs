@@ -51,6 +51,12 @@ use crate::strategy::CasStrategy;
 /// - `T`: Shared application state; cloning the executor does not clone it.
 /// - `E`: Business failure type; it need not implement Clone.
 ///
+/// State comparison uses the [`Arc`] allocation's pointer identity. Equal
+/// values in different allocations conflict, while reusing an old allocation
+/// is subject to the usual A-B-A limitation. Treat published snapshots as
+/// immutable: interior mutation can invalidate the value semantics assumed by
+/// the operation and its callers.
+///
 /// # Examples
 ///
 /// ```

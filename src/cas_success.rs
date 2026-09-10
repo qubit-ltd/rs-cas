@@ -171,10 +171,12 @@ impl<T, R> CasSuccess<T, R> {
         }
     }
 
-    /// Returns the current state after success.
+    /// Returns the snapshot associated with the successful terminal attempt.
     ///
     /// # Returns
-    /// Shared reference to the current state.
+    /// Shared reference to that captured snapshot. It is not a fresh load, so
+    /// a later writer may already have published another state by the time
+    /// this method returns.
     #[must_use]
     #[inline(always)]
     pub fn current(&self) -> &Arc<T> {
