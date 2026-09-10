@@ -1,6 +1,6 @@
 # Qubit CAS 用户指南
 
-本指南适用于 `qubit-cas` 0.14，面向需要并发更新不可变状态的 Rust 应用开发者。英文版本见
+本指南适用于 `qubit-cas` 0.15，面向需要并发更新不可变状态的 Rust 应用开发者。英文版本见
 [`user_guide.md`](user_guide.md)。
 
 ## 库存预留场景与安装
@@ -11,7 +11,7 @@ OutOfStock。只有成功提交的 output 交给调用者。发送通知或扣�
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.14", features = ["tokio"] }
+qubit-cas = { version = "0.15", features = ["tokio"] }
 qubit-atomic = "0.13"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
@@ -22,6 +22,13 @@ tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 `CasDecision::update` 返回的新值。只有观测到的快照仍然是当前值时，compare-and-swap
 才会成功。成功的 compare-and-swap 是本次更新的线性化点。`finish` 决策在线程观测当前
 快照时线性化，不写入新值。
+
+比较依据是 `Arc::ptr_eq`，不是 `T` 的值。分别分配、内容相同的两个 `Arc` 仍属于不同快照，
+可能彼此冲突。使用 `update_arc` 时，应根据 operation 得到的观测快照生成替换值。不要把历史
+`Arc` 当作 A-B-A 检测器：一个分配身份可以在中间更新之后再次被安装，这段历史不会被 CAS 暴露。
+`T` 内的 `Mutex`、`Cell`、原子字段和其他内部可变性也不受身份 CAS 保护。需要共同协调的状态
+应放进不可变、带版本的快照中。`CasSuccess::current()` 返回 `update` 已发布或 `finish` 已观测
+的快照；调用方拿到结果前，全局状态可能已经被其他写者替换。
 
 ## 2. 决策
 
@@ -34,6 +41,27 @@ tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 调用方只需要 `Result<CasSuccess<...>, CasError<...>>` 时，使用 `execute_result` 或
 `execute_async_result`；这两条路径不会构造报告和 hooks。需要尝试次数、冲突、耗时或
 终态时使用 `execute`/`execute_async`。需要单次执行的事件或告警时使用 `*_with_hooks`。
+
+## 0.15 的默认错误与 Clone
+
+`CasExecutor<T>` 和 `CasBuilder<T>` 的默认业务错误改为 `CasBoxError`。它实现
+`std::error::Error`，并把被包装的错误保留为 source，因此默认的终态 `CasError` 可以接入
+普通错误链。具体错误必须显式装箱；若提供 blanket `From<E>`，会与 Rust 已有的
+`From<T> for T` 实现重叠。
+
+```rust
+use std::error::Error;
+
+use qubit_cas::CasBoxError;
+
+fn main() {
+    let error = CasBoxError::new(Box::new(std::io::Error::other("reservation failed")));
+    assert_eq!(error.source().unwrap().to_string(), "reservation failed");
+}
+```
+
+`CasDecision`、`CasSuccess`、`CasAttemptFailure`、`CasError` 和 `CasOutcome` 克隆时共享
+`Arc<T>`。它们不再要求 `T: Clone`；只有按值持有的 output 或业务错误需要 `Clone`。
 
 ## 4. 策略与 builder
 
@@ -231,9 +259,9 @@ fn main() {
 请将事件投递到无阻塞 channel。对于不需要报告、hooks、异步支持和业务重试的紧凑 `u64`
 状态机，请使用独立的 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas)。
 
-标准状态机 `qubit-state-machine` 0.9 使用 CAS 0.14，支持通过
+标准状态机 `qubit-state-machine` 0.9 使用 CAS 0.15，支持通过
 `StateMachineBuilder::cas_executor` 注入配置。仅启用 fast 时不引入 CAS。
-`AtomicRef`、`Function`/`Consumer` 和默认错误类型 `BoxError` 是有意保留的公共协作边界；
+`AtomicRef`、`Function`/`Consumer` 和默认错误类型 `CasBoxError` 是有意保留的公共协作边界；
 隐藏 retry 内部类型不代表隐藏全部上游类型。
 
 ## 10. 排障与限制
@@ -247,7 +275,8 @@ fn main() {
 执行器不能为多个原子值提供跨对象事务，也不能让不可重放的 operation 变安全。当更新需要
 长临界区或外部协调时，应使用锁或数据库事务。
 
-`update` 为每个新快照分配 Arc；`update_arc` 可复用预先分配的快照。热 finish 的执行器记账不分配，
-但不能把它推广成任意 CAS 操作无分配。运行 `cargo bench --bench contention` 评估竞争与尾延迟。
+`update` 为每个新快照分配 Arc；`update_arc` 可复用预先分配的快照。预先分配不能把历史快照变成
+版本标记，替换值仍应从当前观测推导。热 finish 的执行器记账不分配，但不能把它推广成任意 CAS
+操作无分配。运行 `cargo bench --bench contention` 评估竞争与尾延迟。
 
-返回 [README](../README.zh_CN.md)；参阅 [API](https://docs.rs/qubit-cas) 和 [0.14 迁移说明](migration-0.14.zh_CN.md)。
+返回 [README](../README.zh_CN.md)；参阅 [API](https://docs.rs/qubit-cas) 和 [0.15 迁移说明](migration-0.15.zh_CN.md)。

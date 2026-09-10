@@ -71,7 +71,7 @@ fn main() {
 | 数值型、无分配热路径 | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
 请阅读[用户指南](doc/user_guide.zh_CN.md)、[设计文档](doc/design.zh_CN.md)和
-[0.14 迁移说明](doc/migration-0.14.zh_CN.md)。完整 Rustdoc 见
+[0.15 迁移说明](doc/migration-0.15.zh_CN.md)。完整 Rustdoc 见
 [API 文档](https://docs.rs/qubit-cas)。`qubit-fast-cas` 是独立的紧凑 `u64` 状态机 crate，
 不提供报告、hooks、异步执行或业务重试。
 
@@ -82,9 +82,24 @@ result-only 路径省去报告和事件成本；`update` 仍为新快照分配 `
 英文教程见 [User Guide](doc/user_guide.md)。标准状态机可通过
 `StateMachineBuilder::cas_executor` 注入配置，紧凑整数状态继续使用独立的 fast-cas。
 
-0.14 通过 `max_attempts()`、`max_retries()`、`max_operation_elapsed()` 和
+0.15 通过 `max_attempts()`、`max_retries()`、`max_operation_elapsed()` 和
 `max_total_elapsed()` 读取实际配置。告警统一使用
 `on_contention_alert(thresholds, callback)`，重复注册会同时替换阈值和回调。
+
+## 快照身份与默认错误
+
+CAS 比较的是 `Arc::ptr_eq` 所表示的快照身份，不比较 `T` 的值。两个分别分配、内容相同的
+`Arc` 仍是不同快照；其中一个的安装可能与对另一个的观测发生冲突。调用 `update_arc` 时，应从
+operation 接收的当前快照计算替换值；不要用历史 `Arc` 判断 A-B-A 过程，因为身份可以回到
+先前分配，而中间的发布不会因此暴露。`T` 内部的 `Mutex`、`Cell`、原子字段等内部可变状态
+不受这项身份比较保护。若这些修改也必须参与 CAS 合同，请使用不可变的版本化状态。
+`CasSuccess::current()` 返回的是 `update` 已发布或 `finish` 已观测到的快照；方法返回前，
+全局状态可能已经被其他写者替换。
+
+默认业务错误类型改为 `CasBoxError`，使默认终态错误能够进入 `std::error::Error` 的 source
+链。具体错误需要显式写成 `CasBoxError::new(Box::new(error))`；0.15 有意不提供 blanket
+`From<E>`，因为它会与 Rust 的 `From<T> for T` 重叠。`CasSuccess`、`CasError` 和
+`CasOutcome` 现在不再要求快照 `T: Clone`；只有按值保存的 output 或业务错误需要 `Clone`。
 
 ## 测试
 

@@ -1,6 +1,6 @@
 # Qubit CAS User Guide
 
-This guide covers `qubit-cas` 0.14 for Rust applications that update shared
+This guide covers `qubit-cas` 0.15 for Rust applications that update shared
 immutable snapshots. The Chinese version is [`user_guide.zh_CN.md`](user_guide.zh_CN.md).
 
 ## Inventory reservation and setup
@@ -14,7 +14,7 @@ roll back its effects.
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.14", features = ["tokio"] }
+qubit-cas = { version = "0.15", features = ["tokio"] }
 qubit-atomic = "0.13"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
@@ -27,6 +27,17 @@ The compare-and-swap succeeds only if the observed snapshot is still current.
 The successful compare-and-swap is the update's linearization point. A
 `finish` decision linearizes at the observation of the current snapshot and
 does not write it.
+
+The comparison is `Arc::ptr_eq`, rather than a comparison of `T` values. Equal
+values in separately allocated `Arc`s are different snapshots and can conflict.
+For `update_arc`, derive the replacement from the operation's observed snapshot.
+Do not use a historical `Arc` as an A-B-A detector: an allocation identity can
+be installed again after an intervening update, so that history is not exposed.
+`Mutex`, `Cell`, atomic fields, and other interior-mutability in `T` are not
+protected by identity CAS. Put state that must be coordinated into immutable,
+versioned snapshots. `CasSuccess::current()` returns the snapshot that an
+`update` published or a `finish` observed; another writer may replace the global
+state before the caller receives that result.
 
 ## 2. Decisions
 
@@ -43,6 +54,29 @@ Use `execute_result` or `execute_async_result` when the caller needs only
 construction. Use `execute`/`execute_async` when attempts, conflicts, elapsed
 time, or terminal outcomes are needed. Use the `*_with_hooks` variants for
 per-execution events or alerts.
+
+## Default errors and cloning in 0.15
+
+`CasExecutor<T>` and `CasBuilder<T>` now default their business error to
+`CasBoxError`. It implements `std::error::Error` and retains the wrapped error
+as its source, so the default terminal `CasError` can participate in ordinary
+error chains. A concrete error must be boxed explicitly; a blanket `From<E>`
+implementation would overlap with Rust's `From<T> for T` implementation.
+
+```rust
+use std::error::Error;
+
+use qubit_cas::CasBoxError;
+
+fn main() {
+    let error = CasBoxError::new(Box::new(std::io::Error::other("reservation failed")));
+    assert_eq!(error.source().unwrap().to_string(), "reservation failed");
+}
+```
+
+`CasDecision`, `CasSuccess`, `CasAttemptFailure`, `CasError`, and `CasOutcome`
+share `Arc<T>` when cloned. They no longer require `T: Clone`; only an owned
+output or business error requires `Clone`.
 
 ## 4. Strategies and builders
 
@@ -266,9 +300,9 @@ they must be exported. For a compact `u64` state machine that needs no reports,
 hooks, async support, or business retry, use
 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) instead.
 
-The standard `qubit-state-machine` 0.9 path uses CAS 0.14 and accepts an executor
+The standard `qubit-state-machine` 0.9 path uses CAS 0.15 and accepts an executor
 through `StateMachineBuilder::cas_executor`. Fast-only builds do not depend on
-CAS. `AtomicRef`, `Function`/`Consumer`, and the default `BoxError` are intentional
+CAS. `AtomicRef`, `Function`/`Consumer`, and the default `CasBoxError` are intentional
 public collaboration boundaries; hiding retry types does not hide all upstream types.
 
 ## 10. Troubleshooting and limits
@@ -289,9 +323,10 @@ transaction when the update requires a long critical section or external
 coordination.
 
 `update` allocates an Arc for each new snapshot; `update_arc` accepts a preallocated
-snapshot. Warm finish bookkeeping does not allocate, but this is not a claim that
-every CAS operation avoids allocation. Run `cargo bench --bench contention` to
-measure contention and tail latency.
+snapshot. Preallocation does not make an old snapshot a version marker: always
+derive the replacement from the current observation. Warm finish bookkeeping does
+not allocate, but this is not a claim that every CAS operation avoids allocation.
+Run `cargo bench --bench contention` to measure contention and tail latency.
 
 Return to the [README](../README.md), [API](https://docs.rs/qubit-cas), or
-[0.14 migration note](migration-0.14.md).
+[0.15 migration note](migration-0.15.md).

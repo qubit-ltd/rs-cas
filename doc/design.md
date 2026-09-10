@@ -1,6 +1,6 @@
 # Qubit CAS Design
 
-This document describes qubit-cas 0.14. [中文版](design.zh_CN.md).
+This document describes qubit-cas 0.15. [中文版](design.zh_CN.md).
 
 ## Responsibilities
 
@@ -8,6 +8,10 @@ This document describes qubit-cas 0.14. [中文版](design.zh_CN.md).
 those decisions to the single Retry/TokioRetry control engine. The builder owns
 validated settings; the executor caches a result-only retry configuration in a
 shared OnceLock. Cloning configuration never requires T or E to implement Clone.
+
+`CasDecision`, `CasAttemptFailure`, `CasSuccess`, `CasError`, and `CasOutcome`
+also clone their `Arc<T>` snapshots by sharing them. Their `Clone` implementations
+therefore require only a cloned owned output or business error, never `T: Clone`.
 
 The CAS adapter owns atomic snapshot publication and CAS-specific termination.
 The retry dependency owns admission, backoff, clocks, and timeout precedence.
@@ -20,9 +24,21 @@ and output belong to that successful attempt. Conflicting attempts discard their
 output and reload state before recomputing. A same-value replacement remains an
 Update. Finish linearizes at its snapshot read and does not revalidate it.
 
+The comparison is identity-based: `AtomicRef::compare_set` uses `Arc::ptr_eq`,
+not equality of `T`. Equal values in distinct allocations are distinct snapshots
+and conflict. An `update_arc` caller must derive its replacement from the current
+observation. A historical `Arc` is not an A-B-A detector, because a prior
+allocation can be published again after an intervening update. Identity CAS does
+not cover mutations behind `Mutex`, `Cell`, atomics, or other interior mutability
+inside `T`; applications needing those mutations in this contract must model them
+in immutable, versioned snapshots.
+
 The snapshot is not promised to remain globally current after return. Operations
 must be replayable. External effects require separate idempotency or placement
 after success; CAS does not provide a transaction across resources.
+`CasSuccess::current()` is the snapshot an `Updated` result published or a
+`Finished` result observed. It may already have been replaced globally before
+the caller receives the result.
 
 ## Execution and observation
 
@@ -30,7 +46,12 @@ Result-only calls skip report construction and hook dispatch. Rich execution
 creates a per-execution report and retry observers. Both use the same decision
 projection, retry classifier, and terminal mapper. Hooks are per call and never
 run while holding the report mutex. Listener panics are caught with unwinding
-enabled and appended to the final returned report. Operation panics propagate.
+enabled and appended to the final returned report. The listener's panic payload
+is described before it is dropped inside a second unwind boundary; if that drop
+panics, its second payload is intentionally forgotten so no listener failure can
+change an already determined CAS result. This exceptional leak is limited to a
+payload whose destructor violates the no-panic convention. Operation panics
+propagate, and `panic = "abort"` builds cannot isolate any panic.
 
 Finished-event and alert reports are snapshots taken before their callbacks.
 The final returned report additionally includes failures from those callbacks.
@@ -75,6 +96,13 @@ completion_diagnostics retains post-terminal callback failures in order.
 Message text is not a stable parsing protocol. Public APIs do not require retry
 implementation types and provide no From<RetryError> compatibility bridge.
 
+The default business error for `CasExecutor<T>` and `CasBuilder<T>` is
+`CasBoxError`, a newtype around `BoxError` that implements `Error` and returns
+the wrapped error as its source. `CasError<T, CasBoxError>` consequently retains
+the ordinary source chain. Concrete errors are wrapped explicitly with
+`CasBoxError::new(Box::new(error))`. No blanket `From<E>` exists: it would overlap
+with the standard `From<T> for T` implementation.
+
 ## Presets and downstream use
 
 ContentionBackoff is fixed exponential backoff with jitter, not an adaptive
@@ -99,12 +127,12 @@ throughput, conflict counts, failed calls, and p50/p95/p99 latency including fai
 calls. It does not hide exhausted calls behind unbounded retries. Absolute
 latency is machine-specific and not enforced as a shared-CI timing threshold.
 
-See the [user guide](user_guide.md) and [migration note](migration-0.14.md).
+See the [user guide](user_guide.md) and [0.15 migration note](migration-0.15.md).
 
 Installed configuration is read through four CAS getters: max_attempts,
 max_retries, max_operation_elapsed, and max_total_elapsed. Reads allocate nothing
 and do not initialize OnceLock. Public signatures do not expose RetryPolicy.
-AtomicRef, Function/Consumer, and default BoxError remain intentional public boundaries.
+AtomicRef, Function/Consumer, and default CasBoxError remain intentional public boundaries.
 
 The project CI hook executes current Rust examples extracted from both README
 files and both guides, and checks private Rustdoc. Historical migration snippets

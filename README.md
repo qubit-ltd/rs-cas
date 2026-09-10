@@ -73,7 +73,7 @@ fn main() {
 | Numeric allocation-free hot path | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
 Read the [user guide](doc/user_guide.md), [design](doc/design.md), and
-[0.14 migration note](doc/migration-0.14.md). The [API documentation](https://docs.rs/qubit-cas)
+[0.15 migration note](doc/migration-0.15.md). The [API documentation](https://docs.rs/qubit-cas)
 contains the complete Rustdoc. `qubit-fast-cas` is a separate compact `u64`
 state-machine crate without reports, hooks, async execution, or business retry.
 
@@ -87,9 +87,30 @@ See the [Chinese guide](doc/user_guide.zh_CN.md). Standard state machines can in
 an executor with `StateMachineBuilder::cas_executor`; compact integer states keep
 using the separate fast-cas crate.
 
-Version 0.14 exposes installed limits through `max_attempts()`, `max_retries()`,
+Version 0.15 exposes installed limits through `max_attempts()`, `max_retries()`,
 `max_operation_elapsed()`, and `max_total_elapsed()`. Register alerts through
 `on_contention_alert(thresholds, callback)`; repeated registration replaces both.
+
+## Snapshot identity and default errors
+
+CAS compares snapshot identity with `Arc::ptr_eq`, not the value inside `T`.
+Two separately allocated `Arc`s containing equal values are distinct snapshots;
+installing either can conflict with an observation of the other. Build an
+`update_arc` replacement from the snapshot passed to the operation, and do not
+use an old `Arc` to detect an A-B-A history: identity can return to a prior
+allocation without exposing the intervening publication. `Mutex`, `Cell`, atomic
+fields, and other interior-mutability inside `T` are outside this identity check.
+Use immutable, versioned state when those mutations must participate in the CAS
+contract. `CasSuccess::current()` is the snapshot published by an `update` or
+observed by a `finish`; another writer may replace the global state before the
+method returns.
+
+The default business-error type is `CasBoxError`, so terminal default errors
+participate in `std::error::Error` source chains. Wrap concrete errors explicitly
+with `CasBoxError::new(Box::new(error))`; 0.15 intentionally has no blanket
+`From<E>` conversion because it would overlap with Rust's `From<T> for T`.
+`CasSuccess`, `CasError`, and `CasOutcome` can now be cloned without `T: Clone`;
+only the owned output or business error needs `Clone`.
 
 ## Testing
 
