@@ -2,6 +2,8 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Isolated, thread-local allocation measurements of public CAS execution.
 
@@ -9,11 +11,25 @@ use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::alloc::System;
 use std::cell::Cell;
+#[cfg(feature = "tokio")]
+use std::future::Future;
+#[cfg(feature = "tokio")]
+use std::pin::pin;
 use std::sync::Arc;
+#[cfg(feature = "tokio")]
+use std::task::Context;
+#[cfg(feature = "tokio")]
+use std::task::Poll;
+#[cfg(feature = "tokio")]
+use std::task::Waker;
+#[cfg(feature = "tokio")]
+use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
 use qubit_cas::CasExecutor;
+#[cfg(feature = "tokio")]
+use tokio::runtime::Builder as RuntimeBuilder;
 
 thread_local! {
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
@@ -79,6 +95,20 @@ where
 #[test]
 fn test_sync_allocation_measurements() {
     let (executor, constructor) = allocations(|| CasExecutor::<usize, ()>::builder().build().expect("valid policy"));
+    let ((attempts, retries, operation_budget, total_budget), getter_allocations) = allocations(|| {
+        (
+            executor.max_attempts(),
+            executor.max_retries(),
+            executor.max_operation_elapsed(),
+            executor.max_total_elapsed(),
+        )
+    });
+    assert_eq!(
+        getter_allocations, 0,
+        "configuration reads must not initialize execution state"
+    );
+    assert_eq!((attempts, retries), (5, 4));
+    assert_eq!((operation_budget, total_budget), (None, None));
     let state = AtomicRef::from_value(0usize);
     let (first, cold) = allocations(|| executor.execute_result(&state, |_: &usize| CasDecision::finish(())));
     first.expect("first finish");
@@ -137,12 +167,7 @@ fn test_sync_allocation_measurements() {
 #[cfg(feature = "tokio")]
 #[test]
 fn test_async_allocation_measurements() {
-    use std::future::Future;
-    use std::task::Context;
-    use std::task::Poll;
-    use std::task::Waker;
-    use std::time::Duration;
-    let runtime = tokio::runtime::Builder::new_current_thread()
+    let runtime = RuntimeBuilder::new_current_thread()
         .enable_time()
         .build()
         .expect("runtime");
@@ -163,8 +188,7 @@ fn test_async_allocation_measurements() {
             .expect("initialize retry cache");
         let mut counts = Vec::new();
         for _ in 0..2 {
-            let mut future =
-                std::pin::pin!(executor.execute_async_result(&state, |_| async { CasDecision::finish(()) }));
+            let mut future = pin!(executor.execute_async_result(&state, |_| async { CasDecision::finish(()) }));
             let (result, count) = allocations(|| future.as_mut().poll(&mut context));
             assert!(matches!(result, Poll::Ready(Ok(_))), "finish must be immediately ready");
             counts.push(count);

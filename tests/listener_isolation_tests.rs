@@ -2,10 +2,14 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Observation failures must not change the committed business outcome.
 
 use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
+use std::panic::panic_any;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -14,6 +18,7 @@ use qubit_atomic::AtomicRef;
 use qubit_cas::CasAlert;
 use qubit_cas::CasDecision;
 use qubit_cas::CasEvent;
+use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
 use qubit_cas::CasListenerKind;
@@ -124,7 +129,7 @@ fn test_all_listener_panics_preserve_order_and_finished_snapshot() {
 fn test_operation_panic_propagates_and_listener_can_reenter() {
     let state = Arc::new(AtomicRef::from_value(0usize));
     let executor = CasExecutor::<usize, ()>::builder().build().expect("valid policy");
-    let panic = std::panic::catch_unwind(AssertUnwindSafe(|| {
+    let panic = catch_unwind(AssertUnwindSafe(|| {
         executor.execute_result(&state, |_: &usize| -> CasDecision<usize, (), ()> {
             panic!("operation panic")
         })
@@ -146,4 +151,43 @@ fn test_operation_panic_propagates_and_listener_can_reenter() {
             .result()
             .is_ok()
     );
+}
+
+#[test]
+fn test_listener_owned_and_non_string_panics_remain_diagnostic_only() {
+    for string_payload in [true, false] {
+        let hooks = CasHooks::new().on_event(move |_: &CasEvent| {
+            if string_payload {
+                panic_any(String::from("owned listener panic"));
+            } else {
+                panic_any(17u32);
+            }
+        });
+        let executor = CasExecutor::<usize, &'static str>::builder().build().expect("executor");
+        let state = AtomicRef::from_value(3usize);
+        let outcome = executor.execute_with_hooks(
+            &state,
+            |_: &usize| CasDecision::<usize, (), _>::abort("business"),
+            hooks,
+        );
+        assert_eq!(outcome.report().aborts(), 1);
+        assert_eq!(outcome.report().outcome(), CasExecutionOutcome::ErrorAbort);
+        for failure in outcome.report().listener_failures() {
+            let expected = if string_payload {
+                "owned listener panic"
+            } else {
+                "non-string panic payload"
+            };
+            assert_eq!(failure.message(), expected);
+            assert!(failure.to_string().contains(expected));
+        }
+        assert_eq!(outcome.report().listener_failures().len(), 3);
+        let failure = outcome
+            .into_result()
+            .expect_err("business abort")
+            .into_last_failure()
+            .expect("last failure");
+        assert_eq!(failure.error(), Some(&"business"));
+        assert_eq!(**failure.current(), 3);
+    }
 }

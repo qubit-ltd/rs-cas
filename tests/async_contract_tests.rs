@@ -2,11 +2,17 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Async decision, deadline, cancellation and future ownership contracts.
 #![cfg(feature = "tokio")]
 
 use std::future::Future;
+use std::future::pending;
+use std::future::poll_fn;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -26,6 +32,9 @@ use qubit_cas::CasLimitKind;
 use qubit_cas::CasSuccess;
 use qubit_cas::CasTermination;
 use qubit_cas::CasTimeoutScope;
+use tokio::runtime::Builder as RuntimeBuilder;
+use tokio::test as async_test;
+use tokio::time::sleep;
 
 type ExecutionResult = Result<CasSuccess<usize, usize>, CasError<usize, &'static str>>;
 
@@ -57,7 +66,7 @@ where
     }
 }
 
-#[tokio::test]
+#[async_test]
 async fn test_async_paths_agree_on_decisions() {
     for path in 0..3 {
         for scenario in 0..6 {
@@ -143,7 +152,7 @@ async fn test_async_paths_agree_on_decisions() {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[async_test(start_paused = true)]
 async fn test_attempt_timeout_action_and_retained_snapshot() {
     for path in 0..3 {
         for retry in [false, true] {
@@ -158,7 +167,7 @@ async fn test_attempt_timeout_action_and_retained_snapshot() {
             }
             .build()
             .expect("valid timeouts");
-            let (result, report) = run_path(path, &executor, &state, |_| async { std::future::pending().await }).await;
+            let (result, report) = run_path(path, &executor, &state, |_| async { pending().await }).await;
             let error = result.expect_err("pending operation times out");
             assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
             assert_eq!(error.attempts(), if retry { 2 } else { 1 });
@@ -179,7 +188,7 @@ async fn test_attempt_timeout_action_and_retained_snapshot() {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[async_test(start_paused = true)]
 async fn test_flow_timeout_during_attempt_and_backoff_preserves_precedence() {
     for path in 0..3 {
         for in_backoff in [false, true] {
@@ -195,7 +204,7 @@ async fn test_flow_timeout_during_attempt_and_backoff_preserves_precedence() {
                 if in_backoff {
                     CasDecision::retry("before backoff")
                 } else {
-                    std::future::pending().await
+                    pending().await
                 }
             })
             .await;
@@ -212,7 +221,7 @@ async fn test_flow_timeout_during_attempt_and_backoff_preserves_precedence() {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[async_test(start_paused = true)]
 async fn test_zero_flow_timeout_does_not_start_operation() {
     for path in 0..3 {
         let state = AtomicRef::from_value(7usize);
@@ -231,7 +240,7 @@ async fn test_zero_flow_timeout_does_not_start_operation() {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[async_test(start_paused = true)]
 async fn test_async_soft_budgets_do_not_cancel_admitted_success() {
     for path in 0..3 {
         for operation_budget in [false, true] {
@@ -246,7 +255,7 @@ async fn test_async_soft_budgets_do_not_cancel_admitted_success() {
                 .build()
                 .expect("valid budget");
                 let (result, _) = run_path(path, &executor, &state, |_| async move {
-                    tokio::time::sleep(Duration::from_millis(10)).await;
+                    sleep(Duration::from_millis(10)).await;
                     match decision {
                         0 => CasDecision::finish(1),
                         1 => CasDecision::update(1, 1),
@@ -275,7 +284,7 @@ async fn test_async_soft_budgets_do_not_cancel_admitted_success() {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[async_test(start_paused = true)]
 async fn test_soft_total_budget_prevents_retry_after_backoff() {
     for path in 0..3 {
         let state = AtomicRef::from_value(0usize);
@@ -302,7 +311,7 @@ impl Drop for CancelGuard<'_> {
     }
 }
 
-#[tokio::test]
+#[async_test]
 async fn test_cancellation_drops_in_flight_operation_without_commit_or_finished_event() {
     for path in 0..3 {
         let state = AtomicRef::from_value(0usize);
@@ -317,7 +326,7 @@ async fn test_cancellation_drops_in_flight_operation_without_commit_or_finished_
         });
         let operation = |_: Arc<usize>| async {
             let _guard = CancelGuard { dropped: &dropped };
-            std::future::pending::<CasDecision<usize, usize, &'static str>>().await
+            pending::<CasDecision<usize, usize, &'static str>>().await
         };
         let mut future = Box::pin(async {
             match path {
@@ -332,7 +341,7 @@ async fn test_cancellation_drops_in_flight_operation_without_commit_or_finished_
                 }
             }
         });
-        std::future::poll_fn(|cx| {
+        poll_fn(|cx| {
             assert!(future.as_mut().poll(cx).is_pending());
             Poll::Ready(())
         })
@@ -357,7 +366,7 @@ fn test_async_futures_remain_send() {
     require_send(executor.execute_async_with_hooks(&state, |_| async { CasDecision::finish(()) }, CasHooks::new()));
 }
 
-#[tokio::test]
+#[async_test]
 async fn test_async_snapshot_is_loaded_when_future_is_polled() {
     let state = AtomicRef::from_value(0usize);
     let executor = CasExecutor::<usize, ()>::builder().build().expect("valid policy");
@@ -368,11 +377,11 @@ async fn test_async_snapshot_is_loaded_when_future_is_polled() {
 
 #[test]
 fn test_async_operation_panics_propagate() {
-    let runtime = tokio::runtime::Builder::new_current_thread().build().expect("runtime");
+    let runtime = RuntimeBuilder::new_current_thread().build().expect("runtime");
     for path in 0..3 {
         let state = AtomicRef::from_value(7usize);
         let executor = CasExecutor::builder().build().expect("executor");
-        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let panic = catch_unwind(AssertUnwindSafe(|| {
             runtime.block_on(run_path(path, &executor, &state, |_| async {
                 panic!("operation panic")
             }))
@@ -382,7 +391,7 @@ fn test_async_operation_panics_propagate() {
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[async_test(start_paused = true)]
 async fn test_timeout_reports_attempt_snapshot_after_external_write() {
     for path in 0..3 {
         let state = AtomicRef::from_value(7usize);
@@ -393,7 +402,7 @@ async fn test_timeout_reports_attempt_snapshot_after_external_write() {
             .expect("executor");
         let (result, _) = run_path(path, &executor, &state, |_| async {
             state.store(Arc::new(9));
-            std::future::pending().await
+            pending().await
         })
         .await;
         let error = result.expect_err("deadline");

@@ -2,6 +2,8 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Concurrent snapshot publication and replay contracts.
 
@@ -9,6 +11,7 @@ use std::sync::Arc;
 use std::sync::Barrier;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::thread::scope;
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
@@ -23,7 +26,7 @@ fn test_concurrent_updates_return_committed_pairs() {
         .no_delay()
         .build()
         .expect("valid policy");
-    let mut previous = std::thread::scope(|scope| {
+    let mut previous = scope(|scope| {
         let mut handles = Vec::new();
         for _ in 0..4 {
             let state = &state;

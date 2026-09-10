@@ -21,11 +21,11 @@ pub const CONTENTION_BACKOFF_INITIAL_DELAY: Duration = Duration::from_micros(50)
 /// Maximum retry delay for the contention-backoff strategy.
 pub const CONTENTION_BACKOFF_MAX_DELAY: Duration = Duration::from_millis(5);
 
-/// Cumulative user operation elapsed-time budget for the contention-backoff
-/// strategy.
+/// Cumulative attempt elapsed-time budget (including CAS adapter work) for the
+/// contention-backoff strategy.
 pub const CONTENTION_BACKOFF_MAX_ELAPSED: Duration = Duration::from_millis(50);
 
-/// Monotonic total retry-flow elapsed-time ceiling for the contention-backoff
+/// Monotonic total retry-flow soft admission budget for the contention-backoff
 /// strategy.
 ///
 /// Includes user operation time, retry sleeps, and control-path listener work.
@@ -39,11 +39,11 @@ pub const CONTENTION_BACKOFF_JITTER_FACTOR: f64 = 0.25;
 /// Maximum attempts for the latency-first strategy.
 pub const LATENCY_FIRST_MAX_ATTEMPTS: u32 = 100;
 
-/// Cumulative user operation elapsed-time budget for the latency-first
-/// strategy.
+/// Cumulative attempt elapsed-time budget (including CAS adapter work) for the
+/// latency-first strategy.
 pub const LATENCY_FIRST_MAX_ELAPSED: Duration = Duration::from_millis(5);
 
-/// Monotonic total retry-flow elapsed-time ceiling for the latency-first
+/// Monotonic total retry-flow soft admission budget for the latency-first
 /// strategy.
 pub const LATENCY_FIRST_MAX_TOTAL_ELAPSED: Duration = Duration::from_millis(20);
 
@@ -56,15 +56,15 @@ pub const RELIABILITY_FIRST_INITIAL_DELAY: Duration = Duration::from_millis(1);
 /// Maximum retry delay for the reliability-first strategy.
 pub const RELIABILITY_FIRST_MAX_DELAY: Duration = Duration::from_millis(100);
 
-/// Cumulative user operation elapsed-time budget for the reliability-first
-/// strategy.
+/// Cumulative attempt elapsed-time budget (including CAS adapter work) for the
+/// reliability-first strategy.
 pub const RELIABILITY_FIRST_MAX_ELAPSED: Duration = Duration::from_secs(5);
 
-/// Monotonic total retry-flow elapsed-time ceiling for the reliability-first
+/// Monotonic total retry-flow soft admission budget for the reliability-first
 /// strategy.
 ///
 /// Set above [`RELIABILITY_FIRST_MAX_ELAPSED`] so long
-/// exponential backoff windows can still fit under a hard end-to-end cap.
+/// exponential backoff windows fit within the soft continuation budget.
 pub const RELIABILITY_FIRST_MAX_TOTAL_ELAPSED: Duration = Duration::from_secs(10);
 
 /// Jitter factor for the reliability-first strategy.

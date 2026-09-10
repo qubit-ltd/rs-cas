@@ -21,7 +21,7 @@ use crate::constants::DEFAULT_CAS_MAX_ATTEMPTS;
 use crate::error::CasBuildError;
 use crate::strategy::CasStrategy;
 
-/// Builder for [`CasExecutor`](crate::CasExecutor).
+/// Builder for [`CasExecutor`].
 ///
 /// ```compile_fail
 /// #![deny(unused_must_use)]
@@ -29,6 +29,28 @@ use crate::strategy::CasStrategy;
 /// use qubit_cas::CasExecutor;
 ///
 /// CasExecutor::<usize, ()>::builder();
+/// ```
+///
+/// # Type Parameters
+/// - `T`: Shared application state used by the executor.
+/// - `E`: Business failure returned by operations.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
+///
+/// let state = AtomicRef::from_value(3usize);
+/// let success = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute_result(&state, |current: &usize| CasDecision::update(*current - 1, "reserved"))
+///     .unwrap();
+/// assert!(success.is_updated());
+/// assert_eq!(**success.previous().unwrap(), 3);
+/// assert_eq!(**success.current(), 2);
+/// assert_eq!(*success.output(), "reserved");
+/// assert!(CasExecutor::<usize, ()>::builder().max_attempts(0).build().is_err());
 /// ```
 #[must_use = "a CAS builder must be configured or built"]
 pub struct CasBuilder<T, E = BoxError> {
@@ -55,6 +77,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A [`CasBuilder`] using immediate retries and the CAS default limit.
+    #[inline]
     pub fn new() -> Self {
         Self {
             max_attempts: DEFAULT_CAS_MAX_ATTEMPTS,
@@ -75,6 +98,7 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// The updated builder.
+    #[inline(always)]
     pub fn max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
         self
@@ -83,7 +107,9 @@ impl<T, E> CasBuilder<T, E> {
     /// Sets the maximum retries after the initial attempt.
     ///
     /// # Parameters
-    /// - `max_retries`: Maximum retries after the first attempt.
+    /// - `max_retries`: Maximum retries after the first attempt. Conversion to
+    ///   total attempts saturates at `u32::MAX`, so the largest input permits
+    ///   at most `u32::MAX - 1` retries.
     ///
     /// # Returns
     /// The updated builder.
@@ -92,11 +118,12 @@ impl<T, E> CasBuilder<T, E> {
         self.max_attempts(max_retries.saturating_add(1))
     }
 
-    /// Sets the maximum cumulative user operation elapsed-time budget.
+    /// Sets the maximum cumulative attempt elapsed-time budget.
     ///
     /// # Parameters
-    /// - `max_operation_elapsed`: Optional cumulative user operation time
-    ///   budget.
+    /// - `max_operation_elapsed`: `Some` soft budget for cumulative operation
+    ///   and CAS adapter work; `None` disables this admission check. Admitted
+    ///   successful commits are retained even when they exceed the budget.
     ///
     /// # Returns
     /// The updated builder.
@@ -109,7 +136,8 @@ impl<T, E> CasBuilder<T, E> {
     /// Sets the maximum monotonic elapsed-time budget for the whole retry flow.
     ///
     /// # Parameters
-    /// - `max_total_elapsed`: Optional total retry-flow time budget.
+    /// - `max_total_elapsed`: `Some` soft budget including backoff; `None`
+    ///   disables this check. It cannot cancel an already admitted operation.
     ///
     /// # Returns
     /// The updated builder.
@@ -121,9 +149,17 @@ impl<T, E> CasBuilder<T, E> {
 
     /// Sets the hard wall-clock timeout for asynchronous retry flows.
     ///
-    /// This timeout cancels an admitted attempt when reached. The retry policy
-    /// `max_total_elapsed` setting remains a soft continuation budget that only
-    /// controls admission of later attempts.
+    /// This cooperative timeout drops an admitted future when it yields
+    /// control. It cannot preempt blocking work or roll back external side
+    /// effects. The retry policy `max_total_elapsed` setting remains a soft
+    /// continuation budget that only controls admission of later attempts.
+    /// Synchronous execution ignores it.
+    ///
+    /// # Parameters
+    /// - `flow_timeout`: `Some` enables the deadline; `None` disables it.
+    ///
+    /// # Returns
+    /// The updated builder.
     #[inline(always)]
     pub fn flow_timeout(mut self, flow_timeout: Option<Duration>) -> Self {
         self.flow_timeout = flow_timeout;
@@ -212,7 +248,9 @@ impl<T, E> CasBuilder<T, E> {
     /// Sets the async per-attempt timeout.
     ///
     /// # Parameters
-    /// - `attempt_timeout`: Timeout applied to each async CAS attempt.
+    /// - `attempt_timeout`: `Some` enables a cooperative async deadline; `None`
+    ///   disables it. Synchronous calls ignore it; blocking operation code
+    ///   cannot be preempted, and cancellation does not undo side effects.
     ///
     /// # Returns
     /// The updated builder.
@@ -244,6 +282,10 @@ impl<T, E> CasBuilder<T, E> {
 
     /// Applies a built-in CAS strategy to this builder.
     ///
+    /// Replaces attempts, soft budgets, and the entire backoff configuration,
+    /// including a deferred backoff error. Async timeouts and their action
+    /// remain unchanged. Later setters override the installed preset.
+    ///
     /// # Parameters
     /// - `strategy`: Strategy profile to install.
     ///
@@ -268,7 +310,10 @@ impl<T, E> CasBuilder<T, E> {
     /// A validated [`CasExecutor`].
     ///
     /// # Errors
-    /// Returns a [`CasBuildError`] when a setting is invalid.
+    /// Returns a [`CasBuildError`] for zero attempts, reversed delay bounds,
+    /// a non-finite or less-than-one exponential multiplier, or jitter outside
+    /// the finite range `[0, 1]`. Backoff errors are deferred until this call;
+    /// a later backoff setter or strategy can replace an earlier error.
     pub fn build(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         let backoff = self.backoff.map_err(map_retry_policy_error)?;
         let policy = RetryPolicy::builder()
@@ -290,6 +335,12 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] suitable for contended writers.
+    ///
+    /// # Errors
+    /// Preset construction uses the same validated result as [`Self::build`].
+    /// The installed built-in settings are always valid and replace any
+    /// deferred retry-policy error, so current presets return `Ok`.
+    #[inline(always)]
     pub fn build_contention_backoff(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         self.strategy(CasStrategy::ContentionBackoff).build()
     }
@@ -298,6 +349,12 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for low latency.
+    ///
+    /// # Errors
+    /// Preset construction uses the same validated result as [`Self::build`].
+    /// The installed built-in settings are always valid and replace any
+    /// deferred retry-policy error, so current presets return `Ok`.
+    #[inline(always)]
     pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         self.strategy(CasStrategy::LatencyFirst).build()
     }
@@ -306,11 +363,27 @@ impl<T, E> CasBuilder<T, E> {
     ///
     /// # Returns
     /// A configured [`CasExecutor`] optimized for long retry windows.
+    ///
+    /// # Errors
+    /// Preset construction uses the same validated result as [`Self::build`].
+    /// The installed built-in settings are always valid and replace any
+    /// deferred retry-policy error, so current presets return `Ok`.
+    #[inline(always)]
     pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
         self.strategy(CasStrategy::ReliabilityFirst).build()
     }
 }
 
+/// Retains the retry validator message under the CAS policy configuration
+/// boundary.
+///
+/// # Parameters
+/// - `error`: Upstream validation error consumed during builder validation.
+///
+/// # Returns
+/// A CAS-owned construction error; the upstream message remains diagnostic
+/// text.
+#[inline]
 fn map_retry_policy_error(error: RetryPolicyError) -> CasBuildError {
     CasBuildError::new("retry_policy", error.to_string())
 }

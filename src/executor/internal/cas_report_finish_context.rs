@@ -27,7 +27,20 @@ pub(in crate::executor) struct CasReportFinishContext {
 
 impl CasReportFinishContext {
     /// Creates a terminal report context from retry-layer values.
+    ///
+    /// # Parameters
+    /// - `attempts_total`: Number of started operations, possibly zero.
+    /// - `max_attempts`: Installed positive attempt limit.
+    /// - `max_operation_elapsed`: `Some` cumulative attempt budget, or `None`
+    ///   if disabled.
+    /// - `max_total_elapsed`: `Some` total flow budget, or `None` if disabled.
+    /// - `outcome`: Terminal classification already determined by the executor.
+    ///
+    /// # Returns
+    /// A copied configuration and terminal snapshot used by report
+    /// finalization.
     #[inline]
+    #[must_use]
     pub(in crate::executor) fn new(
         attempts_total: u32,
         max_attempts: u32,

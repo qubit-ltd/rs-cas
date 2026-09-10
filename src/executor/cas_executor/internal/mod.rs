@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Tests of crate-private diagnostic projection.
+//! Private observer owned by the CAS executor.
 
-mod error_projection_tests;
+mod cas_retry_observer;
+
+pub(super) use cas_retry_observer::CasRetryObserver;

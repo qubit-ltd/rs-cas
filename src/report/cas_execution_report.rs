@@ -16,12 +16,25 @@ use crate::observability::ContentionThresholds;
 
 /// Immutable report describing one completed CAS execution.
 ///
+/// Reports delivered to completion and alert callbacks are snapshots captured
+/// before those callbacks run. Only the report returned in the final outcome
+/// includes diagnostics from completion and alert listener panics.
+///
 /// # Examples
 ///
 /// ```
-/// use qubit_cas::CasExecutionReport;
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
 ///
-/// let _layout = std::mem::size_of::<CasExecutionReport>();
+/// let state = AtomicRef::from_value(3usize);
+/// let outcome = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute(&state, |_: &usize| CasDecision::finish("available"));
+/// let report = outcome.report();
+/// assert_eq!(report.attempts_total(), 1);
+/// assert_eq!(report.conflicts(), 0);
+/// assert_eq!(report.conflict_ratio(), 0.0);
+/// assert!(report.listener_failures().is_empty());
 /// ```
 #[derive(Debug, Clone)]
 pub struct CasExecutionReport {
@@ -41,12 +54,13 @@ pub struct CasExecutionReport {
     finished_at: Instant,
     /// Configured maximum attempts.
     max_attempts: u32,
-    /// Configured maximum cumulative user operation time.
+    /// Configured maximum cumulative attempt time.
     max_operation_elapsed: Option<Duration>,
     /// Configured maximum total retry-flow elapsed time.
     max_total_elapsed: Option<Duration>,
     /// Terminal outcome.
     outcome: CasExecutionOutcome,
+    /// Listener panics from start, attempt, completion, and alert dispatch.
     listener_failures: Vec<CasListenerFailure>,
 }
 
@@ -58,7 +72,7 @@ impl CasExecutionReport {
     ///
     /// # Parameters
     /// - `attempts_total`: Total number of attempts executed by the retry loop
-    ///   (one-based).
+    ///   (zero when no operation was admitted).
     /// - `conflicts`: Number of compare-and-swap conflicts encountered.
     /// - `retry_errors`: Number of retryable business failures.
     /// - `aborts`: Number of business aborts.
@@ -67,8 +81,8 @@ impl CasExecutionReport {
     /// - `started_at`: Instant captured before the first attempt.
     /// - `finished_at`: Instant captured when the flow completed.
     /// - `max_attempts`: Configured maximum number of attempts.
-    /// - `max_operation_elapsed`: Configured maximum cumulative user operation
-    ///   time, if any.
+    /// - `max_operation_elapsed`: Configured maximum cumulative attempt time,
+    ///   if any.
     /// - `max_total_elapsed`: Configured maximum total retry-flow elapsed time,
     ///   if any.
     /// - `outcome`: The terminal [`CasExecutionOutcome`] of the execution.
@@ -76,6 +90,8 @@ impl CasExecutionReport {
     /// # Returns
     /// A fully populated [`CasExecutionReport`] value.
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    #[inline]
     pub(crate) fn new(
         attempts_total: u32,
         conflicts: u32,
@@ -108,8 +124,8 @@ impl CasExecutionReport {
     /// Returns total attempts executed by the retry loop.
     ///
     /// # Returns
-    /// One-based count of attempts performed (including the successful or
-    /// terminal one).
+    /// Count of admitted attempts, including the successful or terminal one.
+    /// Zero means the flow ended before any operation started.
     #[must_use]
     #[inline(always)]
     pub fn attempts_total(&self) -> u32 {
@@ -120,7 +136,7 @@ impl CasExecutionReport {
     ///
     /// # Returns
     /// Count of times a CAS operation failed due to state change by another
-    /// thread/process.
+    /// writer.
     #[must_use]
     #[inline(always)]
     pub fn conflicts(&self) -> u32 {
@@ -199,7 +215,7 @@ impl CasExecutionReport {
         self.max_attempts
     }
 
-    /// Returns the configured maximum cumulative user operation time budget.
+    /// Returns the configured maximum cumulative attempt time budget.
     ///
     /// # Returns
     /// `Some(Duration)` if a budget was set, otherwise `None`.
@@ -229,15 +245,16 @@ impl CasExecutionReport {
         self.outcome
     }
 
-    /// Returns listener panic diagnostics captured during completion.
+    /// Returns listener panic diagnostics in dispatch order across all stages.
+    /// An empty slice means no listener panic was retained.
+    ///
+    /// # Returns
+    /// Borrowed ordered diagnostics; empty if none. The final outcome includes
+    /// completion and alert panics, while callback snapshots exclude them.
     #[must_use]
+    #[inline(always)]
     pub fn listener_failures(&self) -> &[CasListenerFailure] {
         &self.listener_failures
-    }
-
-    pub(crate) fn with_listener_failures(mut self, failures: Vec<CasListenerFailure>) -> Self {
-        self.listener_failures = failures;
-        self
     }
 
     /// Returns conflicts divided by total attempts.
@@ -284,5 +301,20 @@ impl CasExecutionReport {
         self.attempts_total >= thresholds.min_attempts()
             && self.conflicts >= thresholds.min_conflicts()
             && self.conflict_ratio() >= thresholds.conflict_ratio()
+    }
+
+    /// Replaces diagnostics with the final ordered snapshot, including late
+    /// hooks.
+    ///
+    /// # Parameters
+    /// - `failures`: Owned diagnostics after completion and alert dispatch.
+    ///
+    /// # Returns
+    /// This report with its diagnostic list replaced.
+    #[must_use]
+    #[inline(always)]
+    pub(crate) fn with_listener_failures(mut self, failures: Vec<CasListenerFailure>) -> Self {
+        self.listener_failures = failures;
+        self
     }
 }

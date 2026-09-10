@@ -26,6 +26,27 @@ use std::sync::Arc;
 ///
 /// CasDecision::<usize, (), ()>::finish(());
 /// ```
+///
+/// # Type Parameters
+/// - `T`: Shared application state.
+/// - `R`: Output returned only from a successful attempt.
+/// - `E`: Business failure used for Retry or Abort.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
+///
+/// let state = AtomicRef::from_value(3usize);
+/// let executor = CasExecutor::<usize, ()>::builder().build().unwrap();
+/// let success = executor.execute_result(&state, |current: &usize| {
+///     CasDecision::update(*current - 1, "reserved")
+/// }).unwrap();
+/// assert_eq!(*state.load(), 2);
+/// assert_eq!(*success.output(), "reserved");
+/// ```
 #[must_use = "a CAS decision must be returned to the executor"]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CasDecision<T, R, E> {
@@ -44,10 +65,16 @@ pub enum CasDecision<T, R, E> {
     },
 
     /// Requests another CAS attempt.
-    Retry(E),
+    Retry(
+        /// Business failure retained if the flow cannot continue.
+        E,
+    ),
 
     /// Aborts the CAS flow immediately.
-    Abort(E),
+    Abort(
+        /// Business failure explaining the terminal abort.
+        E,
+    ),
 }
 
 impl<T, R, E> CasDecision<T, R, E> {
@@ -75,7 +102,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Update`] value.
-    #[inline]
+    #[inline(always)]
     pub fn update_arc(next: Arc<T>, output: R) -> Self {
         Self::Update { next, output }
     }
@@ -87,7 +114,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Finish`] value.
-    #[inline]
+    #[inline(always)]
     pub fn finish(output: R) -> Self {
         Self::Finish { output }
     }
@@ -99,7 +126,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Retry`] value.
-    #[inline]
+    #[inline(always)]
     pub fn retry(error: E) -> Self {
         Self::Retry(error)
     }
@@ -111,7 +138,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Abort`] value.
-    #[inline]
+    #[inline(always)]
     pub fn abort(error: E) -> Self {
         Self::Abort(error)
     }

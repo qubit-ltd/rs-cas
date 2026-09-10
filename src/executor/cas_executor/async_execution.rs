@@ -7,6 +7,7 @@
 // =============================================================================
 //! Tokio-gated asynchronous CAS execution entry points and attempts.
 
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -27,6 +28,11 @@ use crate::report::CasReportBuilder;
 impl<T, E> CasExecutor<T, E> {
     /// Executes one asynchronous CAS operation.
     ///
+    /// # Type Parameters
+    /// - `R`: Output moved to the caller only after a successful attempt.
+    /// - `O`: Factory receiving an owned snapshot for each async attempt.
+    /// - `Fut`: Future yielding that attempt's CAS decision.
+    ///
     /// # Parameters
     /// - `state`: Shared atomic state container.
     /// - `operation`: Async operation factory receiving one state snapshot.
@@ -41,12 +47,13 @@ impl<T, E> CasExecutor<T, E> {
     /// # Panics
     /// An operation panic propagates to the caller.
     #[cfg(feature = "tokio")]
+    #[inline(always)]
     pub async fn execute_async<R, O, Fut>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
         T: 'static,
         E: 'static,
         O: Fn(Arc<T>) -> Fut,
-        Fut: std::future::Future<Output = CasDecision<T, R, E>>,
+        Fut: Future<Output = CasDecision<T, R, E>>,
     {
         self.execute_async_with_hooks(state, operation, CasHooks::new()).await
     }
@@ -58,12 +65,21 @@ impl<T, E> CasExecutor<T, E> {
     /// dispatch. Use [`Self::execute_async`] when the caller needs execution
     /// metrics.
     ///
+    /// # Type Parameters
+    /// - `R`: Output moved to the caller only after a successful attempt.
+    /// - `O`: Factory receiving an owned snapshot for each async attempt.
+    /// - `Fut`: Future yielding that attempt's CAS decision.
+    ///
     /// # Parameters
     /// - `state`: Shared atomic state container.
     /// - `operation`: Async operation factory receiving one state snapshot.
     ///
     /// # Returns
     /// The terminal CAS success or error without an execution report.
+    ///
+    /// # Errors
+    /// Returns a business abort, exhausted retry or soft-budget limit, timeout,
+    /// or infrastructure failure with the last available attempt snapshot.
     ///
     /// # Cancellation
     /// Cancelling the returned future cancels the in-flight operation future.
@@ -83,7 +99,7 @@ impl<T, E> CasExecutor<T, E> {
         T: 'static,
         E: 'static,
         O: Fn(Arc<T>) -> Fut,
-        Fut: std::future::Future<Output = CasDecision<T, R, E>>,
+        Fut: Future<Output = CasDecision<T, R, E>>,
     {
         let attempt_snapshot = Mutex::new(None);
         let snapshot_slot =
@@ -117,6 +133,11 @@ impl<T, E> CasExecutor<T, E> {
 
     /// Executes one asynchronous CAS operation with lifecycle hooks.
     ///
+    /// # Type Parameters
+    /// - `R`: Output moved to the caller only after a successful attempt.
+    /// - `O`: Factory receiving an owned snapshot for each async attempt.
+    /// - `Fut`: Future yielding that attempt's CAS decision.
+    ///
     /// # Parameters
     /// - `state`: Shared atomic state container.
     /// - `operation`: Async operation factory receiving one state snapshot.
@@ -145,7 +166,7 @@ impl<T, E> CasExecutor<T, E> {
         T: 'static,
         E: 'static,
         O: Fn(Arc<T>) -> Fut,
-        Fut: std::future::Future<Output = CasDecision<T, R, E>>,
+        Fut: Future<Output = CasDecision<T, R, E>>,
     {
         let attempt_snapshot = Mutex::new(None);
         let snapshot_slot =
@@ -171,6 +192,33 @@ impl<T, E> CasExecutor<T, E> {
 }
 
 /// Runs one asynchronous attempt and records its snapshot for timeout errors.
+///
+/// # Type Parameters
+/// - `T`: Shared state held alive through the attempt.
+/// - `R`: Output returned by a successful operation.
+/// - `E`: Business failure returned by the operation.
+/// - `O`: Factory creating a fresh future for each attempt.
+/// - `Fut`: Future yielding a CAS decision.
+///
+/// # Parameters
+/// - `state`: Slot loaded when this attempt is first polled.
+/// - `operation`: Factory receiving shared ownership of the loaded snapshot.
+/// - `attempt_snapshot`: `Some` retains a snapshot for timeout projection;
+///   `None` avoids this bookkeeping when no timeout is configured.
+///
+/// # Returns
+/// A successful update or no-write finish after the operation resolves.
+///
+/// # Errors
+/// Returns a CAS conflict or an explicit Retry/Abort failure.
+///
+/// # Panics
+/// Operation panics propagate; a poisoned snapshot mutex also panics.
+/// The mutex is released before polling the operation.
+///
+/// # Cancellation
+/// Dropping this future drops the operation without publishing its decision;
+/// external side effects already performed by the operation are not undone.
 #[cfg(feature = "tokio")]
 async fn run_async_attempt<T, R, E, O, Fut>(
     state: &AtomicRef<T>,
@@ -179,7 +227,7 @@ async fn run_async_attempt<T, R, E, O, Fut>(
 ) -> Result<AttemptSuccess<T, R>, CasAttemptFailure<T, E>>
 where
     O: Fn(Arc<T>) -> Fut,
-    Fut: std::future::Future<Output = CasDecision<T, R, E>>,
+    Fut: Future<Output = CasDecision<T, R, E>>,
 {
     let current = state.load();
     if let Some(slot) = attempt_snapshot {

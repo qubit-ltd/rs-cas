@@ -11,15 +11,16 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use qubit_retry::AttemptFailure;
-use qubit_retry::BackoffStep;
 use qubit_retry::RetryConfig;
 use qubit_retry::RetryContext;
 use qubit_retry::RetryDecision;
 use qubit_retry::RetryFallback;
-use qubit_retry::RetryObserver;
+use qubit_retry::RetryTimeoutScope;
 
 use super::CasExecutor;
+use super::internal::CasRetryObserver;
 use crate::error::CasAttemptFailure;
+use crate::error::CasAttemptFailureKind;
 use crate::event::CasContext;
 use crate::event::CasEvent;
 use crate::event::CasHooks;
@@ -27,43 +28,24 @@ use crate::executor::cas_executor::retry_adapter;
 use crate::executor::internal::AttemptTimeoutAction;
 use crate::report::CasReportBuilder;
 
-struct CasRetryObserver<T, E> {
-    event_hook: Option<crate::event::CasEventHook>,
-    report_builder: Arc<Mutex<CasReportBuilder>>,
-    _marker: std::marker::PhantomData<fn() -> (T, E)>,
-}
-
-impl<T, E> RetryObserver<CasAttemptFailure<T, E>> for CasRetryObserver<T, E>
-where
-    T: 'static,
-    E: 'static,
-{
-    fn on_retry_scheduled(&self, backoff: &BackoffStep, context: &RetryContext) {
-        if CasExecutor::<T, E>::should_emit_events(&self.event_hook)
-            && let Some(listener_failure) = CasExecutor::<T, E>::dispatch_event(
-                self.event_hook
-                    .as_ref()
-                    .expect("event hook should exist when events are emitted"),
-                CasEvent::RetryScheduled {
-                    context: CasContext::new(context),
-                    delay: backoff.effective_delay(),
-                },
-            )
-        {
-            self.report_builder
-                .lock()
-                .expect("CAS report builder should be lockable")
-                .record_listener_failure(listener_failure);
-        }
-    }
-}
-
 /// Classifies one retry-layer failure without producing side effects.
+///
+/// # Type Parameters
+/// - `T`: State snapshot retained by application failures.
+/// - `E`: Business failure type.
+///
+/// # Parameters
+/// - `failure`: Retry failure being considered for another attempt.
+/// - `attempt_timeout_action`: Whether an attempt timeout retries or aborts.
+///
+/// # Returns
+/// Retry for conflicts and retryable business errors, Abort for explicit
+/// aborts, or the retry facade's default handling for infrastructure and other
+/// failures.
 pub(super) fn retry_decision<T, E>(
     failure: &AttemptFailure<CasAttemptFailure<T, E>>,
     attempt_timeout_action: AttemptTimeoutAction,
 ) -> RetryDecision {
-    use qubit_retry::RetryTimeoutScope;
     match failure {
         AttemptFailure::Error(CasAttemptFailure::Conflict { .. })
         | AttemptFailure::Error(CasAttemptFailure::Retry { .. }) => RetryDecision::Retry,
@@ -82,8 +64,13 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Parameters
     /// - `hooks`: Hook registrations for the current execution.
+    /// - `report_builder`: Shared accumulator used after callback dispatch.
+    ///
     /// # Returns
     /// A retry policy configured for one CAS execution.
+    ///
+    /// # Panics
+    /// Panics if the previously validated configuration is no longer valid.
     pub(super) fn build_retry(
         &self,
         hooks: &CasHooks,
@@ -121,7 +108,7 @@ impl<T, E> CasExecutor<T, E> {
                                 .lock()
                                 .expect("CAS report builder should be lockable")
                                 .record_timeout();
-                            Some(crate::error::CasAttemptFailureKind::Timeout)
+                            Some(CasAttemptFailureKind::Timeout)
                         }
                         AttemptFailure::Panicked { .. } => None,
                         _ => None,
@@ -145,14 +132,9 @@ impl<T, E> CasExecutor<T, E> {
                     }
                 },
             )
-            .observer(CasRetryObserver {
-                event_hook,
-                report_builder,
-                _marker: std::marker::PhantomData,
-            })
+            .observer(CasRetryObserver::new(event_hook, report_builder))
             .rule(
-                move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, context: &RetryContext| {
-                    let _ = context;
+                move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, _context: &RetryContext| {
                     super::retry_adapter::retry_decision(failure, attempt_timeout_action)
                 },
             )
@@ -163,7 +145,11 @@ impl<T, E> CasExecutor<T, E> {
     /// Returns the cached retry definition used by result-only execution.
     ///
     /// # Returns
-    /// An immutable retry definition initialized exactly once per executor.
+    /// An immutable retry definition initialized once and shared by executor
+    /// clones. The first call allocates its rule; later calls reuse the cache.
+    ///
+    /// # Panics
+    /// Panics if the previously validated configuration is no longer valid.
     pub(super) fn result_retry(&self) -> &RetryConfig<CasAttemptFailure<T, E>>
     where
         T: 'static,

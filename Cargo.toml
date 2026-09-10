@@ -1,7 +1,9 @@
 [package]
 name = "qubit-cas"
-version = "0.13.0"
+version = "0.14.0"
 edition = "2024"
+# Keep public contracts in one harness to share fixtures and inline coverage maps.
+autotests = false
 rust-version = "1.94"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
 license = "Apache-2.0"
@@ -26,6 +28,10 @@ include = [
 [lib]
 name = "qubit_cas"
 doctest = true
+
+[[test]]
+name = "lib_tests"
+path = "tests/lib_tests.rs"
 
 [[bench]]
 name = "observability_overhead"

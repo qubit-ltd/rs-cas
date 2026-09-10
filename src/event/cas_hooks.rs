@@ -14,16 +14,44 @@ use super::CasAlertHook;
 use super::CasEvent;
 use super::CasEventHook;
 use crate::observability::CasAlert;
+use crate::observability::ContentionThresholds;
 
 /// Per-execution hooks for observing CAS lifecycle events.
 ///
 /// # Examples
 ///
 /// ```
+/// use std::sync::Arc;
+/// use std::sync::atomic::AtomicUsize;
+/// use std::sync::atomic::Ordering;
+///
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasEvent;
+/// use qubit_cas::CasExecutor;
 /// use qubit_cas::CasHooks;
 ///
-/// let hooks = CasHooks::new();
-/// assert_eq!(std::mem::size_of_val(&hooks), std::mem::size_of::<CasHooks>());
+/// let finished = Arc::new(AtomicUsize::new(0));
+/// let observed = Arc::clone(&finished);
+/// let hooks = CasHooks::new().on_event(move |event: &CasEvent| {
+///     if let CasEvent::ExecutionFinished { report } = event {
+///         observed.store(report.attempts_total() as usize, Ordering::SeqCst);
+///     }
+/// });
+/// let state = AtomicRef::from_value(3usize);
+/// let outcome = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute_with_hooks(&state, |_: &usize| CasDecision::finish(()), hooks);
+/// assert!(outcome.is_ok());
+/// assert_eq!(finished.load(Ordering::SeqCst), 1);
+/// ```
+///
+/// Alert registration requires explicit thresholds:
+///
+/// ```compile_fail
+/// use qubit_cas::CasAlert;
+/// use qubit_cas::CasHooks;
+///
+/// let _ = CasHooks::new().on_alert(|_: &CasAlert| {});
 /// ```
 #[derive(Clone)]
 pub struct CasHooks {
@@ -32,7 +60,7 @@ pub struct CasHooks {
     /// Hook invoked when configured alert thresholds are crossed.
     on_alert: Option<CasAlertHook>,
     /// Optional thresholds used to trigger contention alerts.
-    contention_thresholds: Option<crate::observability::ContentionThresholds>,
+    contention_thresholds: Option<ContentionThresholds>,
 }
 
 impl Default for CasHooks {
@@ -55,12 +83,18 @@ impl CasHooks {
     ///
     /// # Returns
     /// A [`CasHooks`] value with every hook unset.
-    #[inline]
+    #[inline(always)]
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Registers a lifecycle event hook.
+    /// Registers a lifecycle event hook, replacing the previous callback.
+    ///
+    /// Listeners run inline with execution and should remain short.
+    ///
+    /// # Type Parameters
+    /// - `C`: Thread-safe consumer owned by this registration.
     ///
     /// # Parameters
     /// - `hook`: Hook receiving each emitted lifecycle event.
@@ -77,26 +111,23 @@ impl CasHooks {
         self
     }
 
-    /// Registers an alert hook.
+    /// Registers a contention alert hook and its thresholds.
+    ///
+    /// Replaces both the previous callback and its thresholds. All configured
+    /// thresholds must be met before an alert is dispatched.
+    ///
+    /// # Type Parameters
+    /// - `C`: Thread-safe consumer retained for this execution.
     ///
     /// # Parameters
-    /// - `hook`: Hook receiving contention alerts.
+    /// - `thresholds`: Minimum attempts, conflicts, and conflict ratio.
+    /// - `hook`: Callback invoked inline after the execution finishes.
     ///
     /// # Returns
-    /// The updated hook set.
+    /// The updated hook set. Listener panics are isolated in unwind builds.
     #[must_use]
     #[inline(always)]
-    pub fn on_alert<C>(mut self, hook: C) -> Self
-    where
-        C: Consumer<CasAlert> + Send + Sync + 'static,
-    {
-        self.on_alert = Some(ArcConsumer::new(hook));
-        self
-    }
-
-    /// Registers a contention alert hook and its thresholds.
-    #[must_use]
-    pub fn on_contention_alert<C>(mut self, thresholds: crate::observability::ContentionThresholds, hook: C) -> Self
+    pub fn on_contention_alert<C>(mut self, thresholds: ContentionThresholds, hook: C) -> Self
     where
         C: Consumer<CasAlert> + Send + Sync + 'static,
     {
@@ -108,7 +139,8 @@ impl CasHooks {
     /// Returns the registered lifecycle event hook.
     ///
     /// # Returns
-    /// Optional shared event hook.
+    /// `Some` cloned shared listener, or `None` when events are disabled.
+    #[must_use]
     #[inline(always)]
     pub(crate) fn event_hook(&self) -> Option<CasEventHook> {
         self.on_event.clone()
@@ -117,13 +149,22 @@ impl CasHooks {
     /// Returns the registered alert hook.
     ///
     /// # Returns
-    /// Optional shared alert hook.
+    /// `Some` cloned shared listener, or `None` when alerts are disabled.
+    #[must_use]
     #[inline(always)]
     pub(crate) fn alert_hook(&self) -> Option<CasAlertHook> {
         self.on_alert.clone()
     }
 
-    pub(crate) fn contention_thresholds(&self) -> Option<crate::observability::ContentionThresholds> {
+    /// Returns `Some` registered thresholds, or `None` when alerts are
+    /// disabled.
+    ///
+    /// # Returns
+    /// `Some` thresholds registered with the alert callback, or `None` for
+    /// disabled alerts.
+    #[must_use]
+    #[inline(always)]
+    pub(crate) fn contention_thresholds(&self) -> Option<ContentionThresholds> {
         self.contention_thresholds
     }
 }

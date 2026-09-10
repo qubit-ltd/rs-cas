@@ -14,14 +14,28 @@ use super::cas_attempt_failure_kind::CasAttemptFailureKind;
 
 /// Failure produced by one CAS attempt.
 ///
+/// # Type Parameters
+/// - `T`: State associated with the failed attempt.
+/// - `E`: Business failure carried by Retry or Abort.
+///
 /// # Examples
 ///
 /// ```
-/// use qubit_cas::CasAttemptFailure;
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
 ///
-/// let _layout = std::mem::size_of::<CasAttemptFailure<usize, ()>>();
+/// let state = AtomicRef::from_value(3usize);
+/// let error = CasExecutor::<usize, &'static str>::builder().build().unwrap()
+///     .execute_result(&state, |_: &usize| CasDecision::<usize, (), _>::abort("sold out"))
+///     .unwrap_err();
+/// let failure = error.last_failure().unwrap();
+/// assert!(failure.is_abort());
+/// assert_eq!(failure.error(), Some(&"sold out"));
+/// assert_eq!(**failure.current(), 3);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use = "an attempt failure must be handled by the retry flow"]
 pub enum CasAttemptFailure<T, E> {
     /// Compare-and-swap failed because another writer changed the state first.
     Conflict {
@@ -60,7 +74,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// A [`CasAttemptFailure::Conflict`] value.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn conflict(current: Arc<T>) -> Self {
         Self::Conflict { current }
     }
@@ -73,7 +87,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// A [`CasAttemptFailure::Retry`] value.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn retry(current: Arc<T>, error: E) -> Self {
         Self::Retry { current, error }
     }
@@ -86,7 +100,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// A [`CasAttemptFailure::Abort`] value.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn abort(current: Arc<T>, error: E) -> Self {
         Self::Abort { current, error }
     }
@@ -98,7 +112,7 @@ impl<T, E> CasAttemptFailure<T, E> {
     ///
     /// # Returns
     /// A [`CasAttemptFailure::Timeout`] value.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn timeout(current: Arc<T>) -> Self {
         Self::Timeout { current }
     }

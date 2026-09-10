@@ -28,6 +28,10 @@ use crate::report::CasReportBuilder;
 impl<T, E> CasExecutor<T, E> {
     /// Executes one synchronous CAS operation.
     ///
+    /// # Type Parameters
+    /// - `R`: Output moved to the caller only after a successful attempt.
+    /// - `O`: Borrowing operation that may be called again after a retry.
+    ///
     /// # Parameters
     /// - `state`: Shared atomic state container.
     /// - `operation`: Pure operation that inspects the current state and
@@ -36,8 +40,13 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// A terminal result together with the execution report.
     ///
+    /// # Panics
+    /// Operation panics propagate. Synchronous execution ignores async
+    /// timeouts.
+    ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
+    #[inline(always)]
     pub fn execute<R, O>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
         T: 'static,
@@ -53,6 +62,10 @@ impl<T, E> CasExecutor<T, E> {
     /// skipping report accumulation and lifecycle hook dispatch. Use
     /// [`Self::execute`] when the caller needs execution metrics.
     ///
+    /// # Type Parameters
+    /// - `R`: Output moved to the caller only after a successful attempt.
+    /// - `O`: Borrowing operation that may be called again after a retry.
+    ///
     /// # Parameters
     /// - `state`: Shared atomic state container.
     /// - `operation`: Pure operation that inspects the current state and
@@ -60,6 +73,15 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// The terminal CAS success or error without an execution report.
+    ///
+    /// # Errors
+    /// Returns a business abort, exhausted retries or soft budgets, or a retry
+    /// infrastructure failure. The error retains the last available failure
+    /// snapshot.
+    ///
+    /// # Panics
+    /// Operation panics propagate. Synchronous execution ignores async
+    /// timeouts.
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
@@ -84,6 +106,10 @@ impl<T, E> CasExecutor<T, E> {
 
     /// Executes one synchronous CAS operation with lifecycle hooks.
     ///
+    /// # Type Parameters
+    /// - `R`: Output moved to the caller only after a successful attempt.
+    /// - `O`: Borrowing operation that may be called again after a retry.
+    ///
     /// # Parameters
     /// - `state`: Shared atomic state container.
     /// - `operation`: Pure operation that inspects the current state and
@@ -92,6 +118,10 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A terminal result together with the execution report.
+    ///
+    /// # Panics
+    /// Operation panics propagate. Synchronous execution ignores async
+    /// timeouts.
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
@@ -113,6 +143,26 @@ impl<T, E> CasExecutor<T, E> {
 }
 
 /// Runs one synchronous attempt after loading its state snapshot.
+///
+/// # Type Parameters
+/// - `T`: Shared state inspected by the operation.
+/// - `R`: Output returned on successful completion.
+/// - `E`: Business failure returned by the operation.
+/// - `O`: Borrowing operation; it may be invoked again after a retry.
+///
+/// # Parameters
+/// - `state`: Atomic slot loaded exactly once before invoking the operation.
+/// - `operation`: Operation applied to the loaded snapshot.
+///
+/// # Returns
+/// The successful update or no-write finish for this attempt.
+///
+/// # Errors
+/// Returns a CAS conflict or an explicit Retry/Abort failure.
+///
+/// # Panics
+/// An operation panic propagates without publishing its unfinished decision.
+#[inline]
 pub(super) fn run_sync_attempt<T, R, E, O>(
     state: &AtomicRef<T>,
     operation: &O,

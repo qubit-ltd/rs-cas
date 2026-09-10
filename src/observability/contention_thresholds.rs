@@ -12,10 +12,34 @@
 /// # Examples
 ///
 /// ```
+/// use std::sync::Arc;
+/// use std::sync::atomic::AtomicUsize;
+/// use std::sync::atomic::Ordering;
+///
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasAlert;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
+/// use qubit_cas::CasHooks;
 /// use qubit_cas::ContentionThresholds;
 ///
-/// let thresholds = ContentionThresholds::default();
-/// assert!(thresholds.min_attempts() > 0);
+/// let state = AtomicRef::from_value(3usize);
+/// let count = Arc::new(AtomicUsize::new(0));
+/// let observed = Arc::clone(&count);
+/// let thresholds = ContentionThresholds::new(1, 1, 1.0);
+/// let hooks = CasHooks::new().on_contention_alert(thresholds, move |alert: &CasAlert| {
+///     assert_eq!(alert.thresholds(), thresholds);
+///     assert_eq!(alert.report().conflicts(), 1);
+///     observed.fetch_add(1, Ordering::SeqCst);
+/// });
+/// let outcome = CasExecutor::<usize, ()>::builder().max_attempts(1).build().unwrap()
+///     .execute_with_hooks(&state, |current: &usize| {
+///         // Simulate another writer; avoid external side effects in real retry closures.
+///         state.store(Arc::new(*current + 1));
+///         CasDecision::update(*current + 2, ())
+///     }, hooks);
+/// assert!(outcome.is_err());
+/// assert_eq!(count.load(Ordering::SeqCst), 1);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContentionThresholds {
@@ -41,6 +65,7 @@ impl ContentionThresholds {
     /// # Returns
     /// A normalized [`ContentionThresholds`] value.
     #[inline]
+    #[must_use]
     pub fn new(min_attempts: u32, min_conflicts: u32, conflict_ratio: f64) -> Self {
         Self {
             min_attempts,
@@ -86,7 +111,11 @@ impl ContentionThresholds {
 
 impl Default for ContentionThresholds {
     /// Returns the recommended high-contention threshold.
-    #[inline]
+    ///
+    /// # Returns
+    /// Thresholds requiring three attempts, one conflict, and at least 30%
+    /// conflicts.
+    #[inline(always)]
     fn default() -> Self {
         Self::new(3, 1, 0.30)
     }

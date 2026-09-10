@@ -8,6 +8,21 @@
 //! Terminal outcomes represented in CAS execution reports.
 
 /// Terminal outcome captured in a CAS execution report.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
+/// use qubit_cas::CasExecutionOutcome;
+///
+/// let state = AtomicRef::from_value(3usize);
+/// let outcome = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute(&state, |_: &usize| CasDecision::finish("available"));
+/// assert_eq!(outcome.report().outcome(), CasExecutionOutcome::SuccessFinished);
+/// assert_eq!(outcome.report().attempts_total(), 1);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CasExecutionOutcome {
     /// The flow completed by installing a new state.
@@ -26,7 +41,7 @@ pub enum CasExecutionOutcome {
     ErrorFlowTimeout,
     /// Retry infrastructure failed while scheduling or stopping work.
     ErrorRetryInfrastructure,
-    /// The cumulative user operation elapsed-time budget was exceeded.
+    /// The cumulative attempt elapsed-time budget was exceeded.
     ErrorOperationBudgetExceeded,
     /// The monotonic total retry-flow elapsed-time budget was exceeded.
     ErrorTotalBudgetExceeded,

@@ -28,6 +28,19 @@ use crate::report::CasExecutionOutcome;
 use crate::report::CasReportBuilder;
 
 /// Enriches an attempt success with retry context.
+///
+/// # Type Parameters
+/// - `T`: Shared state held by the successful attempt.
+/// - `R`: Business output moved from that attempt.
+///
+/// # Parameters
+/// - `success`: Committed update or no-write result.
+/// - `context`: Terminal retry counters and limits.
+///
+/// # Returns
+/// A public success retaining the original attempt snapshots and output.
+#[must_use]
+#[inline]
 pub(super) fn enrich_success<T, R>(success: AttemptSuccess<T, R>, context: RetryContext) -> CasSuccess<T, R> {
     let context = CasContext::new(&context);
     match success {
@@ -41,6 +54,13 @@ pub(super) fn enrich_success<T, R>(success: AttemptSuccess<T, R>, context: Retry
 }
 
 /// Maps a terminal CAS error kind to its report outcome.
+///
+/// # Parameters
+/// - `kind`: Terminal error category after precedence has been resolved.
+///
+/// # Returns
+/// The corresponding report outcome, without reclassifying the last attempt.
+#[must_use]
 pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
     match kind {
         CasErrorKind::Abort => CasExecutionOutcome::ErrorAbort,
@@ -57,14 +77,21 @@ pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
 impl<T, E> CasExecutor<T, E> {
     /// Finalizes one retry execution into the public CAS result type.
     ///
+    /// # Type Parameters
+    /// - `R`: Business output retained only from the successful attempt.
+    ///
     /// # Parameters
     /// - `attempt`: Retry-layer terminal success or error.
     /// - `hooks`: Hook registrations for the current execution.
-    /// - `timeout_current`: Last async operation snapshot, when an async
-    ///   execution needs to preserve it for a timeout error.
+    /// - `timeout_current`: `Some` last async operation snapshot retained for
+    ///   timeout projection; `None` for synchronous execution or no snapshot.
+    /// - `report_builder`: Accumulated counters and isolated listener failures.
     ///
     /// # Returns
     /// Public CAS success or error.
+    ///
+    /// # Panics
+    /// Panics if an internal report mutex has been poisoned.
     pub(super) fn finish_execution<R>(
         &self,
         attempt: Result<RetrySuccess<AttemptSuccess<T, R>>, RetryError<CasAttemptFailure<T, E>>>,

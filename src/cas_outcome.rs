@@ -18,19 +18,33 @@ use crate::report::CasExecutionReport;
 /// Combines the terminal [`Result`] (`CasSuccess` or [`CasError`]) with the
 /// full [`CasExecutionReport`] for observability.
 ///
+/// # Type Parameters
+/// - `T`: Shared state referenced by the result.
+/// - `R`: Output of a successful attempt.
+/// - `E`: Retained business failure on an unsuccessful execution.
+///
 /// # Examples
 ///
 /// ```
-/// use qubit_cas::CasOutcome;
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
 ///
-/// let _layout = std::mem::size_of::<CasOutcome<usize, (), ()>>();
+/// let state = AtomicRef::from_value(3usize);
+/// let outcome = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute(&state, |_: &usize| CasDecision::finish("available"));
+/// let (result, report) = outcome.into_parts();
+/// assert_eq!(*result.unwrap().output(), "available");
+/// assert_eq!(report.attempts_total(), 1);
+/// assert_eq!(*state.load(), 3);
 /// ```
 ///
 /// ```compile_fail
 /// #![deny(unused_must_use)]
 ///
 /// use qubit_atomic::AtomicRef;
-/// use qubit_cas::{CasDecision, CasExecutor};
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
 ///
 /// let state = AtomicRef::from_value(1usize);
 /// let executor = CasExecutor::<usize, ()>::latency_first();
@@ -153,7 +167,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Panics
     /// Panics with the given message if the outcome is successful.
-    #[must_use]
+    #[must_use = "inspect the expected terminal CAS error"]
     #[inline(always)]
     pub fn expect_err(self, message: &str) -> CasError<T, E>
     where

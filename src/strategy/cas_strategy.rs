@@ -31,9 +31,18 @@ use crate::constants::RELIABILITY_FIRST_MAX_TOTAL_ELAPSED;
 /// # Examples
 ///
 /// ```
+/// use qubit_cas::CasExecutor;
 /// use qubit_cas::CasStrategy;
 ///
-/// assert!(CasStrategy::LatencyFirst.profile().max_attempts() > 0);
+/// let strategy = CasStrategy::ReliabilityFirst;
+/// let profile = strategy.profile();
+/// let executor = CasExecutor::<usize, ()>::with_strategy(strategy);
+/// assert_eq!(executor.max_attempts(), profile.max_attempts());
+/// assert_eq!(executor.max_operation_elapsed(), Some(profile.max_operation_elapsed()));
+/// assert!(profile.uses_backoff());
+/// let custom = CasExecutor::<usize, ()>::builder().strategy(strategy).max_attempts(2).build().unwrap();
+/// assert_eq!(custom.max_attempts(), 2);
+/// assert_ne!(custom.max_attempts(), profile.max_attempts());
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CasStrategy {
@@ -50,7 +59,7 @@ impl Default for CasStrategy {
     ///
     /// # Returns
     /// [`CasStrategy::LatencyFirst`] as the recommended default.
-    #[inline]
+    #[inline(always)]
     fn default() -> Self {
         Self::LatencyFirst
     }
@@ -92,6 +101,7 @@ impl CasStrategy {
     /// # Returns
     /// `Some((initial, max, jitter_factor))` for backoff strategies, or `None`
     /// for latency-first (immediate retries).
+    #[must_use]
     #[inline]
     pub(crate) fn backoff(self) -> Option<(Duration, Duration, f64)> {
         match self {

@@ -1,24 +1,14 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Infrastructure diagnostics must survive retry-to-CAS projection.
 
-#[test]
-fn test_clock_failure_retains_message() {
-    let error = crate::CasError::<usize, ()>::from_retry_parts(
-        RetryErrorReason::Infrastructure {
-            failure: RetryInfrastructureFailure::Clock {
-                message: "clock moved backwards".into(),
-            },
-        },
-        None,
-        RetryContext::new(0, 3),
-        None,
-        Vec::new().into_boxed_slice(),
-    );
-    assert_eq!(error.kind(), crate::CasErrorKind::RetryInfrastructure);
-    let diagnostic = error.diagnostic().expect("clock diagnostic retained");
-    assert_eq!(diagnostic.kind(), CasDiagnosticKind::Clock);
-    assert!(diagnostic.message().contains("clock moved backwards"));
-}
-
+use std::error::Error;
+use std::io::Error as IoError;
 use std::sync::Arc;
 
 use qubit_retry::AttemptFailure;
@@ -40,6 +30,25 @@ use crate::CasErrorKind;
 use crate::CasLimitKind;
 use crate::CasTermination;
 use crate::CasTimeoutScope;
+
+#[test]
+fn test_clock_failure_retains_message() {
+    let error = CasError::<usize, ()>::from_retry_parts(
+        RetryErrorReason::Infrastructure {
+            failure: RetryInfrastructureFailure::Clock {
+                message: "clock moved backwards".into(),
+            },
+        },
+        None,
+        RetryContext::new(0, 3),
+        None,
+        Vec::new().into_boxed_slice(),
+    );
+    assert_eq!(error.kind(), CasErrorKind::RetryInfrastructure);
+    let diagnostic = error.diagnostic().expect("clock diagnostic retained");
+    assert_eq!(diagnostic.kind(), CasDiagnosticKind::Clock);
+    assert!(diagnostic.message().contains("clock moved backwards"));
+}
 
 /// Projects a terminal reason with an independent retained business failure.
 fn project(reason: RetryErrorReason) -> CasError<usize, &'static str> {
@@ -207,12 +216,11 @@ fn test_timeout_snapshot_is_optional_and_not_reloaded() {
 
 #[test]
 fn test_error_source_still_refers_to_business_error() {
-    use std::error::Error;
-    let error = CasError::<usize, std::io::Error>::from_retry_parts(
+    let error = CasError::<usize, IoError>::from_retry_parts(
         RetryErrorReason::Aborted,
         Some(AttemptFailure::Error(CasAttemptFailure::Abort {
             current: Arc::new(1),
-            error: std::io::Error::other("business source"),
+            error: IoError::other("business source"),
         })),
         RetryContext::new(1, 3),
         None,

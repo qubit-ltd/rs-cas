@@ -7,12 +7,19 @@
 // =============================================================================
 //! Lifecycle dispatch and event wiring for CAS executions.
 
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use qubit_function::Consumer;
+
 use super::CasExecutor;
 use crate::error::CasAttemptFailure;
+use crate::error::CasAttemptFailureKind;
+use crate::event::CasAlertHook;
 use crate::event::CasEvent;
+use crate::event::CasEventHook;
 use crate::event::CasHooks;
 use crate::event::CasListenerFailure;
 use crate::event::CasListenerKind;
@@ -22,27 +29,47 @@ use crate::report::CasExecutionReport;
 use crate::report::CasReportBuilder;
 
 /// Returns whether lifecycle events should be emitted.
-pub(super) fn should_emit_events(hook: &Option<crate::event::CasEventHook>) -> bool {
+///
+/// # Parameters
+/// - `hook`: `Some` registered event listener, or `None` when disabled.
+///
+/// # Returns
+/// Whether constructing and dispatching events is needed.
+#[must_use]
+#[inline(always)]
+pub(super) fn should_emit_events(hook: &Option<CasEventHook>) -> bool {
     hook.is_some()
 }
 
 /// Dispatches one lifecycle event according to listener panic policy.
-pub(super) fn dispatch_event(hook: &crate::event::CasEventHook, event: CasEvent) -> Option<CasListenerFailure> {
-    use std::panic::AssertUnwindSafe;
-    use std::panic::catch_unwind;
-
-    use qubit_function::Consumer;
+///
+/// # Parameters
+/// - `hook`: Registered event listener invoked synchronously.
+/// - `event`: Owned lifecycle payload borrowed by the callback.
+///
+/// # Returns
+/// `Some` isolated listener panic in unwind builds; `None` when dispatch
+/// succeeds. The callback runs without a report
+/// mutex guard.
+#[inline]
+pub(super) fn dispatch_event(hook: &CasEventHook, event: CasEvent) -> Option<CasListenerFailure> {
     catch_unwind(AssertUnwindSafe(|| hook.accept(&event)))
         .err()
         .map(|payload| CasListenerFailure::from_panic(listener_kind(&event), payload))
 }
 
 /// Dispatches one optional alert according to listener panic policy.
-pub(super) fn dispatch_alert(hook: &Option<crate::event::CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
-    use std::panic::AssertUnwindSafe;
-    use std::panic::catch_unwind;
-
-    use qubit_function::Consumer;
+///
+/// # Parameters
+/// - `hook`: `Some` listener or `None` to skip alert dispatch.
+/// - `alert`: Owned contention payload borrowed by the callback.
+///
+/// # Returns
+/// `Some` isolated listener panic in unwind builds; `None` when dispatch
+/// succeeds or an optional hook is absent. The callback runs without a report
+/// mutex guard.
+#[inline]
+pub(super) fn dispatch_alert(hook: &Option<CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
     if let Some(hook) = hook {
         return catch_unwind(AssertUnwindSafe(|| hook.accept(&alert)))
             .err()
@@ -51,6 +78,14 @@ pub(super) fn dispatch_alert(hook: &Option<crate::event::CasAlertHook>, alert: C
     None
 }
 
+/// Maps an event payload to the listener stage used in panic diagnostics.
+///
+/// # Parameters
+/// - `event`: Lifecycle payload being dispatched.
+///
+/// # Returns
+/// The exact stage used to attribute a listener failure.
+#[must_use]
 fn listener_kind(event: &CasEvent) -> CasListenerKind {
     match event {
         CasEvent::ExecutionStarted { .. } => CasListenerKind::ExecutionStarted,
@@ -66,6 +101,9 @@ impl<T, E> CasExecutor<T, E> {
     /// # Parameters
     /// - `hooks`: Per-execution hooks (checked for event hook presence).
     /// - `report_builder`: Used to obtain the start instant for the event.
+    ///
+    /// # Panics
+    /// Panics if the internal report mutex has been poisoned.
     pub(super) fn emit_started(&self, hooks: &CasHooks, report_builder: &Arc<Mutex<CasReportBuilder>>)
     where
         T: 'static,
@@ -94,9 +132,10 @@ impl<T, E> CasExecutor<T, E> {
 
     /// Finishes and emits one execution report (and optional alert).
     ///
-    /// Locks the report builder, finalizes the report, emits the
+    /// Finalizes the report under its lock, releases the lock, then emits the
     /// `ExecutionFinished` event if enabled, and dispatches a contention alert
-    /// if the mode and thresholds warrant it.
+    /// if the registration and thresholds warrant it. Listener callbacks never
+    /// run while the report mutex is held.
     ///
     /// # Parameters
     /// - `hooks`: Used for event and alert dispatching.
@@ -104,7 +143,10 @@ impl<T, E> CasExecutor<T, E> {
     /// - `ctx`: Retry limits and terminal outcome for the report.
     ///
     /// # Returns
-    /// The finalized [`CasExecutionReport`].
+    /// The finalized [`CasExecutionReport`], including late listener failures.
+    ///
+    /// # Panics
+    /// Panics if the internal report mutex has been poisoned.
     pub(super) fn finish_report(
         &self,
         hooks: &CasHooks,
@@ -165,8 +207,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// The [`CasAttemptFailureKind`] for event emission.
-    #[inline]
-    pub(super) fn failure_kind(failure: &CasAttemptFailure<T, E>) -> crate::error::CasAttemptFailureKind {
+    #[must_use]
+    #[inline(always)]
+    pub(super) fn failure_kind(failure: &CasAttemptFailure<T, E>) -> CasAttemptFailureKind {
         failure.kind()
     }
 
@@ -178,7 +221,12 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Panics
     /// Listener panics are isolated and do not change the CAS result.
-    pub(super) fn dispatch_event(hook: &crate::event::CasEventHook, event: CasEvent) -> Option<CasListenerFailure>
+    ///
+    /// # Returns
+    /// `Some` isolated listener panic in unwind builds; `None` when dispatch
+    /// succeeds. The callback runs without a report mutex guard.
+    #[inline(always)]
+    pub(super) fn dispatch_event(hook: &CasEventHook, event: CasEvent) -> Option<CasListenerFailure>
     where
         T: 'static,
         E: 'static,
@@ -187,8 +235,15 @@ impl<T, E> CasExecutor<T, E> {
     }
 
     /// Returns whether lifecycle event construction and dispatch are needed.
-    #[inline]
-    pub(super) fn should_emit_events(hook: &Option<crate::event::CasEventHook>) -> bool {
+    ///
+    /// # Parameters
+    /// - `hook`: `Some` registered event listener, or `None` when disabled.
+    ///
+    /// # Returns
+    /// Whether constructing and dispatching events is needed.
+    #[must_use]
+    #[inline(always)]
+    pub(super) fn should_emit_events(hook: &Option<CasEventHook>) -> bool {
         super::dispatch::should_emit_events(hook)
     }
 
@@ -199,12 +254,15 @@ impl<T, E> CasExecutor<T, E> {
     /// - `alert`: Contention alert to dispatch.
     ///
     /// # Panics
-    /// Exposes alert listener panics to the owning CAS execution boundary when
-    /// Listener panics are isolated and recorded in the report.
-    pub(super) fn dispatch_alert(
-        hook: &Option<crate::event::CasAlertHook>,
-        alert: CasAlert,
-    ) -> Option<CasListenerFailure> {
+    /// Listener panics are isolated in unwind builds and returned as
+    /// diagnostics.
+    ///
+    /// # Returns
+    /// `Some` isolated listener panic in unwind builds; `None` when dispatch
+    /// succeeds or an optional hook is absent. The callback runs without a
+    /// report mutex guard.
+    #[inline(always)]
+    pub(super) fn dispatch_alert(hook: &Option<CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
         super::dispatch::dispatch_alert(hook, alert)
     }
 }

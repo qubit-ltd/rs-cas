@@ -10,6 +10,10 @@
 use std::sync::Arc;
 
 /// Success payload produced before retry-context enrichment.
+///
+/// # Type Parameters
+/// - `T`: State snapshots retained by the admitted attempt.
+/// - `R`: Business output moved only from a successful attempt.
 pub(in crate::executor) enum AttemptSuccess<T, R> {
     /// One compare-and-swap write succeeded.
     Updated {

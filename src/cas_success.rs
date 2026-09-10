@@ -13,12 +13,25 @@ use crate::event::CasContext;
 
 /// Successful result returned by [`crate::CasExecutor`].
 ///
+/// # Type Parameters
+/// - `T`: Shared state retained by the successful snapshot.
+/// - `R`: Business output returned by the winning attempt.
+///
 /// # Examples
 ///
 /// ```
-/// use qubit_cas::CasSuccess;
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
 ///
-/// let _layout = std::mem::size_of::<CasSuccess<usize, ()>>();
+/// let state = AtomicRef::from_value(3usize);
+/// let success = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute_result(&state, |current: &usize| CasDecision::update(*current - 1, "reserved"))
+///     .unwrap();
+/// assert!(success.is_updated());
+/// assert_eq!(**success.previous().unwrap(), 3);
+/// assert_eq!(**success.current(), 2);
+/// assert_eq!(*success.output(), "reserved");
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CasSuccess<T, R> {
@@ -63,6 +76,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// A [`CasSuccess::Updated`] value.
+    #[must_use]
     #[inline]
     pub(crate) fn updated(previous: Arc<T>, current: Arc<T>, output: R, context: CasContext) -> Self {
         Self::Updated {
@@ -82,6 +96,7 @@ impl<T, R> CasSuccess<T, R> {
     ///
     /// # Returns
     /// A [`CasSuccess::Finished`] value.
+    #[must_use]
     #[inline]
     pub(crate) fn finished(current: Arc<T>, output: R, context: CasContext) -> Self {
         Self::Finished {
@@ -140,18 +155,6 @@ impl<T, R> CasSuccess<T, R> {
         }
     }
 
-    /// Consumes the success result and returns the business output.
-    ///
-    /// # Returns
-    /// The owned business output.
-    #[must_use]
-    #[inline(always)]
-    pub fn into_output(self) -> R {
-        match self {
-            Self::Updated { output, .. } | Self::Finished { output, .. } => output,
-        }
-    }
-
     /// Returns the retry context captured at success.
     ///
     /// # Returns
@@ -172,5 +175,17 @@ impl<T, R> CasSuccess<T, R> {
     #[inline(always)]
     pub fn attempts(&self) -> u32 {
         self.context().attempts()
+    }
+
+    /// Consumes the success result and returns the business output.
+    ///
+    /// # Returns
+    /// The owned business output.
+    #[must_use]
+    #[inline(always)]
+    pub fn into_output(self) -> R {
+        match self {
+            Self::Updated { output, .. } | Self::Finished { output, .. } => output,
+        }
     }
 }

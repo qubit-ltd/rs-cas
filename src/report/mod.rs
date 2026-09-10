@@ -9,8 +9,8 @@
 
 mod cas_execution_outcome;
 mod cas_execution_report;
-mod cas_report_builder;
+mod internal;
 
 pub use cas_execution_outcome::CasExecutionOutcome;
 pub use cas_execution_report::CasExecutionReport;
-pub(crate) use cas_report_builder::CasReportBuilder;
+pub(crate) use internal::CasReportBuilder;

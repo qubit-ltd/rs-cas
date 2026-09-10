@@ -8,6 +8,22 @@
 //! Classified kinds for terminal CAS errors.
 
 /// Classified reason for a terminal CAS error.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
+/// use qubit_cas::CasErrorKind;
+///
+/// let state = AtomicRef::from_value(3usize);
+/// let error = CasExecutor::<usize, &'static str>::builder().build().unwrap()
+///     .execute_result(&state, |_: &usize| CasDecision::<usize, (), _>::abort("sold out"))
+///     .unwrap_err();
+/// assert_eq!(error.kind(), CasErrorKind::Abort);
+/// assert_eq!(error.error(), Some(&"sold out"));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CasErrorKind {
     /// The operation explicitly aborted.
@@ -22,7 +38,7 @@ pub enum CasErrorKind {
     FlowTimeout,
     /// The retry layer failed while scheduling or stopping retry work.
     RetryInfrastructure,
-    /// The cumulative user operation elapsed-time budget expired.
+    /// The cumulative attempt elapsed-time budget expired.
     OperationBudgetExceeded,
     /// The monotonic total retry-flow elapsed-time budget expired.
     TotalBudgetExceeded,

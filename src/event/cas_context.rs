@@ -17,9 +17,18 @@ use qubit_retry::RetryContext;
 /// # Examples
 ///
 /// ```
-/// use qubit_cas::CasContext;
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
 ///
-/// let _layout = std::mem::size_of::<CasContext>();
+/// let state = AtomicRef::from_value(3usize);
+/// let outcome = CasExecutor::<usize, ()>::builder().build().unwrap()
+///     .execute(&state, |_: &usize| CasDecision::finish("available"));
+/// let context = outcome.into_result().unwrap().context();
+/// assert_eq!(context.attempts(), 1);
+/// assert_eq!(context.max_attempts(), 5);
+/// assert_eq!(context.max_operation_elapsed(), None);
+/// assert_eq!(context.current_attempt(), None);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CasContext {
@@ -29,7 +38,7 @@ pub struct CasContext {
     current_attempt: Option<NonZeroU32>,
     /// Configured maximum attempts.
     max_attempts: u32,
-    /// Configured maximum cumulative user operation time.
+    /// Configured maximum cumulative attempt time.
     max_operation_elapsed: Option<Duration>,
     /// Configured maximum total retry-flow elapsed time.
     max_total_elapsed: Option<Duration>,
@@ -52,6 +61,7 @@ impl CasContext {
     /// # Returns
     /// A copied [`CasContext`] value.
     #[inline]
+    #[must_use]
     pub(crate) fn new(context: &RetryContext) -> Self {
         Self {
             attempts: context.attempts(),
@@ -69,7 +79,7 @@ impl CasContext {
     /// Returns the number of operations that actually started.
     ///
     /// # Returns
-    /// The committed operation count, or zero if no operation ran.
+    /// The started attempt count, including failures; zero if no operation ran.
     #[must_use]
     #[inline(always)]
     pub fn attempts(&self) -> u32 {
@@ -107,10 +117,11 @@ impl CasContext {
         self.max_attempts.saturating_sub(1)
     }
 
-    /// Returns the configured maximum cumulative user operation time budget.
+    /// Returns the configured maximum cumulative attempt time budget.
     ///
     /// # Returns
-    /// `Some(Duration)` for bounded executions, or `None` for unlimited.
+    /// `Some(Duration)` enables this soft budget; `None` disables only this
+    /// budget. It does not cancel an already admitted operation.
     #[must_use]
     #[inline(always)]
     pub fn max_operation_elapsed(&self) -> Option<Duration> {
@@ -120,7 +131,8 @@ impl CasContext {
     /// Returns the configured maximum total retry-flow elapsed-time budget.
     ///
     /// # Returns
-    /// `Some(Duration)` for bounded executions, or `None` for unlimited.
+    /// `Some(Duration)` enables this soft budget; `None` disables only this
+    /// budget. It does not cancel an already admitted operation.
     #[must_use]
     #[inline(always)]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
@@ -150,7 +162,8 @@ impl CasContext {
     /// Returns the effective timeout for the current async attempt.
     ///
     /// # Returns
-    /// `Some(Duration)` when the current attempt has a hard timeout.
+    /// `Some(Duration)` when the current attempt has a hard timeout; `None`
+    /// when none is selected or the context has no current attempt.
     #[must_use]
     #[inline(always)]
     pub fn current_attempt_timeout(&self) -> Option<Duration> {
@@ -160,7 +173,8 @@ impl CasContext {
     /// Returns the selected delay before the next retry.
     ///
     /// # Returns
-    /// `Some(Duration)` when retry scheduling selected a delay.
+    /// `Some(Duration)` when retry scheduling selected a delay; `None`
+    /// when no next retry delay is selected in this context.
     #[must_use]
     #[inline(always)]
     pub fn next_delay(&self) -> Option<Duration> {

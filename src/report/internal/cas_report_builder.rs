@@ -10,18 +10,24 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use super::CasExecutionOutcome;
-use super::CasExecutionReport;
 use crate::event::CasListenerFailure;
+use crate::report::CasExecutionOutcome;
+use crate::report::CasExecutionReport;
 
 /// Mutable accumulator used internally while one CAS flow is running.
 #[derive(Debug, Clone)]
 pub(crate) struct CasReportBuilder {
+    /// Monotonic instant captured before start listeners run.
     started_at: Instant,
+    /// Number of failed compare-and-swap publications.
     conflicts: u32,
+    /// Number of retryable business failures.
     retry_errors: u32,
+    /// Number of explicit business aborts.
     aborts: u32,
+    /// Number of observed attempt timeouts.
     timeouts: u32,
+    /// Isolated listener panics retained in dispatch order.
     listener_failures: Vec<CasListenerFailure>,
 }
 
@@ -33,6 +39,7 @@ impl CasReportBuilder {
     /// A fresh [`CasReportBuilder`] ready to record statistics during a CAS
     /// execution.
     #[inline]
+    #[must_use]
     pub(crate) fn start() -> Self {
         Self {
             started_at: Instant::now(),
@@ -48,9 +55,21 @@ impl CasReportBuilder {
     ///
     /// # Returns
     /// The [`Instant`] when this report builder was started.
+    #[must_use]
     #[inline(always)]
     pub(crate) fn started_at(&self) -> Instant {
         self.started_at
+    }
+
+    /// Clones accumulated diagnostics; an empty vector means no listener
+    /// failed.
+    ///
+    /// # Returns
+    /// An owned snapshot of all retained listener failures, empty if none.
+    #[must_use]
+    #[inline(always)]
+    pub(crate) fn listener_failures(&self) -> Vec<CasListenerFailure> {
+        self.listener_failures.clone()
     }
 
     /// Records one compare-and-swap conflict.
@@ -87,12 +106,12 @@ impl CasReportBuilder {
     }
 
     /// Records an isolated listener failure.
+    ///
+    /// # Parameters
+    /// - `failure`: Owned isolated listener panic, appended in dispatch order.
+    #[inline(always)]
     pub(crate) fn record_listener_failure(&mut self, failure: CasListenerFailure) {
         self.listener_failures.push(failure);
-    }
-
-    pub(crate) fn listener_failures(&self) -> Vec<CasListenerFailure> {
-        self.listener_failures.clone()
     }
 
     /// Finishes the accumulator into an immutable report.
@@ -101,8 +120,7 @@ impl CasReportBuilder {
     /// - `attempts_total`: The total number of attempts performed (provided by
     ///   the retry layer).
     /// - `max_attempts`: Configured maximum attempts.
-    /// - `max_operation_elapsed`: Configured cumulative user operation time
-    ///   budget.
+    /// - `max_operation_elapsed`: Configured cumulative attempt time budget.
     /// - `max_total_elapsed`: Configured total retry-flow time budget.
     /// - `outcome`: The terminal outcome determined for this execution.
     ///
@@ -110,6 +128,7 @@ impl CasReportBuilder {
     /// A completed [`CasExecutionReport`] with all statistics and timing
     /// information.
     #[inline]
+    #[must_use]
     pub(crate) fn finish(
         &self,
         attempts_total: u32,

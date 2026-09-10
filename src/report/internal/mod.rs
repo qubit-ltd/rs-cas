@@ -5,5 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Private accumulation of execution reports.
 
-mod cas_error_details_tests;
+mod cas_report_builder;
+
+pub(crate) use cas_report_builder::CasReportBuilder;

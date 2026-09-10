@@ -3,8 +3,7 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Shared projection of a CAS decision onto one retry attempt result.
 
@@ -17,6 +16,24 @@ use crate::error::CasAttemptFailure;
 use crate::executor::internal::AttemptSuccess;
 
 /// Applies one CAS decision and preserves the atomic compare-and-set snapshot.
+///
+/// # Type Parameters
+/// - `T`: Shared application state.
+/// - `R`: Output moved to the caller only on success.
+/// - `E`: Business failure retained on Retry or Abort.
+///
+/// # Parameters
+/// - `state`: Atomic slot written only by an accepted Update.
+/// - `current`: Snapshot used by the operation; Finish never revalidates it.
+/// - `decision`: Owned operation decision and its output or business error.
+///
+/// # Returns
+/// A committed update or a no-write finish, retaining that attempt's snapshots.
+///
+/// # Errors
+/// Returns a conflict with the CAS-observed actual value, or the operation's
+/// Retry/Abort failure with its original snapshot. Failed update output is
+/// dropped.
 pub(super) fn apply_decision<T, R, E>(
     state: &AtomicRef<T>,
     current: Arc<T>,

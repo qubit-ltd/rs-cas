@@ -2,12 +2,15 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Equivalent decisions and soft budgets across synchronous facades.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::thread::sleep;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
@@ -157,7 +160,7 @@ fn test_sync_soft_budgets_preserve_admitted_success_and_stop_retry() {
                 .build()
                 .expect("valid soft budget");
                 let (result, _) = run_path(path, &executor, &state, |_| {
-                    std::thread::sleep(Duration::from_millis(5));
+                    sleep(Duration::from_millis(5));
                     match decision {
                         0 => CasDecision::update(1, 1),
                         1 => CasDecision::finish(1),

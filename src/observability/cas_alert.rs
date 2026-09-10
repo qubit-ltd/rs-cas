@@ -15,9 +15,34 @@ use crate::report::CasExecutionReport;
 /// # Examples
 ///
 /// ```
-/// use qubit_cas::CasAlert;
+/// use std::sync::Arc;
+/// use std::sync::atomic::AtomicUsize;
+/// use std::sync::atomic::Ordering;
 ///
-/// let _layout = std::mem::size_of::<CasAlert>();
+/// use qubit_atomic::AtomicRef;
+/// use qubit_cas::CasAlert;
+/// use qubit_cas::CasDecision;
+/// use qubit_cas::CasExecutor;
+/// use qubit_cas::CasHooks;
+/// use qubit_cas::ContentionThresholds;
+///
+/// let state = AtomicRef::from_value(3usize);
+/// let count = Arc::new(AtomicUsize::new(0));
+/// let observed = Arc::clone(&count);
+/// let thresholds = ContentionThresholds::new(1, 1, 1.0);
+/// let hooks = CasHooks::new().on_contention_alert(thresholds, move |alert: &CasAlert| {
+///     assert_eq!(alert.thresholds(), thresholds);
+///     assert_eq!(alert.report().conflicts(), 1);
+///     observed.fetch_add(1, Ordering::SeqCst);
+/// });
+/// let outcome = CasExecutor::<usize, ()>::builder().max_attempts(1).build().unwrap()
+///     .execute_with_hooks(&state, |current: &usize| {
+///         // Simulate another writer; avoid external side effects in real retry closures.
+///         state.store(Arc::new(*current + 1));
+///         CasDecision::update(*current + 2, ())
+///     }, hooks);
+/// assert!(outcome.is_err());
+/// assert_eq!(count.load(Ordering::SeqCst), 1);
 /// ```
 #[derive(Debug, Clone)]
 pub struct CasAlert {
@@ -37,6 +62,7 @@ impl CasAlert {
     /// # Returns
     /// A new [`CasAlert`] value.
     #[inline]
+    #[must_use]
     pub(crate) fn contention(report: CasExecutionReport, thresholds: ContentionThresholds) -> Self {
         Self { report, thresholds }
     }
