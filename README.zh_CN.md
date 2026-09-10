@@ -21,7 +21,7 @@
 
 ```toml
 [dependencies]
-qubit-cas = "0.15"
+qubit-cas = "0.9"
 qubit-atomic = "0.13"
 ```
 
@@ -81,7 +81,7 @@ result-only 路径省去报告和事件成本；`update` 仍为新快照分配 `
 英文教程见 [User Guide](doc/user_guide.md)。标准状态机可通过
 `StateMachineBuilder::cas_executor` 注入配置，紧凑整数状态继续使用独立的 fast-cas。
 
-0.15 通过 `max_attempts()`、`max_retries()`、`max_operation_elapsed()` 和
+0.9 通过 `max_attempts()`、`max_retries()`、`max_operation_elapsed()` 和
 `max_total_elapsed()` 读取实际配置。告警统一使用
 `on_contention_alert(thresholds, callback)`，重复注册会同时替换阈值和回调。
 
@@ -96,7 +96,7 @@ operation 接收的当前快照计算替换值；不要用历史 `Arc` 判断 A-
 全局状态可能已经被其他写者替换。
 
 默认业务错误类型改为 `CasBoxError`，使默认终态错误能够进入 `std::error::Error` 的 source
-链。具体错误需要显式写成 `CasBoxError::new(Box::new(error))`；0.15 有意不提供 blanket
+链。具体错误需要显式写成 `CasBoxError::new(Box::new(error))`；0.9 有意不提供 blanket
 `From<E>`，因为它会与 Rust 的 `From<T> for T` 重叠。`CasSuccess`、`CasError` 和
 `CasOutcome` 现在不再要求快照 `T: Clone`；只有按值保存的 output 或业务错误需要 `Clone`。
 

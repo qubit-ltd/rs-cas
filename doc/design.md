@@ -1,6 +1,6 @@
 # Qubit CAS Design
 
-This document describes qubit-cas 0.15. [中文版](design.zh_CN.md).
+This document describes qubit-cas 0.9. [中文版](design.zh_CN.md).
 
 ## Responsibilities
 

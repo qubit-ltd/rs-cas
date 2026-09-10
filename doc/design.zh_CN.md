@@ -1,6 +1,6 @@
 # Qubit CAS 设计
 
-本文描述 qubit-cas 0.15。[English](design.md)。
+本文描述 qubit-cas 0.9。[English](design.md)。
 
 ## 职责划分
 

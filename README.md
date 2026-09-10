@@ -22,7 +22,7 @@ side effects idempotent; CAS may invoke it more than once.
 
 ```toml
 [dependencies]
-qubit-cas = "0.15"
+qubit-cas = "0.9"
 qubit-atomic = "0.13"
 ```
 
@@ -87,7 +87,7 @@ See the [Chinese guide](doc/user_guide.zh_CN.md). Standard state machines can in
 an executor with `StateMachineBuilder::cas_executor`; compact integer states keep
 using the separate fast-cas crate.
 
-Version 0.15 exposes installed limits through `max_attempts()`, `max_retries()`,
+Version 0.9 exposes installed limits through `max_attempts()`, `max_retries()`,
 `max_operation_elapsed()`, and `max_total_elapsed()`. Register alerts through
 `on_contention_alert(thresholds, callback)`; repeated registration replaces both.
 
@@ -107,7 +107,7 @@ method returns.
 
 The default business-error type is `CasBoxError`, so terminal default errors
 participate in `std::error::Error` source chains. Wrap concrete errors explicitly
-with `CasBoxError::new(Box::new(error))`; 0.15 intentionally has no blanket
+with `CasBoxError::new(Box::new(error))`; 0.9 intentionally has no blanket
 `From<E>` conversion because it would overlap with Rust's `From<T> for T`.
 `CasSuccess`, `CasError`, and `CasOutcome` can now be cloned without `T: Clone`;
 only the owned output or business error needs `Clone`.
