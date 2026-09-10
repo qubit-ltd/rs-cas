@@ -75,6 +75,43 @@ fn test_concurrent_updates_return_committed_pairs() {
 }
 
 #[test]
+fn test_cloned_executors_share_retry_cache_under_concurrent_updates() {
+    let state = AtomicRef::from_value(0usize);
+    let gate = Arc::new(Barrier::new(8));
+    let executor = CasExecutor::<usize, ()>::builder()
+        .max_attempts(1_000)
+        .no_delay()
+        .build()
+        .expect("valid policy");
+    let successes = scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..8 {
+            let state = &state;
+            let gate = Arc::clone(&gate);
+            let executor = executor.clone();
+            handles.push(scope.spawn(move || {
+                gate.wait();
+                (0..128)
+                    .map(|_| {
+                        executor
+                            .execute_result(state, |current: &usize| {
+                                CasDecision::update(*current + 1, ())
+                            })
+                            .expect("bounded contention must succeed");
+                    })
+                    .count()
+            }));
+        }
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("writer must finish"))
+            .sum::<usize>()
+    });
+    assert_eq!(successes, 1_024);
+    assert_eq!(*state.load(), 1_024);
+}
+
+#[test]
 fn test_conflict_replays_operation_from_latest_snapshot() {
     let state = AtomicRef::from_value(0usize);
     let first = AtomicBool::new(true);
