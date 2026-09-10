@@ -94,9 +94,7 @@ fn test_cloned_executors_share_retry_cache_under_concurrent_updates() {
                 (0..128)
                     .map(|_| {
                         executor
-                            .execute_result(state, |current: &usize| {
-                                CasDecision::update(*current + 1, ())
-                            })
+                            .execute_result(state, |current: &usize| CasDecision::update(*current + 1, ()))
                             .expect("bounded contention must succeed");
                     })
                     .count()
