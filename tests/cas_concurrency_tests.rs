@@ -10,12 +10,24 @@
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::thread::scope;
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
 use qubit_cas::CasExecutor;
+
+struct DropTrackedOutput {
+    attempt_snapshot: usize,
+    drops: Arc<AtomicUsize>,
+}
+
+impl Drop for DropTrackedOutput {
+    fn drop(&mut self) {
+        self.drops.fetch_add(1, Ordering::SeqCst);
+    }
+}
 
 #[test]
 fn test_concurrent_updates_return_committed_pairs() {
@@ -82,6 +94,46 @@ fn test_conflict_replays_operation_from_latest_snapshot() {
     assert_eq!(**ok.previous().expect("update has previous snapshot"), 7);
     assert_eq!(**ok.current(), 8);
     assert_eq!(*ok.output(), 7);
+}
+
+#[test]
+fn test_conflicted_attempt_drops_non_clone_output_and_returns_only_winner() {
+    let state = AtomicRef::from_value(0usize);
+    let first = AtomicBool::new(true);
+    let drops = Arc::new(AtomicUsize::new(0));
+    let executor = CasExecutor::<usize, ()>::builder()
+        .max_attempts(2)
+        .no_delay()
+        .build()
+        .expect("valid policy");
+
+    let success = executor
+        .execute_result(&state, |current: &usize| {
+            if first.swap(false, Ordering::SeqCst) {
+                state.store(Arc::new(7));
+            }
+            CasDecision::update(
+                *current + 1,
+                DropTrackedOutput {
+                    attempt_snapshot: *current,
+                    drops: Arc::clone(&drops),
+                },
+            )
+        })
+        .expect("the replayed attempt should commit");
+
+    assert_eq!(2, success.attempts());
+    assert_eq!(
+        1,
+        drops.load(Ordering::SeqCst),
+        "failed attempt output must be released"
+    );
+
+    let output = success.into_output();
+    assert_eq!(7, output.attempt_snapshot, "caller receives only the winning output");
+    assert_eq!(1, drops.load(Ordering::SeqCst), "winning output remains caller-owned");
+    drop(output);
+    assert_eq!(2, drops.load(Ordering::SeqCst), "caller releases the winning output");
 }
 
 #[test]

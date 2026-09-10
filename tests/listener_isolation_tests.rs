@@ -34,13 +34,23 @@ fn event_kind(event: &CasEvent) -> CasListenerKind {
     }
 }
 
-/// A listener panic payload whose cleanup panics a second time.
+/// A listener panic payload whose cleanup raises a second panic payload.
 #[derive(Debug)]
 struct PanicOnDropPayload;
 
 impl Drop for PanicOnDropPayload {
     fn drop(&mut self) {
-        panic!("listener panic payload dropped");
+        panic_any(SecondPanicOnDropPayload);
+    }
+}
+
+/// A second panic payload whose cleanup also panics.
+#[derive(Debug)]
+struct SecondPanicOnDropPayload;
+
+impl Drop for SecondPanicOnDropPayload {
+    fn drop(&mut self) {
+        panic!("second listener panic payload dropped");
     }
 }
 
