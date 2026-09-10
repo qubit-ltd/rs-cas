@@ -25,6 +25,8 @@ const CALLS: usize = 10_000;
 const WARMUP: usize = 1_000;
 const ROUNDS: usize = 5;
 const STRATEGY_SEED: usize = 0x5a17;
+const CSV_COLUMNS: usize = 28;
+const CSV_HEADER: &str = "record_type,os,arch,host_threads,round,writers,strategy,calls,successes,failures,conflicts,ops_per_sec,p50_ns,p95_ns,p99_ns,rounds,ops_per_sec_min,ops_per_sec_median,ops_per_sec_max,p50_min_ns,p50_median_ns,p50_max_ns,p95_min_ns,p95_median_ns,p95_max_ns,p99_min_ns,p99_median_ns,p99_max_ns";
 
 const STRATEGIES: [CasStrategy; 3] = [
     CasStrategy::LatencyFirst,
@@ -43,18 +45,23 @@ struct RoundMetrics {
     conflicts: u64,
 }
 
+#[derive(Debug)]
+struct BenchmarkEnvironment {
+    os: &'static str,
+    arch: &'static str,
+    host_threads: usize,
+}
+
 /// Runs each preset with the same writer counts and fixed call budget.
 fn main() {
-    let environment = format!(
-        "os={};arch={};host_threads={}",
-        std::env::consts::OS,
-        std::env::consts::ARCH,
-        std::thread::available_parallelism()
+    let environment = BenchmarkEnvironment {
+        os: std::env::consts::OS,
+        arch: std::env::consts::ARCH,
+        host_threads: std::thread::available_parallelism()
             .map(|count| count.get())
-            .unwrap_or(1)
-    );
-    println!("environment={environment}");
-    println!("environment,round,writers,strategy,calls,successes,failures,conflicts,ops_per_sec,p50_ns,p95_ns,p99_ns");
+            .unwrap_or(1),
+    };
+    println!("{CSV_HEADER}");
     for writers in [1, 2, 4, 8] {
         let mut all_rounds: [Vec<RoundMetrics>; STRATEGIES.len()] = std::array::from_fn(|_| Vec::with_capacity(ROUNDS));
         for round in 0..ROUNDS {
@@ -62,17 +69,7 @@ fn main() {
                 let strategy_index = (STRATEGY_SEED + round + offset) % STRATEGIES.len();
                 let strategy = STRATEGIES[strategy_index];
                 let metrics = run_round(writers, strategy);
-                println!(
-                    "{environment},{round},{writers},{strategy:?},{},{},{},{},{:.1},{},{},{}",
-                    writers * CALLS,
-                    metrics.successes,
-                    metrics.failures,
-                    metrics.conflicts,
-                    metrics.throughput,
-                    metrics.p50_ns,
-                    metrics.p95_ns,
-                    metrics.p99_ns,
-                );
+                print_round(&environment, round, writers, strategy, &metrics);
                 all_rounds[strategy_index].push(metrics);
             }
         }
@@ -80,6 +77,50 @@ fn main() {
             print_summary(&environment, writers, strategy, &rounds);
         }
     }
+}
+
+/// Writes one round record using the benchmark's fixed CSV schema.
+///
+/// `environment` supplies the host metadata, `round`, `writers`, and
+/// `strategy` identify the workload, and `metrics` supplies its observations.
+/// The function writes one `round` record to standard output.
+fn print_round(
+    environment: &BenchmarkEnvironment,
+    round: usize,
+    writers: usize,
+    strategy: CasStrategy,
+    metrics: &RoundMetrics,
+) {
+    write_csv_row([
+        "round".to_owned(),
+        environment.os.to_owned(),
+        environment.arch.to_owned(),
+        environment.host_threads.to_string(),
+        round.to_string(),
+        writers.to_string(),
+        format!("{strategy:?}"),
+        (writers * CALLS).to_string(),
+        metrics.successes.to_string(),
+        metrics.failures.to_string(),
+        metrics.conflicts.to_string(),
+        format!("{:.1}", metrics.throughput),
+        metrics.p50_ns.to_string(),
+        metrics.p95_ns.to_string(),
+        metrics.p99_ns.to_string(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+    ]);
 }
 
 /// Measures one concurrent workload; failure calls are not silently retried.
@@ -186,8 +227,9 @@ fn run_round(writers: usize, strategy: CasStrategy) -> RoundMetrics {
 /// # Panics
 ///
 /// Panics when `rounds` is empty because an aggregate cannot be computed.
-/// The function writes one summary record to standard output.
-fn print_summary(environment: &str, writers: usize, strategy: CasStrategy, rounds: &[RoundMetrics]) {
+/// The function writes one `summary` record using the same fixed CSV schema as
+/// round records.
+fn print_summary(environment: &BenchmarkEnvironment, writers: usize, strategy: CasStrategy, rounds: &[RoundMetrics]) {
     assert!(!rounds.is_empty());
     let mut throughputs = rounds.iter().map(|round| round.throughput).collect::<Vec<_>>();
     let mut p50 = rounds.iter().map(|round| round.p50_ns).collect::<Vec<_>>();
@@ -197,22 +239,45 @@ fn print_summary(environment: &str, writers: usize, strategy: CasStrategy, round
     p50.sort_unstable();
     p95.sort_unstable();
     p99.sort_unstable();
-    println!(
-        "summary,environment={environment},writers={writers},strategy={strategy:?},rounds={},throughput_min={:.1},throughput_median={:.1},throughput_max={:.1},p50_min_ns={},p50_median_ns={},p50_max_ns={},p95_min_ns={},p95_median_ns={},p95_max_ns={},p99_min_ns={},p99_median_ns={},p99_max_ns={}",
-        rounds.len(),
-        throughputs[0],
-        median(&throughputs),
-        throughputs[throughputs.len() - 1],
-        p50[0],
-        median(&p50),
-        p50[p50.len() - 1],
-        p95[0],
-        median(&p95),
-        p95[p95.len() - 1],
-        p99[0],
-        median(&p99),
-        p99[p99.len() - 1],
-    );
+    write_csv_row([
+        "summary".to_owned(),
+        environment.os.to_owned(),
+        environment.arch.to_owned(),
+        environment.host_threads.to_string(),
+        String::new(),
+        writers.to_string(),
+        format!("{strategy:?}"),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        String::new(),
+        rounds.len().to_string(),
+        format!("{:.1}", throughputs[0]),
+        format!("{:.1}", median(&throughputs)),
+        format!("{:.1}", throughputs[throughputs.len() - 1]),
+        p50[0].to_string(),
+        median(&p50).to_string(),
+        p50[p50.len() - 1].to_string(),
+        p95[0].to_string(),
+        median(&p95).to_string(),
+        p95[p95.len() - 1].to_string(),
+        p99[0].to_string(),
+        median(&p99).to_string(),
+        p99[p99.len() - 1].to_string(),
+    ]);
+}
+
+/// Writes a single record with exactly the columns declared by `CSV_HEADER`.
+///
+/// `fields` is a fixed-size array, so both round and summary records always
+/// contain the same number of columns. The function writes the record to
+/// standard output.
+fn write_csv_row(fields: [String; CSV_COLUMNS]) {
+    println!("{}", fields.join(","));
 }
 
 /// Returns the upper middle element of a non-empty sorted sample set.
