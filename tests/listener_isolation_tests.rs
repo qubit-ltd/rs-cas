@@ -34,6 +34,16 @@ fn event_kind(event: &CasEvent) -> CasListenerKind {
     }
 }
 
+/// A listener panic payload whose cleanup panics a second time.
+#[derive(Debug)]
+struct PanicOnDropPayload;
+
+impl Drop for PanicOnDropPayload {
+    fn drop(&mut self) {
+        panic!("listener panic payload dropped");
+    }
+}
+
 #[test]
 fn test_each_listener_panic_is_retained_without_changing_success() {
     for kind in [
@@ -190,4 +200,62 @@ fn test_listener_owned_and_non_string_panics_remain_diagnostic_only() {
         assert_eq!(failure.error(), Some(&"business"));
         assert_eq!(**failure.current(), 3);
     }
+}
+
+#[test]
+fn test_execution_finished_payload_drop_panic_is_isolated() {
+    let state = AtomicRef::from_value(3usize);
+    let hooks = CasHooks::new().on_event(|event: &CasEvent| {
+        if matches!(event, CasEvent::ExecutionFinished { .. }) {
+            panic_any(PanicOnDropPayload);
+        }
+    });
+    let executor = CasExecutor::<usize, ()>::builder().build().expect("executor");
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        executor.execute_with_hooks(&state, |current: &usize| CasDecision::update(*current + 1, ()), hooks)
+    }))
+    .expect("execution-finished listener payload cleanup must be isolated");
+
+    assert!(outcome.result().is_ok());
+    assert_eq!(*state.load(), 4);
+    assert_eq!(outcome.report().listener_failures().len(), 1);
+    assert_eq!(
+        outcome.report().listener_failures()[0].kind(),
+        CasListenerKind::ExecutionFinished
+    );
+}
+
+#[test]
+fn test_contention_alert_payload_drop_panic_is_isolated() {
+    let state = AtomicRef::from_value(0usize);
+    let counter = AtomicUsize::new(0);
+    let hooks = CasHooks::new().on_contention_alert(ContentionThresholds::new(2, 1, 0.5), |_: &CasAlert| {
+        panic_any(PanicOnDropPayload)
+    });
+    let executor = CasExecutor::<usize, ()>::builder()
+        .max_attempts(2)
+        .build()
+        .expect("executor");
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        executor.execute_with_hooks(
+            &state,
+            |current: &usize| {
+                if counter.fetch_add(1, Ordering::SeqCst) == 0 {
+                    state.store(Arc::new(7));
+                }
+                CasDecision::update(*current + 1, ())
+            },
+            hooks,
+        )
+    }))
+    .expect("contention-alert listener payload cleanup must be isolated");
+
+    assert!(outcome.result().is_ok());
+    assert_eq!(*state.load(), 8);
+    assert_eq!(outcome.report().conflicts(), 1);
+    assert_eq!(outcome.report().listener_failures().len(), 1);
+    assert_eq!(
+        outcome.report().listener_failures()[0].kind(),
+        CasListenerKind::ContentionAlert
+    );
 }

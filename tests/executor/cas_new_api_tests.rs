@@ -16,6 +16,7 @@ use qubit_cas::CasErrorKind;
 #[cfg(feature = "tokio")]
 use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutor;
+use qubit_cas::CasStrategy;
 #[cfg(feature = "tokio")]
 use tokio::test as async_test;
 #[cfg(feature = "tokio")]
@@ -79,5 +80,66 @@ fn test_random_delay_validation_reports_the_invalid_field() {
             .expect("finish")
             .output(),
         &3
+    );
+}
+
+#[test]
+fn test_builder_rejects_invalid_backoff_boundaries() {
+    let invalid_random = CasExecutor::<usize, ()>::builder()
+        .random_delay(Duration::from_secs(1), Duration::ZERO)
+        .build();
+    assert!(invalid_random.is_err());
+
+    for multiplier in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.999] {
+        let error = CasExecutor::<usize, ()>::builder()
+            .exponential_backoff_with_multiplier(Duration::ZERO, Duration::from_secs(1), multiplier)
+            .build()
+            .expect_err("invalid multiplier must be rejected");
+        assert!(error.message().contains("multiplier"));
+    }
+
+    for factor in [
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        -f64::EPSILON,
+        1.0 + f64::EPSILON,
+    ] {
+        let error = CasExecutor::<usize, ()>::builder()
+            .fixed_delay(Duration::ZERO)
+            .jitter_factor(factor)
+            .build()
+            .expect_err("invalid jitter factor must be rejected");
+        assert!(error.message().contains("jitter"));
+    }
+}
+
+#[test]
+fn test_max_retries_saturates_at_max_attempts() {
+    let executor = CasExecutor::<usize, ()>::builder()
+        .max_retries(u32::MAX)
+        .build()
+        .expect("saturated max retries must remain buildable");
+    assert_eq!(executor.max_attempts(), u32::MAX);
+    assert_eq!(executor.max_retries(), u32::MAX - 1);
+}
+
+#[test]
+fn test_later_backoff_setters_and_strategies_replace_deferred_errors() {
+    let no_delay = CasExecutor::<usize, ()>::builder()
+        .random_delay(Duration::from_secs(1), Duration::ZERO)
+        .no_delay()
+        .build()
+        .expect("no_delay must replace a deferred backoff error");
+    assert_eq!(no_delay.max_attempts(), 5);
+
+    let strategy = CasExecutor::<usize, ()>::builder()
+        .exponential_backoff_with_multiplier(Duration::ZERO, Duration::from_secs(1), f64::NAN)
+        .strategy(CasStrategy::LatencyFirst)
+        .build()
+        .expect("strategy must replace a deferred backoff error");
+    assert_eq!(
+        strategy.max_attempts(),
+        CasStrategy::LatencyFirst.profile().max_attempts()
     );
 }

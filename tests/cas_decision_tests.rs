@@ -10,6 +10,27 @@ use std::sync::Arc;
 
 use qubit_cas::CasDecision;
 
+#[derive(Debug, PartialEq, Eq)]
+struct NonCloneSnapshot;
+
+#[test]
+fn test_decision_clone_preserves_variants_without_cloning_snapshot() {
+    let next = Arc::new(NonCloneSnapshot);
+    let decisions: [CasDecision<NonCloneSnapshot, String, String>; 4] = [
+        CasDecision::update_arc(Arc::clone(&next), "updated".to_owned()),
+        CasDecision::finish("finished".to_owned()),
+        CasDecision::retry("retry".to_owned()),
+        CasDecision::abort("abort".to_owned()),
+    ];
+    for decision in decisions {
+        let cloned = decision.clone();
+        assert_eq!(cloned, decision);
+        if let CasDecision::Update { next: cloned_next, .. } = cloned {
+            assert!(Arc::ptr_eq(&cloned_next, &next));
+        }
+    }
+}
+
 /// Verifies all CAS decision constructors create the expected variants.
 ///
 /// # Parameters

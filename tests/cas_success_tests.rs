@@ -6,9 +6,47 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::sync::Arc;
+
 use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
 use qubit_cas::CasExecutor;
+
+#[derive(Debug)]
+struct NonCloneSnapshot;
+
+#[test]
+fn test_success_clone_preserves_non_clone_snapshot_identity() {
+    let state = AtomicRef::from_value(NonCloneSnapshot);
+    let executor = CasExecutor::<NonCloneSnapshot, String>::builder()
+        .build()
+        .expect("valid builder");
+    let updated = executor
+        .execute_result(&state, |_: &NonCloneSnapshot| {
+            CasDecision::update(NonCloneSnapshot, "updated".to_owned())
+        })
+        .expect("update succeeds");
+    let finished = executor
+        .execute_result(&state, |_: &NonCloneSnapshot| {
+            CasDecision::finish("finished".to_owned())
+        })
+        .expect("finish succeeds");
+    for success in [updated, finished] {
+        let cloned = success.clone();
+        assert_eq!(cloned.is_updated(), success.is_updated());
+        assert!(Arc::ptr_eq(cloned.current(), success.current()));
+        if let Some(previous) = success.previous() {
+            assert!(Arc::ptr_eq(
+                cloned.previous().expect("updated retains previous"),
+                previous
+            ));
+        } else {
+            assert!(cloned.previous().is_none());
+        }
+        assert_eq!(cloned.output(), success.output());
+        assert_eq!(cloned.context(), success.context());
+    }
+}
 
 /// Verifies success accessors for updated and finished outcomes.
 ///

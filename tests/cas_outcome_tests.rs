@@ -28,6 +28,56 @@ impl Error for TestError {}
 
 struct NonDebugError;
 
+#[derive(Debug)]
+struct NonCloneSnapshot;
+
+#[derive(Debug)]
+struct NonCloneOutput {
+    value: usize,
+}
+
+#[test]
+fn test_execution_accepts_non_clone_business_output_and_error() {
+    let state = AtomicRef::from_value(NonCloneSnapshot);
+    let executor = CasExecutor::<NonCloneSnapshot, NonDebugError>::builder()
+        .build()
+        .expect("valid builder");
+    let success = executor.execute(&state, |_: &NonCloneSnapshot| {
+        CasDecision::finish(NonCloneOutput { value: 7 })
+    });
+    assert_eq!(success.expect("non-clone output succeeds").into_output().value, 7);
+    let failure = executor.execute(&state, |_: &NonCloneSnapshot| {
+        CasDecision::<_, NonCloneOutput, _>::abort(NonDebugError)
+    });
+    assert!(failure.expect_err("non-clone error is retained").error().is_some());
+}
+
+#[test]
+fn test_outcome_clone_accepts_non_clone_snapshot_for_success_and_error() {
+    let state = AtomicRef::from_value(NonCloneSnapshot);
+    let executor = CasExecutor::<NonCloneSnapshot, String>::builder()
+        .build()
+        .expect("valid builder");
+    let success = executor.execute(&state, |_: &NonCloneSnapshot| CasDecision::finish("done".to_owned()));
+    let error = executor.execute(&state, |_: &NonCloneSnapshot| {
+        CasDecision::<_, String, _>::abort("stopped".to_owned())
+    });
+    for outcome in [success, error] {
+        let cloned = outcome.clone();
+        assert_eq!(cloned.is_ok(), outcome.is_ok());
+        assert_eq!(cloned.report().outcome(), outcome.report().outcome());
+        assert_eq!(cloned.report().attempts_total(), outcome.report().attempts_total());
+        match (cloned.into_result(), outcome.into_result()) {
+            (Ok(cloned), Ok(original)) => {
+                assert!(std::sync::Arc::ptr_eq(cloned.current(), original.current()));
+                assert_eq!(cloned.output(), original.output());
+            }
+            (Err(cloned), Err(original)) => assert_eq!(cloned.error(), original.error()),
+            _ => panic!("clone must preserve terminal outcome"),
+        }
+    }
+}
+
 #[test]
 fn test_cas_outcome_success_accessors_and_parts() {
     let state = AtomicRef::from_value(1usize);
