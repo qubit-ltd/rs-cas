@@ -1,6 +1,6 @@
 [package]
 name = "qubit-cas"
-version = "0.15.0"
+version = "0.9.0"
 edition = "2024"
 # Keep public contracts in one harness to share fixtures and inline coverage maps.
 autotests = false
