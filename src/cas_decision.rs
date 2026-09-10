@@ -48,7 +48,7 @@ use std::sync::Arc;
 /// assert_eq!(*success.output(), "reserved");
 /// ```
 #[must_use = "a CAS decision must be returned to the executor"]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CasDecision<T, R, E> {
     /// Writes a new state and returns a business output.
     Update {
@@ -75,6 +75,21 @@ pub enum CasDecision<T, R, E> {
         /// Business failure explaining the terminal abort.
         E,
     ),
+}
+
+impl<T, R: Clone, E: Clone> Clone for CasDecision<T, R, E> {
+    /// Clones the output or error and shares the replacement snapshot.
+    fn clone(&self) -> Self {
+        match self {
+            Self::Update { next, output } => Self::Update {
+                next: Arc::clone(next),
+                output: output.clone(),
+            },
+            Self::Finish { output } => Self::Finish { output: output.clone() },
+            Self::Retry(error) => Self::Retry(error.clone()),
+            Self::Abort(error) => Self::Abort(error.clone()),
+        }
+    }
 }
 
 impl<T, R, E> CasDecision<T, R, E> {

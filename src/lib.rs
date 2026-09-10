@@ -31,6 +31,7 @@ pub use cas_outcome::CasOutcome;
 pub use cas_success::CasSuccess;
 pub use error::CasAttemptFailure;
 pub use error::CasAttemptFailureKind;
+pub use error::CasBoxError;
 pub use error::CasBuildError;
 pub use error::CasDiagnostic;
 pub use error::CasDiagnosticKind;

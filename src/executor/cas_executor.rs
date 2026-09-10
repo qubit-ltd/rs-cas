@@ -36,13 +36,13 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use qubit_error::BoxError;
 use qubit_retry::RetryConfig;
 use qubit_retry::RetryPolicy;
 
 use super::cas_builder::CasBuilder;
 use super::internal::AttemptTimeoutAction;
 use crate::error::CasAttemptFailure;
+use crate::error::CasBoxError;
 use crate::strategy::CasStrategy;
 
 /// Executor for retry-aware compare-and-swap workflows.
@@ -76,7 +76,7 @@ use crate::strategy::CasStrategy;
 /// let executor = CasExecutor::<usize, ()>::builder().build().unwrap();
 /// let _ = executor.retry_policy();
 /// ```
-pub struct CasExecutor<T, E = BoxError> {
+pub struct CasExecutor<T, E = CasBoxError> {
     /// Pure policy used by the retry facades.
     policy: RetryPolicy,
     /// Optional hard wall-clock timeout for asynchronous retry flows.

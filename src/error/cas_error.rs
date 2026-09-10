@@ -54,7 +54,6 @@ use crate::event::CasContext;
 /// assert_eq!(error.attempts(), 1);
 /// ```
 #[must_use = "a CAS error describes an unsuccessful execution"]
-#[derive(Clone)]
 pub struct CasError<T, E> {
     /// Terminal category, which takes precedence over the last business error.
     kind: CasErrorKind,
@@ -65,6 +64,18 @@ pub struct CasError<T, E> {
     /// failure. A later budget or deadline may determine the terminal
     /// category instead.
     last_failure: Option<CasAttemptFailure<T, E>>,
+}
+
+impl<T, E: Clone> Clone for CasError<T, E> {
+    /// Clones terminal diagnostics and business errors, sharing state
+    /// snapshots.
+    fn clone(&self) -> Self {
+        Self {
+            kind: self.kind,
+            details: self.details.clone(),
+            last_failure: self.last_failure.clone(),
+        }
+    }
 }
 
 impl<T, E> CasError<T, E> {

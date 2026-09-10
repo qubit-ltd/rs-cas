@@ -9,6 +9,9 @@
 
 use std::any::Any;
 use std::fmt;
+use std::mem::forget;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 
 use super::CasListenerKind;
 
@@ -47,8 +50,8 @@ pub struct CasListenerFailure {
 }
 
 impl CasListenerFailure {
-    /// Takes ownership of an unwind payload and retains a printable
-    /// description.
+    /// Retains a printable description from an unwind payload and safely
+    /// disposes of the payload.
     ///
     /// # Parameters
     /// - `kind`: Stage of the isolated listener invocation.
@@ -59,13 +62,36 @@ impl CasListenerFailure {
     /// A diagnostic independent of the business result.
     #[must_use]
     pub(crate) fn from_panic(kind: CasListenerKind, payload: Box<dyn Any + Send>) -> Self {
-        let message = payload
+        let message = Self::message_from_payload(payload.as_ref());
+        Self::drop_payload(payload);
+        Self { kind, message }
+    }
+
+    /// Projects a printable diagnostic from a borrowed panic payload.
+    ///
+    /// # Parameters
+    /// - `payload`: Panic payload whose destruction remains owned by the
+    ///   caller.
+    ///
+    /// # Returns
+    /// Owned panic text, with a fallback for non-string payloads.
+    fn message_from_payload(payload: &(dyn Any + Send)) -> String {
+        payload
             .downcast_ref::<&'static str>()
             .copied()
             .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
             .unwrap_or("non-string panic payload")
-            .to_owned();
-        Self { kind, message }
+            .to_owned()
+    }
+
+    /// Drops an unwind payload without allowing a second panic to escape.
+    ///
+    /// # Parameters
+    /// - `payload`: Original listener panic payload to dispose of.
+    fn drop_payload(payload: Box<dyn Any + Send>) {
+        if let Err(second_payload) = catch_unwind(AssertUnwindSafe(|| drop(payload))) {
+            forget(second_payload);
+        }
     }
 
     /// Returns the listener location.

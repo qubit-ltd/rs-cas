@@ -34,7 +34,7 @@ use super::cas_attempt_failure_kind::CasAttemptFailureKind;
 /// assert_eq!(failure.error(), Some(&"sold out"));
 /// assert_eq!(**failure.current(), 3);
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 #[must_use = "an attempt failure must be handled by the retry flow"]
 pub enum CasAttemptFailure<T, E> {
     /// Compare-and-swap failed because another writer changed the state first.
@@ -64,6 +64,28 @@ pub enum CasAttemptFailure<T, E> {
         /// State snapshot used by the timed-out attempt.
         current: Arc<T>,
     },
+}
+
+impl<T, E: Clone> Clone for CasAttemptFailure<T, E> {
+    /// Clones retained business errors while sharing the failure snapshot.
+    fn clone(&self) -> Self {
+        match self {
+            Self::Conflict { current } => Self::Conflict {
+                current: Arc::clone(current),
+            },
+            Self::Retry { current, error } => Self::Retry {
+                current: Arc::clone(current),
+                error: error.clone(),
+            },
+            Self::Abort { current, error } => Self::Abort {
+                current: Arc::clone(current),
+                error: error.clone(),
+            },
+            Self::Timeout { current } => Self::Timeout {
+                current: Arc::clone(current),
+            },
+        }
+    }
 }
 
 impl<T, E> CasAttemptFailure<T, E> {

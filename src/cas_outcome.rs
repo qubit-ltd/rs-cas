@@ -23,6 +23,18 @@ use crate::report::CasExecutionReport;
 /// - `R`: Output of a successful attempt.
 /// - `E`: Retained business failure on an unsuccessful execution.
 ///
+/// Cloning shares snapshots without requiring `T: Clone`; both owned outputs
+/// and business errors must implement `Clone`.
+///
+/// ```compile_fail
+/// use qubit_cas::CasOutcome;
+///
+/// struct NonCloneError;
+/// fn clone_outcome(outcome: CasOutcome<usize, (), NonCloneError>) {
+///     let _ = outcome.clone();
+/// }
+/// ```
+///
 /// # Examples
 ///
 /// ```
@@ -53,12 +65,22 @@ use crate::report::CasExecutionReport;
 /// });
 /// ```
 #[must_use = "a CAS outcome contains the terminal success or error"]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CasOutcome<T, R, E> {
     /// Terminal success or error.
     result: Result<CasSuccess<T, R>, CasError<T, E>>,
     /// Execution report captured for the flow.
     report: CasExecutionReport,
+}
+
+impl<T, R: Clone, E: Clone> Clone for CasOutcome<T, R, E> {
+    /// Clones the terminal result and report while sharing state snapshots.
+    fn clone(&self) -> Self {
+        Self {
+            result: self.result.clone(),
+            report: self.report.clone(),
+        }
+    }
 }
 
 impl<T, R, E> CasOutcome<T, R, E> {

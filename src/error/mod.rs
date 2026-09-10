@@ -9,6 +9,7 @@
 
 mod cas_attempt_failure;
 mod cas_attempt_failure_kind;
+mod cas_box_error;
 mod cas_build_error;
 mod cas_diagnostic;
 mod cas_diagnostic_kind;
@@ -21,6 +22,7 @@ mod internal;
 
 pub use cas_attempt_failure::CasAttemptFailure;
 pub use cas_attempt_failure_kind::CasAttemptFailureKind;
+pub use cas_box_error::CasBoxError;
 pub use cas_build_error::CasBuildError;
 pub use cas_diagnostic::CasDiagnostic;
 pub use cas_diagnostic_kind::CasDiagnosticKind;

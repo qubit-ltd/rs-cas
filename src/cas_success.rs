@@ -17,6 +17,18 @@ use crate::event::CasContext;
 /// - `T`: Shared state retained by the successful snapshot.
 /// - `R`: Business output returned by the winning attempt.
 ///
+/// Cloning shares snapshots without requiring `T: Clone`, but requires the
+/// owned business output to implement `Clone`.
+///
+/// ```compile_fail
+/// use qubit_cas::CasSuccess;
+///
+/// struct NonCloneOutput;
+/// fn clone_success(success: CasSuccess<usize, NonCloneOutput>) {
+///     let _ = success.clone();
+/// }
+/// ```
+///
 /// # Examples
 ///
 /// ```
@@ -33,7 +45,7 @@ use crate::event::CasContext;
 /// assert_eq!(**success.current(), 2);
 /// assert_eq!(*success.output(), "reserved");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CasSuccess<T, R> {
     /// The executor installed a new state by compare-and-swap.
     Updated {
@@ -63,6 +75,34 @@ pub enum CasSuccess<T, R> {
         /// Retry context captured when the flow completed.
         context: CasContext,
     },
+}
+
+impl<T, R: Clone> Clone for CasSuccess<T, R> {
+    /// Clones the business output and shares the successful snapshots.
+    fn clone(&self) -> Self {
+        match self {
+            Self::Updated {
+                previous,
+                current,
+                output,
+                context,
+            } => Self::Updated {
+                previous: Arc::clone(previous),
+                current: Arc::clone(current),
+                output: output.clone(),
+                context: *context,
+            },
+            Self::Finished {
+                current,
+                output,
+                context,
+            } => Self::Finished {
+                current: Arc::clone(current),
+                output: output.clone(),
+                context: *context,
+            },
+        }
+    }
 }
 
 impl<T, R> CasSuccess<T, R> {

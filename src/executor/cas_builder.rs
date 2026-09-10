@@ -10,7 +10,6 @@
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use qubit_error::BoxError;
 use qubit_retry::BackoffPolicy;
 use qubit_retry::RetryPolicy;
 use qubit_retry::RetryPolicyError;
@@ -18,6 +17,7 @@ use qubit_retry::RetryPolicyError;
 use super::cas_executor::CasExecutor;
 use super::internal::AttemptTimeoutAction;
 use crate::constants::DEFAULT_CAS_MAX_ATTEMPTS;
+use crate::error::CasBoxError;
 use crate::error::CasBuildError;
 use crate::strategy::CasStrategy;
 
@@ -53,7 +53,7 @@ use crate::strategy::CasStrategy;
 /// assert!(CasExecutor::<usize, ()>::builder().max_attempts(0).build().is_err());
 /// ```
 #[must_use = "a CAS builder must be configured or built"]
-pub struct CasBuilder<T, E = BoxError> {
+pub struct CasBuilder<T, E = CasBoxError> {
     /// Maximum total attempts, including the initial operation.
     max_attempts: u32,
     /// Optional cumulative operation-time continuation budget.
