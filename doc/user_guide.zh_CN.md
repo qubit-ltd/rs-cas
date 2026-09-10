@@ -279,4 +279,4 @@ fn main() {
 版本标记，替换值仍应从当前观测推导。热 finish 的执行器记账不分配，但不能把它推广成任意 CAS
 操作无分配。运行 `cargo bench --bench contention` 评估竞争与尾延迟。
 
-返回 [README](../README.zh_CN.md)；参阅 [API](https://docs.rs/qubit-cas) 和 [0.15 迁移说明](migration-0.15.zh_CN.md)。
+返回 [README](../README.zh_CN.md) 或参阅 [API](https://docs.rs/qubit-cas)。

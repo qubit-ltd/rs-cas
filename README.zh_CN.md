@@ -70,8 +70,7 @@ fn main() {
 | 需要单次执行的事件或告警 | `execute_with_hooks` / `execute_async_with_hooks` |
 | 数值型、无分配热路径 | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
-请阅读[用户指南](doc/user_guide.zh_CN.md)、[设计文档](doc/design.zh_CN.md)和
-[0.15 迁移说明](doc/migration-0.15.zh_CN.md)。完整 Rustdoc 见
+请阅读[用户指南](doc/user_guide.zh_CN.md)和[设计文档](doc/design.zh_CN.md)。完整 Rustdoc 见
 [API 文档](https://docs.rs/qubit-cas)。`qubit-fast-cas` 是独立的紧凑 `u64` 状态机 crate，
 不提供报告、hooks、异步执行或业务重试。
 

@@ -328,5 +328,4 @@ derive the replacement from the current observation. Warm finish bookkeeping doe
 not allocate, but this is not a claim that every CAS operation avoids allocation.
 Run `cargo bench --bench contention` to measure contention and tail latency.
 
-Return to the [README](../README.md), [API](https://docs.rs/qubit-cas), or
-[0.15 migration note](migration-0.15.md).
+Return to the [README](../README.md) or [API](https://docs.rs/qubit-cas).

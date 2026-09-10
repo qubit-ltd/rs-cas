@@ -95,12 +95,12 @@ p50/p95/p99 延迟。它固定运行五轮：每轮从独立 state 开始，并�
 测量指标均汇总为 min/median/max。不会通过无限重试隐藏耗尽的调用。绝对耗时取决于机器，
 不作为共享 CI 的时间门槛。
 
-参阅[用户指南](user_guide.zh_CN.md)和[0.15 迁移说明](migration-0.15.zh_CN.md)。
+参阅[用户指南](user_guide.zh_CN.md)。
 
 当前配置通过四个 CAS getter 读取：max_attempts、max_retries、max_operation_elapsed、
 max_total_elapsed；读取不分配、不初始化 OnceLock。公开签名不暴露 RetryPolicy。
 AtomicRef、Function/Consumer 和默认 CasBoxError 继续保留为公共协作边界。
 
 项目 CI hook 抽取两份 README 和两份用户手册的当前 Rust 示例并运行，同时检查私有 Rustdoc。
-历史迁移片段不按当前 API 编译。CAS 发布包验证与下游含 path/patch 的本地验证分开记录；
+CAS 发布包验证与下游含 path/patch 的本地验证分开记录；
 正式发布先上传 CAS，随后才能进行下游无 patch 的 registry 验证。

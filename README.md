@@ -72,8 +72,8 @@ fn main() {
 | Per-execution events or alerts | `execute_with_hooks` / `execute_async_with_hooks` |
 | Numeric allocation-free hot path | [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) |
 
-Read the [user guide](doc/user_guide.md), [design](doc/design.md), and
-[0.15 migration note](doc/migration-0.15.md). The [API documentation](https://docs.rs/qubit-cas)
+Read the [user guide](doc/user_guide.md) and [design](doc/design.md). The
+[API documentation](https://docs.rs/qubit-cas)
 contains the complete Rustdoc. `qubit-fast-cas` is a separate compact `u64`
 state-machine crate without reports, hooks, async execution, or business retry.
 

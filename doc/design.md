@@ -129,7 +129,7 @@ presets in a fixed order. Each measured metric is summarized as min/median/max.
 It does not hide exhausted calls behind unbounded retries. Absolute latency is
 machine-specific and not enforced as a shared-CI timing threshold.
 
-See the [user guide](user_guide.md) and [0.15 migration note](migration-0.15.md).
+See the [user guide](user_guide.md).
 
 Installed configuration is read through four CAS getters: max_attempts,
 max_retries, max_operation_elapsed, and max_total_elapsed. Reads allocate nothing
@@ -137,7 +137,6 @@ and do not initialize OnceLock. Public signatures do not expose RetryPolicy.
 AtomicRef, Function/Consumer, and default CasBoxError remain intentional public boundaries.
 
 The project CI hook executes current Rust examples extracted from both README
-files and both guides, and checks private Rustdoc. Historical migration snippets
-are not compiled as current examples. CAS package verification is distinct from
+files and both guides, and checks private Rustdoc. CAS package verification is distinct from
 downstream path/patch validation: publish CAS first, then validate downstream
 against the registry without local patches.
