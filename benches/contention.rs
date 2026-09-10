@@ -2,11 +2,17 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Real writer contention with successful throughput and inclusive tail
-//! latency.
+//! latency. Wall time includes barrier release, per-call clock sampling,
+//! counters, result destruction, and joins. Setup and final assertions are
+//! outside the measured interval; values are not absolute CI thresholds.
 
+use std::hint::black_box;
 use std::sync::Barrier;
+use std::thread::scope;
 use std::time::Instant;
 
 use qubit_atomic::AtomicRef;
@@ -34,11 +40,11 @@ fn main() {
 
 /// Measures one concurrent workload; failure calls are not silently retried.
 fn run(writers: usize, strategy: CasStrategy) {
-    let state = AtomicRef::from_value(0usize);
-    let executor = CasExecutor::<usize, ()>::with_strategy(strategy);
+    let state = AtomicRef::from_value(black_box(0usize));
+    let executor = CasExecutor::<usize, ()>::with_strategy(black_box(strategy));
     let ready = Barrier::new(writers + 1);
     let start_gate = Barrier::new(writers + 1);
-    let (results, elapsed) = std::thread::scope(|scope| {
+    let (results, elapsed) = scope(|scope| {
         let mut threads = Vec::with_capacity(writers);
         for _ in 0..writers {
             let state = &state;
@@ -55,12 +61,14 @@ fn run(writers: usize, strategy: CasStrategy) {
                 let mut samples = Vec::with_capacity(CALLS);
                 let mut successes = 0usize;
                 let mut conflicts = 0u64;
+                let mut unexpected_errors = 0usize;
                 ready.wait();
                 start_gate.wait();
                 for _ in 0..CALLS {
                     let start = Instant::now();
-                    let result =
-                        executor.execute_result(state, |current: &usize| CasDecision::update(*current + 1, ()));
+                    let result = black_box(executor.execute_result(black_box(state), |current: &usize| {
+                        CasDecision::update(black_box(*current) + 1, ())
+                    }));
                     samples.push(start.elapsed().as_nanos());
                     match result {
                         Ok(success) => {
@@ -68,7 +76,7 @@ fn run(writers: usize, strategy: CasStrategy) {
                             conflicts += u64::from(success.attempts().saturating_sub(1));
                         }
                         Err(error) => {
-                            assert!(matches!(
+                            unexpected_errors += usize::from(!matches!(
                                 error.kind(),
                                 CasErrorKind::ConflictExhausted
                                     | CasErrorKind::OperationBudgetExceeded
@@ -78,7 +86,7 @@ fn run(writers: usize, strategy: CasStrategy) {
                         }
                     }
                 }
-                (samples, successes, conflicts)
+                (samples, successes, conflicts, unexpected_errors)
             }));
         }
         ready.wait();
@@ -93,11 +101,14 @@ fn run(writers: usize, strategy: CasStrategy) {
     let mut samples = Vec::with_capacity(writers * CALLS);
     let mut successes = 0;
     let mut conflicts = 0;
-    for (latencies, completed, failed_attempts) in results {
+    let mut unexpected_errors = 0;
+    for (latencies, completed, failed_attempts, unexpected) in results {
+        unexpected_errors += unexpected;
         samples.extend(latencies);
         successes += completed;
         conflicts += failed_attempts;
     }
+    assert_eq!(unexpected_errors, 0, "unexpected failure category in CAS benchmark");
     samples.sort_unstable();
     assert_eq!(
         *state.load(),
@@ -115,7 +126,7 @@ fn run(writers: usize, strategy: CasStrategy) {
     );
 }
 
-/// Returns a nearest-rank observation from sorted latencies, including
+/// Returns an upper-index observation from sorted latencies, including
 /// failures.
 fn percentile(sorted: &[u128], percent: usize) -> u128 {
     assert!(!sorted.is_empty());

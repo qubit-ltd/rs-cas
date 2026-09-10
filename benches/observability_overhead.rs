@@ -20,11 +20,13 @@ use qubit_cas::CasDecision;
 use qubit_cas::CasEvent;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
+use qubit_cas::ContentionThresholds;
 
 const ITERATIONS: usize = 200_000;
 const WARMUP_RUNS: usize = 2;
 const MEASURED_RUNS: usize = 9;
 
+/// Runs both deterministic contention scenarios and prints median throughput.
 fn main() {
     println!("iterations_per_sample={ITERATIONS}, warmups={WARMUP_RUNS}, samples={MEASURED_RUNS}");
 
@@ -32,6 +34,7 @@ fn main() {
     run_group("forced_conflict", true);
 }
 
+/// Compares raw, result, report, and listener costs using identical inputs.
 fn run_group(group: &'static str, force_conflict: bool) {
     println!();
     println!("## {group}");
@@ -45,7 +48,7 @@ fn run_group(group: &'static str, force_conflict: bool) {
         force_conflict,
     );
     let event_light = measure_executor(benchmark_executor(), light_event_hook(), force_conflict);
-    let alert_light = measure_executor(benchmark_executor(), light_alert_hooks(), force_conflict);
+    let event_and_alert_light = measure_executor(benchmark_executor(), light_alert_hooks(), force_conflict);
 
     print_row("raw_cas_floor", &raw, None, None);
     print_row("result_only", &result_only, Some(raw.ops_per_sec), None);
@@ -63,13 +66,14 @@ fn run_group(group: &'static str, force_conflict: bool) {
         Some(report_only.ops_per_sec),
     );
     print_row(
-        "alert_light",
-        &alert_light,
+        "event_and_alert_light",
+        &event_and_alert_light,
         Some(raw.ops_per_sec),
         Some(report_only.ops_per_sec),
     );
 }
 
+/// Builds the bounded no-delay executor shared by measured workloads.
 fn benchmark_executor() -> CasExecutor<usize, &'static str> {
     CasExecutor::<usize, &'static str>::builder()
         .max_attempts(100)
@@ -78,6 +82,7 @@ fn benchmark_executor() -> CasExecutor<usize, &'static str> {
         .expect("benchmark retry policy should be valid")
 }
 
+/// Warms the result-only path and returns the median sample throughput.
 fn measure_result_executor(executor: CasExecutor<usize, &'static str>, force_conflict: bool) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
         run_result_executor_sample(executor.clone(), force_conflict).expect("benchmark warmup should succeed");
@@ -99,6 +104,8 @@ fn measure_result_executor(executor: CasExecutor<usize, &'static str>, force_con
     result
 }
 
+/// Measures result-only calls, including retry bookkeeping and result
+/// destruction.
 fn run_result_executor_sample(
     executor: CasExecutor<usize, &'static str>,
     force_conflict: bool,
@@ -133,17 +140,16 @@ fn run_result_executor_sample(
     })
 }
 
+/// Registers both light event accounting and contention alert accounting.
 fn light_alert_hooks() -> CasHooks {
     let alerts = Arc::new(AtomicUsize::new(0));
     let alert_count = Arc::clone(&alerts);
-    light_event_hook().on_contention_alert(
-        qubit_cas::ContentionThresholds::new(2, 1, 0.5),
-        move |alert: &CasAlert| {
-            alert_count.fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
-        },
-    )
+    light_event_hook().on_contention_alert(ContentionThresholds::new(2, 1, 0.5), move |alert: &CasAlert| {
+        alert_count.fetch_add(alert.report().conflicts() as usize, Ordering::Relaxed);
+    })
 }
 
+/// Counts failed-attempt events with a relaxed atomic increment.
 fn light_event_hook() -> CasHooks {
     let events = Arc::new(AtomicUsize::new(0));
     let event_count = Arc::clone(&events);
@@ -162,6 +168,7 @@ struct BenchResult {
     conflicts: u64,
 }
 
+/// Warms the observed path and reports median throughput across samples.
 fn measure_executor(executor: CasExecutor<usize, &'static str>, hooks: CasHooks, force_conflict: bool) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
         run_executor_sample(executor.clone(), hooks.clone(), force_conflict).expect("benchmark warmup should succeed");
@@ -183,6 +190,7 @@ fn measure_executor(executor: CasExecutor<usize, &'static str>, hooks: CasHooks,
     result
 }
 
+/// Measures observed calls, including report and hook costs.
 fn run_executor_sample(
     executor: CasExecutor<usize, &'static str>,
     hooks: CasHooks,
@@ -226,6 +234,7 @@ fn run_executor_sample(
     })
 }
 
+/// Warms the raw CAS floor and reports median throughput across samples.
 fn measure_raw(force_conflict: bool) -> BenchResult {
     for _ in 0..WARMUP_RUNS {
         let _ = run_raw_sample(force_conflict);
@@ -246,6 +255,8 @@ fn measure_raw(force_conflict: bool) -> BenchResult {
     result
 }
 
+/// Measures raw CAS; the controlled writer forces at most one conflict per
+/// update.
 fn run_raw_sample(force_conflict: bool) -> BenchResult {
     let state = AtomicRef::from_value(0usize);
     let forced = AtomicUsize::new(0);
@@ -284,11 +295,13 @@ fn run_raw_sample(force_conflict: bool) -> BenchResult {
     }
 }
 
+/// Sorts finite, nonempty samples and returns the middle observation.
 fn median(samples: &mut [f64]) -> f64 {
     samples.sort_by(|left, right| left.partial_cmp(right).expect("benchmark samples should not be NaN"));
     samples[samples.len() / 2]
 }
 
+/// Prints one measured path and its optional baseline comparisons.
 fn print_row(name: &'static str, result: &BenchResult, raw_ops: Option<f64>, report_ops: Option<f64>) {
     let raw_loss = raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     let report_loss = report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
@@ -303,10 +316,12 @@ fn print_row(name: &'static str, result: &BenchResult, raw_ops: Option<f64>, rep
     );
 }
 
+/// Computes throughput loss relative to a positive baseline.
 fn loss_percent(ops_per_sec: f64, baseline_ops_per_sec: f64) -> f64 {
     (baseline_ops_per_sec - ops_per_sec) / baseline_ops_per_sec * 100.0
 }
 
+/// Formats a measured loss or indicates that no baseline is available.
 fn format_loss(loss: Option<f64>) -> String {
     match loss {
         Some(value) => format!("{value:>6.2}%"),
