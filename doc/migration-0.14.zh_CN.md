@@ -1,6 +1,8 @@
 # 迁移到 qubit-cas 0.14
 
-[English](migration-0.14.md)。本文适用于 0.14。
+[English](migration-0.14.md)。
+
+> 历史记录：本文仅描述 0.14 版本。当前 API 请参阅 [0.15 迁移说明](migration-0.15.zh_CN.md)。
 
 0.14 删除两个公共接口，请同步迁移调用方。本版本不提供 deprecated 别名、兼容 feature
 或转发桥梁。

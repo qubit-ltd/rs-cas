@@ -1,6 +1,8 @@
 # Migrating to qubit-cas 0.14
 
-[中文版](migration-0.14.zh_CN.md). This page applies to 0.14.
+[中文版](migration-0.14.zh_CN.md).
+
+> Historical note: this page describes version 0.14 only. See the [0.15 migration note](migration-0.15.md) for the current API.
 
 Version 0.14 removes two public interfaces. Update callers together; no deprecated
 aliases, compatibility features, or forwarding bridges are provided.

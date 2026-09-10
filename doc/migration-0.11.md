@@ -1,6 +1,6 @@
 # Migrating to `qubit-cas` 0.11
 
-> Historical note: this page describes version 0.11 only. See the [0.14 migration note](migration-0.14.md) for the current API.
+> Historical note: this page describes version 0.11 only. See the [0.15 migration note](migration-0.15.md) for the current API.
 
 The Chinese version is [`migration-0.11.zh_CN.md`](migration-0.11.zh_CN.md).
 This note covers the behavior and dependency changes that matter when upgrading

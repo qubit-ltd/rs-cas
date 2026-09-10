@@ -21,7 +21,7 @@
 
 ```toml
 [dependencies]
-qubit-cas = "0.14"
+qubit-cas = "0.15"
 qubit-atomic = "0.13"
 ```
 

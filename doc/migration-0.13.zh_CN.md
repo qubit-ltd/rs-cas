@@ -1,6 +1,6 @@
 # 迁移到 qubit-cas 0.13
 
-> 历史记录：本文仅描述 0.13 版本。当前 API 请参阅 [0.14 迁移说明](migration-0.14.zh_CN.md)。
+> 历史记录：本文仅描述 0.13 版本。当前 API 请参阅 [0.15 迁移说明](migration-0.15.zh_CN.md)。
 
 [English](migration-0.13.md)。
 

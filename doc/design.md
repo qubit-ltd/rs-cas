@@ -124,8 +124,10 @@ warm execution, owned/preallocated updates, and async timeout configurations.
 
 The contention benchmark measures 1/2/4/8 writers, all three presets, successful
 throughput, conflict counts, failed calls, and p50/p95/p99 latency including failed
-calls. It does not hide exhausted calls behind unbounded retries. Absolute
-latency is machine-specific and not enforced as a shared-CI timing threshold.
+calls. It runs five rounds: each round starts from independent state and rotates
+presets in a fixed order. Each measured metric is summarized as min/median/max.
+It does not hide exhausted calls behind unbounded retries. Absolute latency is
+machine-specific and not enforced as a shared-CI timing threshold.
 
 See the [user guide](user_guide.md) and [0.15 migration note](migration-0.15.md).
 
