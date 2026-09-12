@@ -1,6 +1,6 @@
 [package]
 name = "qubit-cas"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 # Keep public contracts in one harness to share fixtures and inline coverage maps.
 autotests = false
@@ -51,7 +51,7 @@ tokio = { version = "1.53", features = ["time", "rt"], optional = true }
 qubit-atomic = "0.17"
 qubit-error = "0.2"
 qubit-function = "0.18"
-qubit-retry = "0.23"
+qubit-retry = "0.25"
 
 [dev-dependencies]
 qubit-clock = { version = "0.13", features = ["test-util"] }
