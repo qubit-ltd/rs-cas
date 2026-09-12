@@ -21,8 +21,8 @@
 
 ```toml
 [dependencies]
-qubit-cas = "0.9"
-qubit-atomic = "0.13"
+qubit-cas = "0.10"
+qubit-atomic = "0.17"
 ```
 
 使用 `features = ["tokio"]` 启用异步执行。次数、预算、退避和超时均通过

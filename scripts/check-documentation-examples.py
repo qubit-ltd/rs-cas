@@ -42,7 +42,7 @@ def main():
             'version = "0.0.0"', 'edition = "2024"', 'publish = false',
             '[workspace]', '[dependencies]',
             'qubit-cas = { path = ' + json.dumps(str(ROOT)) + ', features = ["tokio"] }',
-            'qubit-atomic = "0.13"',
+            'qubit-atomic = "0.17"',
             'tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }',
             '',
         ))

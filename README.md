@@ -22,8 +22,8 @@ side effects idempotent; CAS may invoke it more than once.
 
 ```toml
 [dependencies]
-qubit-cas = "0.9"
-qubit-atomic = "0.13"
+qubit-cas = "0.10"
+qubit-atomic = "0.17"
 ```
 
 Enable asynchronous execution with `features = ["tokio"]`. Configure attempts,
