@@ -63,3 +63,5 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints.clippy]
 type_complexity = "allow"
+
+[workspace]
