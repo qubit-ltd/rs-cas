@@ -1,6 +1,6 @@
 # Qubit CAS 设计
 
-本文描述 qubit-cas 0.9。[English](design.md)。
+本文描述 qubit-cas 0.12。[English](design.md)。
 
 ## 职责划分
 
@@ -81,7 +81,7 @@ ContentionBackoff 是固定指数退避加 jitter，不会学习竞争率。Stra
 保留异步 timeout 配置；后续 setter 覆盖单个字段。普通 builder 默认五次尝试，
 LatencyFirst 则是 100 次尝试并带时间预算的另一套预设。
 
-qubit-state-machine 0.9 的标准 builder 接受配置好的 CasExecutor，成功回调仍只在提交后执行。
+qubit-state-machine 0.11 的标准 builder 接受配置好的 CasExecutor，成功回调仍只在提交后执行。
 Fast 版和 qubit-progress 继续使用独立的 qubit-fast-cas。
 
 ## 性能与验证

@@ -1,6 +1,6 @@
 # Qubit CAS Design
 
-This document describes qubit-cas 0.9. [中文版](design.zh_CN.md).
+This document describes qubit-cas 0.12. [中文版](design.zh_CN.md).
 
 ## Responsibilities
 
@@ -111,7 +111,7 @@ preserve async timeout configuration. Subsequent setters override individual
 fields. A plain builder defaults to five attempts; LatencyFirst is a different
 preset with 100 attempts and explicit time budgets.
 
-The standard qubit-state-machine 0.9 builder accepts a configured CasExecutor.
+The standard qubit-state-machine 0.11 builder accepts a configured CasExecutor.
 Its success callback runs only after a committed transition. The fast variant
 and qubit-progress retain their separate qubit-fast-cas implementation.
 

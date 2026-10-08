@@ -1,6 +1,6 @@
 # Qubit CAS User Guide
 
-This guide covers `qubit-cas` 0.9 for Rust applications that update shared
+This guide covers `qubit-cas` 0.12 for Rust applications that update shared
 immutable snapshots. The Chinese version is [`user_guide.zh_CN.md`](user_guide.zh_CN.md).
 
 ## Inventory reservation and setup
@@ -14,7 +14,7 @@ roll back its effects.
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.9", features = ["tokio"] }
+qubit-cas = { version = "0.12", features = ["tokio"] }
 qubit-atomic = "0.13"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
@@ -300,7 +300,7 @@ they must be exported. For a compact `u64` state machine that needs no reports,
 hooks, async support, or business retry, use
 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas) instead.
 
-The standard `qubit-state-machine` 0.9 path uses CAS 0.9 and accepts an executor
+The standard `qubit-state-machine` 0.11 path uses CAS 0.12 and accepts an executor
 through `StateMachineBuilder::cas_executor`. Fast-only builds do not depend on
 CAS. `AtomicRef`, `Function`/`Consumer`, and the default `CasBoxError` are intentional
 public collaboration boundaries; hiding retry types does not hide all upstream types.

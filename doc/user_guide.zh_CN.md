@@ -1,6 +1,6 @@
 # Qubit CAS 用户指南
 
-本指南适用于 `qubit-cas` 0.9，面向需要并发更新不可变状态的 Rust 应用开发者。英文版本见
+本指南适用于 `qubit-cas` 0.12，面向需要并发更新不可变状态的 Rust 应用开发者。英文版本见
 [`user_guide.md`](user_guide.md)。
 
 ## 库存预留场景与安装
@@ -11,7 +11,7 @@ OutOfStock。只有成功提交的 output 交给调用者。发送通知或扣�
 
 ```toml
 [dependencies]
-qubit-cas = { version = "0.9", features = ["tokio"] }
+qubit-cas = { version = "0.12", features = ["tokio"] }
 qubit-atomic = "0.13"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
@@ -259,7 +259,7 @@ fn main() {
 请将事件投递到无阻塞 channel。对于不需要报告、hooks、异步支持和业务重试的紧凑 `u64`
 状态机，请使用独立的 [`qubit-fast-cas`](https://crates.io/crates/qubit-fast-cas)。
 
-标准状态机 `qubit-state-machine` 0.9 使用 CAS 0.9，支持通过
+标准状态机 `qubit-state-machine` 0.11 使用 CAS 0.12，支持通过
 `StateMachineBuilder::cas_executor` 注入配置。仅启用 fast 时不引入 CAS。
 `AtomicRef`、`Function`/`Consumer` 和默认错误类型 `CasBoxError` 是有意保留的公共协作边界；
 隐藏 retry 内部类型不代表隐藏全部上游类型。
