@@ -13,8 +13,8 @@ use qubit_retry::RetryInfrastructureFailure;
 use crate::error::CasDiagnostic;
 use crate::error::CasDiagnosticKind;
 
-/// Retains details for infrastructure reasons; ordinary CAS termination has
-/// none.
+/// Projects retry failure reasons into CAS-owned diagnostics while omitting
+/// ordinary termination outcomes.
 ///
 /// # Parameters
 /// - `reason`: Retry stopping reason to inspect.

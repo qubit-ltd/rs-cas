@@ -127,7 +127,7 @@ impl CasExecutionReport {
     /// Count of admitted attempts, including the successful or terminal one.
     /// Zero means the flow ended before any operation started.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn attempts_total(&self) -> u32 {
         self.attempts_total
     }
@@ -138,7 +138,7 @@ impl CasExecutionReport {
     /// Count of times a CAS operation failed due to state change by another
     /// writer.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn conflicts(&self) -> u32 {
         self.conflicts
     }
@@ -149,7 +149,7 @@ impl CasExecutionReport {
     /// Count of times the business operation returned
     /// [`CasDecision::Retry`](crate::CasDecision::Retry).
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn retry_errors(&self) -> u32 {
         self.retry_errors
     }
@@ -160,7 +160,7 @@ impl CasExecutionReport {
     /// Count of times the business operation returned
     /// [`CasDecision::Abort`](crate::CasDecision::Abort).
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn aborts(&self) -> u32 {
         self.aborts
     }
@@ -170,7 +170,7 @@ impl CasExecutionReport {
     /// # Returns
     /// Count of times an async operation exceeded its configured timeout.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn timeouts(&self) -> u32 {
         self.timeouts
     }
@@ -180,7 +180,7 @@ impl CasExecutionReport {
     /// # Returns
     /// [`Instant`] at the start of the CAS execution.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn started_at(&self) -> Instant {
         self.started_at
     }
@@ -190,7 +190,7 @@ impl CasExecutionReport {
     /// # Returns
     /// [`Instant`] when the CAS flow terminated.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn finished_at(&self) -> Instant {
         self.finished_at
     }
@@ -200,7 +200,7 @@ impl CasExecutionReport {
     /// # Returns
     /// Duration between `started_at` and `finished_at`.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn elapsed(&self) -> Duration {
         self.finished_at.duration_since(self.started_at)
     }
@@ -210,7 +210,7 @@ impl CasExecutionReport {
     /// # Returns
     /// The `max_attempts` value used by the retry policy.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -220,7 +220,7 @@ impl CasExecutionReport {
     /// # Returns
     /// `Some(Duration)` if a budget was set, otherwise `None`.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_operation_elapsed(&self) -> Option<Duration> {
         self.max_operation_elapsed
     }
@@ -230,7 +230,7 @@ impl CasExecutionReport {
     /// # Returns
     /// `Some(Duration)` if a budget was set, otherwise `None`.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -240,7 +240,7 @@ impl CasExecutionReport {
     /// # Returns
     /// The [`CasExecutionOutcome`] classifying how the execution ended.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn outcome(&self) -> CasExecutionOutcome {
         self.outcome
     }
@@ -252,7 +252,7 @@ impl CasExecutionReport {
     /// Borrowed ordered diagnostics; empty if none. The final outcome includes
     /// completion and alert panics, while callback snapshots exclude them.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn listener_failures(&self) -> &[CasListenerFailure] {
         &self.listener_failures
     }
@@ -312,7 +312,7 @@ impl CasExecutionReport {
     /// # Returns
     /// This report with its diagnostic list replaced.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn with_listener_failures(mut self, failures: Vec<CasListenerFailure>) -> Self {
         self.listener_failures = failures;
         self

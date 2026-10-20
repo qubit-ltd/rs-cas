@@ -56,7 +56,7 @@ impl CasReportBuilder {
     /// # Returns
     /// The [`Instant`] when this report builder was started.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn started_at(&self) -> Instant {
         self.started_at
     }
@@ -67,7 +67,7 @@ impl CasReportBuilder {
     /// # Returns
     /// An owned snapshot of all retained listener failures, empty if none.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn listener_failures(&self) -> Vec<CasListenerFailure> {
         self.listener_failures.clone()
     }
@@ -76,7 +76,7 @@ impl CasReportBuilder {
     ///
     /// Increments the internal conflict counter using saturating arithmetic to
     /// prevent overflow.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn record_conflict(&mut self) {
         self.conflicts = self.conflicts.saturating_add(1);
     }
@@ -84,7 +84,7 @@ impl CasReportBuilder {
     /// Records one retryable business failure.
     ///
     /// Increments the internal retry error counter using saturating arithmetic.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn record_retry_error(&mut self) {
         self.retry_errors = self.retry_errors.saturating_add(1);
     }
@@ -92,7 +92,7 @@ impl CasReportBuilder {
     /// Records one aborting business failure.
     ///
     /// Increments the internal abort counter using saturating arithmetic.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn record_abort(&mut self) {
         self.aborts = self.aborts.saturating_add(1);
     }
@@ -100,7 +100,7 @@ impl CasReportBuilder {
     /// Records one async attempt timeout.
     ///
     /// Increments the internal timeout counter using saturating arithmetic.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn record_timeout(&mut self) {
         self.timeouts = self.timeouts.saturating_add(1);
     }
@@ -109,7 +109,7 @@ impl CasReportBuilder {
     ///
     /// # Parameters
     /// - `failure`: Owned isolated listener panic, appended in dispatch order.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn record_listener_failure(&mut self, failure: CasListenerFailure) {
         self.listener_failures.push(failure);
     }

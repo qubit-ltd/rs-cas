@@ -83,7 +83,7 @@ impl ContentionThresholds {
     /// # Returns
     /// Minimum number of attempts before a ratio is considered meaningful.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn min_attempts(&self) -> u32 {
         self.min_attempts
     }
@@ -93,7 +93,7 @@ impl ContentionThresholds {
     /// # Returns
     /// Minimum raw number of conflicts required to be considered hot.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn min_conflicts(&self) -> u32 {
         self.min_conflicts
     }
@@ -103,7 +103,7 @@ impl ContentionThresholds {
     /// # Returns
     /// Minimum ratio of conflicts to total attempts.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn conflict_ratio(&self) -> f64 {
         self.conflict_ratio
     }
@@ -115,7 +115,7 @@ impl Default for ContentionThresholds {
     /// # Returns
     /// Thresholds requiring three attempts, one conflict, and at least 30%
     /// conflicts.
-    #[inline(always)]
+    #[inline]
     fn default() -> Self {
         Self::new(3, 1, 0.30)
     }

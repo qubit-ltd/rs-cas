@@ -36,7 +36,7 @@ use crate::report::CasReportBuilder;
 /// # Returns
 /// Whether constructing and dispatching events is needed.
 #[must_use]
-#[inline(always)]
+#[inline]
 pub(super) fn should_emit_events(hook: &Option<CasEventHook>) -> bool {
     hook.is_some()
 }
@@ -208,7 +208,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// The [`CasAttemptFailureKind`] for event emission.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(super) fn failure_kind(failure: &CasAttemptFailure<T, E>) -> CasAttemptFailureKind {
         failure.kind()
     }
@@ -225,7 +225,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// `Some` isolated listener panic in unwind builds; `None` when dispatch
     /// succeeds. The callback runs without a report mutex guard.
-    #[inline(always)]
+    #[inline]
     pub(super) fn dispatch_event(hook: &CasEventHook, event: CasEvent) -> Option<CasListenerFailure>
     where
         T: 'static,
@@ -242,7 +242,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// Whether constructing and dispatching events is needed.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(super) fn should_emit_events(hook: &Option<CasEventHook>) -> bool {
         super::dispatch::should_emit_events(hook)
     }
@@ -261,7 +261,7 @@ impl<T, E> CasExecutor<T, E> {
     /// `Some` isolated listener panic in unwind builds; `None` when dispatch
     /// succeeds or an optional hook is absent. The callback runs without a
     /// report mutex guard.
-    #[inline(always)]
+    #[inline]
     pub(super) fn dispatch_alert(hook: &Option<CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
         super::dispatch::dispatch_alert(hook, alert)
     }

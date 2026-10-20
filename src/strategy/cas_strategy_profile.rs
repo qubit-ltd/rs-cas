@@ -73,7 +73,7 @@ impl CasStrategyProfile {
     /// # Returns
     /// Maximum number of attempts (including initial) for this strategy.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -83,7 +83,7 @@ impl CasStrategyProfile {
     /// # Returns
     /// Soft admission budget for accumulated operation and CAS adapter work.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_operation_elapsed(&self) -> Duration {
         self.max_operation_elapsed
     }
@@ -95,7 +95,7 @@ impl CasStrategyProfile {
     /// including retry sleeps; `None` disables this budget. An admitted
     /// operation can still complete after the budget expires.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -105,7 +105,7 @@ impl CasStrategyProfile {
     /// # Returns
     /// `true` for strategies that insert delays between retries.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn uses_backoff(&self) -> bool {
         self.uses_backoff
     }

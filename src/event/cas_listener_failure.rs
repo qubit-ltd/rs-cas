@@ -67,6 +67,26 @@ impl CasListenerFailure {
         Self { kind, message }
     }
 
+    /// Returns the listener location.
+    ///
+    /// # Returns
+    /// The stage of the failed listener invocation.
+    #[must_use]
+    #[inline]
+    pub fn kind(&self) -> CasListenerKind {
+        self.kind
+    }
+
+    /// Returns the panic message.
+    ///
+    /// # Returns
+    /// Borrowed panic text, with a fallback for non-string payloads.
+    #[must_use]
+    #[inline]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
     /// Projects a printable diagnostic from a borrowed panic payload.
     ///
     /// # Parameters
@@ -92,26 +112,6 @@ impl CasListenerFailure {
         if let Err(second_payload) = catch_unwind(AssertUnwindSafe(|| drop(payload))) {
             forget(second_payload);
         }
-    }
-
-    /// Returns the listener location.
-    ///
-    /// # Returns
-    /// The stage of the failed listener invocation.
-    #[must_use]
-    #[inline(always)]
-    pub fn kind(&self) -> CasListenerKind {
-        self.kind
-    }
-
-    /// Returns the panic message.
-    ///
-    /// # Returns
-    /// Borrowed panic text, with a fallback for non-string payloads.
-    #[must_use]
-    #[inline(always)]
-    pub fn message(&self) -> &str {
-        &self.message
     }
 }
 

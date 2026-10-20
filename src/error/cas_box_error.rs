@@ -43,14 +43,14 @@ impl CasBoxError {
 
     /// Borrows the original error, including its thread-safety bounds.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn as_inner(&self) -> &(dyn Error + Send + Sync + 'static) {
         self.inner.as_ref()
     }
 
     /// Consumes the wrapper and returns ownership of the original boxed error.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn into_inner(self) -> BoxError {
         self.inner
     }
@@ -80,7 +80,7 @@ impl fmt::Debug for CasBoxError {
 
 impl Error for CasBoxError {
     /// Always returns the original boxed business error as the source.
-    #[inline(always)]
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.as_inner())
     }

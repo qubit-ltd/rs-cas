@@ -24,7 +24,6 @@ use crate::error::CasAttemptFailureKind;
 use crate::event::CasContext;
 use crate::event::CasEvent;
 use crate::event::CasHooks;
-use crate::executor::cas_executor::retry_adapter;
 use crate::executor::internal::AttemptTimeoutAction;
 use crate::report::CasReportBuilder;
 
@@ -135,7 +134,7 @@ impl<T, E> CasExecutor<T, E> {
             .observer(CasRetryObserver::new(event_hook, report_builder))
             .rule(
                 move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, _context: &RetryContext| {
-                    super::retry_adapter::retry_decision(failure, attempt_timeout_action)
+                    retry_decision(failure, attempt_timeout_action)
                 },
             )
             .build()
@@ -162,7 +161,7 @@ impl<T, E> CasExecutor<T, E> {
                 .fallback(RetryFallback::Retry)
                 .rule(
                     move |failure: &AttemptFailure<CasAttemptFailure<T, E>>, _context: &RetryContext| {
-                        retry_adapter::retry_decision(failure, attempt_timeout_action)
+                        retry_decision(failure, attempt_timeout_action)
                     },
                 )
                 .build()

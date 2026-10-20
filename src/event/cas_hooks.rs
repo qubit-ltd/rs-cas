@@ -83,7 +83,7 @@ impl CasHooks {
     ///
     /// # Returns
     /// A [`CasHooks`] value with every hook unset.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -102,7 +102,7 @@ impl CasHooks {
     /// # Returns
     /// The updated hook set.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn on_event<C>(mut self, hook: C) -> Self
     where
         C: Consumer<CasEvent> + Send + Sync + 'static,
@@ -126,7 +126,7 @@ impl CasHooks {
     /// # Returns
     /// The updated hook set. Listener panics are isolated in unwind builds.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn on_contention_alert<C>(mut self, thresholds: ContentionThresholds, hook: C) -> Self
     where
         C: Consumer<CasAlert> + Send + Sync + 'static,
@@ -141,7 +141,7 @@ impl CasHooks {
     /// # Returns
     /// `Some` cloned shared listener, or `None` when events are disabled.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn event_hook(&self) -> Option<CasEventHook> {
         self.on_event.clone()
     }
@@ -151,7 +151,7 @@ impl CasHooks {
     /// # Returns
     /// `Some` cloned shared listener, or `None` when alerts are disabled.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn alert_hook(&self) -> Option<CasAlertHook> {
         self.on_alert.clone()
     }
@@ -163,7 +163,7 @@ impl CasHooks {
     /// `Some` thresholds registered with the alert callback, or `None` for
     /// disabled alerts.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn contention_thresholds(&self) -> Option<ContentionThresholds> {
         self.contention_thresholds
     }

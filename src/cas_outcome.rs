@@ -102,7 +102,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// Reference to the inner [`Result<CasSuccess<T, R>, CasError<T, E>>`].
     #[must_use = "inspect the terminal CAS result"]
-    #[inline(always)]
+    #[inline]
     pub fn result(&self) -> &Result<CasSuccess<T, R>, CasError<T, E>> {
         &self.result
     }
@@ -112,7 +112,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// Reference to the [`CasExecutionReport`] captured during execution.
     #[must_use = "inspect both the terminal result and execution report"]
-    #[inline(always)]
+    #[inline]
     pub fn report(&self) -> &CasExecutionReport {
         &self.report
     }
@@ -122,7 +122,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// `true` if the terminal result is [`Ok`].
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn is_ok(&self) -> bool {
         self.result.is_ok()
     }
@@ -132,7 +132,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// `true` if the terminal result is [`Err`].
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn is_err(&self) -> bool {
         self.result.is_err()
     }
@@ -142,7 +142,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// The owned [`Result<CasSuccess<T, R>, CasError<T, E>>`].
     #[must_use = "inspect the consumed terminal CAS result"]
-    #[inline(always)]
+    #[inline]
     pub fn into_result(self) -> Result<CasSuccess<T, R>, CasError<T, E>> {
         self.result
     }
@@ -152,7 +152,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Returns
     /// Tuple of the terminal result and the execution report.
     #[must_use = "inspect the consumed terminal result and execution report"]
-    #[inline(always)]
+    #[inline]
     pub fn into_parts(self) -> (Result<CasSuccess<T, R>, CasError<T, E>>, CasExecutionReport) {
         (self.result, self.report)
     }
@@ -171,7 +171,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Panics
     /// Panics with the given message if the outcome contains an error.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn expect(self, message: &str) -> CasSuccess<T, R> {
         self.result.expect(message)
     }
@@ -190,7 +190,7 @@ impl<T, R, E> CasOutcome<T, R, E> {
     /// # Panics
     /// Panics with the given message if the outcome is successful.
     #[must_use = "inspect the expected terminal CAS error"]
-    #[inline(always)]
+    #[inline]
     pub fn expect_err(self, message: &str) -> CasError<T, E>
     where
         T: fmt::Debug,

@@ -71,7 +71,7 @@ impl CasDiagnostic {
     /// # Returns
     /// The stable classification independent of the retained message wording.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn kind(&self) -> CasDiagnosticKind {
         self.kind
     }
@@ -82,7 +82,7 @@ impl CasDiagnostic {
     /// # Returns
     /// Diagnostic text borrowed for the lifetime of this value.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn message(&self) -> &str {
         &self.message
     }
@@ -99,7 +99,7 @@ impl fmt::Display for CasDiagnostic {
     ///
     /// # Errors
     /// Returns a formatting error if the destination rejects a write.
-    #[inline(always)]
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.message)
     }

@@ -72,7 +72,7 @@ impl CasAlert {
     /// # Returns
     /// Reference to the [`CasExecutionReport`] that caused the alert.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn report(&self) -> &CasExecutionReport {
         &self.report
     }
@@ -82,7 +82,7 @@ impl CasAlert {
     /// # Returns
     /// The [`ContentionThresholds`] used for this alert.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn thresholds(&self) -> ContentionThresholds {
         self.thresholds
     }

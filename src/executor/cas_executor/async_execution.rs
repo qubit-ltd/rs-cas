@@ -47,7 +47,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Panics
     /// An operation panic propagates to the caller.
     #[cfg(feature = "tokio")]
-    #[inline(always)]
+    #[inline]
     pub async fn execute_async<R, O, Fut>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
         T: 'static,

@@ -152,7 +152,7 @@ impl<T, R> CasSuccess<T, R> {
     /// `true` for [`CasSuccess::Updated`], `false` for
     /// [`CasSuccess::Finished`].
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn is_updated(&self) -> bool {
         matches!(self, Self::Updated { .. })
     }
@@ -162,8 +162,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// `Some(&Arc<T>)` for [`CasSuccess::Updated`], or `None` when no write
     /// occurred.
-    #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn previous(&self) -> Option<&Arc<T>> {
         match self {
             Self::Updated { previous, .. } => Some(previous),
@@ -178,7 +177,7 @@ impl<T, R> CasSuccess<T, R> {
     /// a later writer may already have published another state by the time
     /// this method returns.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn current(&self) -> &Arc<T> {
         match self {
             Self::Updated { current, .. } | Self::Finished { current, .. } => current,
@@ -190,7 +189,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// Shared reference to the business output.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn output(&self) -> &R {
         match self {
             Self::Updated { output, .. } | Self::Finished { output, .. } => output,
@@ -202,7 +201,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// Retry context for the completed flow.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn context(&self) -> CasContext {
         match self {
             Self::Updated { context, .. } | Self::Finished { context, .. } => *context,
@@ -214,7 +213,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// One-based attempt count.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn attempts(&self) -> u32 {
         self.context().attempts()
     }
@@ -224,7 +223,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// The owned business output.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn into_output(self) -> R {
         match self {
             Self::Updated { output, .. } | Self::Finished { output, .. } => output,

@@ -146,7 +146,7 @@ impl<T, E> CasError<T, E> {
     /// `Some` retained infrastructure cause, or `None` for ordinary CAS
     /// termination.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn diagnostic(&self) -> Option<&CasDiagnostic> {
         self.details.diagnostic.as_ref()
     }
@@ -158,7 +158,7 @@ impl<T, E> CasError<T, E> {
     /// Ordered post-terminal callback diagnostics; an empty slice means none
     /// failed.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn completion_diagnostics(&self) -> &[CasDiagnostic] {
         &self.details.completion_diagnostics
     }
@@ -168,7 +168,7 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// The terminal category, accounting for budget and timeout precedence.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn kind(&self) -> CasErrorKind {
         self.kind
     }
@@ -179,7 +179,7 @@ impl<T, E> CasError<T, E> {
     /// The structured stopping reason independent of the retained attempt
     /// error.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn termination(&self) -> CasTermination {
         self.details.termination
     }
@@ -189,7 +189,7 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// A copied snapshot of retry counters and limits at termination.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn context(&self) -> CasContext {
         self.details.context
     }
@@ -199,7 +199,7 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// Started attempt count, possibly zero when stopped before admission.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn attempts(&self) -> u32 {
         self.details.context.attempts()
     }
@@ -211,7 +211,7 @@ impl<T, E> CasError<T, E> {
     /// `Some` borrowed attempt failure and its snapshot, or `None` if none was
     /// retained.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn last_failure(&self) -> Option<&CasAttemptFailure<T, E>> {
         self.last_failure.as_ref()
     }
@@ -222,7 +222,7 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// `Some` borrowed failure snapshot, or `None` without a retained snapshot.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn current(&self) -> Option<&Arc<T>> {
         self.last_failure().map(CasAttemptFailure::current)
     }
@@ -234,7 +234,7 @@ impl<T, E> CasError<T, E> {
     /// `Some` original Retry/Abort business error, or `None` for other
     /// failures.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn error(&self) -> Option<&E> {
         self.last_failure().and_then(CasAttemptFailure::error)
     }
@@ -246,7 +246,7 @@ impl<T, E> CasError<T, E> {
     /// `Some` owned attempt failure, or `None` when no retainable failure
     /// exists.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn into_last_failure(self) -> Option<CasAttemptFailure<T, E>> {
         self.last_failure
     }
@@ -404,7 +404,7 @@ where
     /// # Returns
     /// `Some` borrowed original business error, or `None` when termination
     /// retained none.
-    #[inline(always)]
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.error().map(|error| error as &(dyn Error + 'static))
     }

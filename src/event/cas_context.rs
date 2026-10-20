@@ -81,7 +81,7 @@ impl CasContext {
     /// # Returns
     /// The started attempt count, including failures; zero if no operation ran.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn attempts(&self) -> u32 {
         self.attempts
     }
@@ -92,7 +92,7 @@ impl CasContext {
     /// `Some(NonZeroU32)` for attempt-related contexts, or `None` for terminal
     /// contexts without a current attempt.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn current_attempt(&self) -> Option<NonZeroU32> {
         self.current_attempt
     }
@@ -102,7 +102,7 @@ impl CasContext {
     /// # Returns
     /// Maximum attempts, including the initial attempt.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_attempts(&self) -> u32 {
         self.max_attempts
     }
@@ -112,7 +112,7 @@ impl CasContext {
     /// # Returns
     /// Maximum retries after the first attempt.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_retries(&self) -> u32 {
         self.max_attempts.saturating_sub(1)
     }
@@ -123,7 +123,7 @@ impl CasContext {
     /// `Some(Duration)` enables this soft budget; `None` disables only this
     /// budget. It does not cancel an already admitted operation.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_operation_elapsed(&self) -> Option<Duration> {
         self.max_operation_elapsed
     }
@@ -134,7 +134,7 @@ impl CasContext {
     /// `Some(Duration)` enables this soft budget; `None` disables only this
     /// budget. It does not cancel an already admitted operation.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.max_total_elapsed
     }
@@ -144,7 +144,7 @@ impl CasContext {
     /// # Returns
     /// Total elapsed time observed at this event.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn total_elapsed(&self) -> Duration {
         self.total_elapsed
     }
@@ -154,7 +154,7 @@ impl CasContext {
     /// # Returns
     /// Latest completed attempt elapsed time, or zero before one completes.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn last_attempt_elapsed(&self) -> Duration {
         self.last_attempt_elapsed
     }
@@ -165,7 +165,7 @@ impl CasContext {
     /// `Some(Duration)` when the current attempt has a hard timeout; `None`
     /// when none is selected or the context has no current attempt.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn current_attempt_timeout(&self) -> Option<Duration> {
         self.current_attempt_timeout
     }
@@ -176,7 +176,7 @@ impl CasContext {
     /// `Some(Duration)` when retry scheduling selected a delay; `None`
     /// when no next retry delay is selected in this context.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn next_delay(&self) -> Option<Duration> {
         self.next_delay
     }

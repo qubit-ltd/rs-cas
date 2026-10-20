@@ -53,7 +53,7 @@ impl CasBuildError {
     /// # Returns
     /// The static validation boundary label, intended for diagnostics.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn field(&self) -> &'static str {
         self.field
     }
@@ -63,7 +63,7 @@ impl CasBuildError {
     /// # Returns
     /// Validation details borrowed from this error; no allocation is performed.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn message(&self) -> &str {
         &self.message
     }

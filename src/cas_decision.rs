@@ -122,7 +122,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     /// by pointer identity, not `T` value equality. Reusing an earlier `Arc`
     /// can therefore be affected by A-B-A changes; do not mutate the pointee
     /// through interior mutability while it is a shared CAS snapshot.
-    #[inline(always)]
+    #[inline]
     pub fn update_arc(next: Arc<T>, output: R) -> Self {
         Self::Update { next, output }
     }
@@ -134,7 +134,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Finish`] value.
-    #[inline(always)]
+    #[inline]
     pub fn finish(output: R) -> Self {
         Self::Finish { output }
     }
@@ -146,7 +146,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Retry`] value.
-    #[inline(always)]
+    #[inline]
     pub fn retry(error: E) -> Self {
         Self::Retry(error)
     }
@@ -158,7 +158,7 @@ impl<T, R, E> CasDecision<T, R, E> {
     ///
     /// # Returns
     /// A [`CasDecision::Abort`] value.
-    #[inline(always)]
+    #[inline]
     pub fn abort(error: E) -> Self {
         Self::Abort(error)
     }

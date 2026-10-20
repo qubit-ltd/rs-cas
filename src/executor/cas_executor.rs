@@ -143,7 +143,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A builder configured with default retry settings.
-    #[inline(always)]
+    #[inline]
     pub fn builder() -> CasBuilder<T, E> {
         CasBuilder::new()
     }
@@ -237,7 +237,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// The configured positive attempt limit.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_attempts(&self) -> u32 {
         self.policy.admission_limits().max_attempts().get()
     }
@@ -247,7 +247,7 @@ impl<T, E> CasExecutor<T, E> {
     /// # Returns
     /// The attempt limit minus one; zero means no retries are allowed.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_retries(&self) -> u32 {
         self.max_attempts().saturating_sub(1)
     }
@@ -258,7 +258,7 @@ impl<T, E> CasExecutor<T, E> {
     /// `Some` limits admission using elapsed operation and adapter work;
     /// `None` disables this budget. An admitted successful commit is retained.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_operation_elapsed(&self) -> Option<Duration> {
         self.policy.admission_limits().operation_time_budget()
     }
@@ -269,7 +269,7 @@ impl<T, E> CasExecutor<T, E> {
     /// `Some` limits retry scheduling and admission; `None` disables this
     /// budget. It does not cancel an already admitted operation.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn max_total_elapsed(&self) -> Option<Duration> {
         self.policy.admission_limits().total_time_budget()
     }
@@ -280,7 +280,7 @@ impl<T, E> CasExecutor<T, E> {
     /// `Some` enables the timeout; `None` disables it. Synchronous execution
     /// ignores this setting, and blocking operation code cannot be preempted.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn attempt_timeout(&self) -> Option<Duration> {
         self.attempt_timeout
     }
@@ -293,7 +293,7 @@ impl<T, E> CasExecutor<T, E> {
     /// excludes the full cost of start/finish hooks, and cannot preempt
     /// blocking operation code. Synchronous execution ignores this setting.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn flow_timeout(&self) -> Option<Duration> {
         self.flow_timeout
     }

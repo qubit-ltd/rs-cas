@@ -46,7 +46,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
-    #[inline(always)]
+    #[inline]
     pub fn execute<R, O>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
     where
         T: 'static,

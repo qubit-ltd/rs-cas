@@ -59,7 +59,7 @@ impl Default for CasStrategy {
     ///
     /// # Returns
     /// [`CasStrategy::LatencyFirst`] as the recommended default.
-    #[inline(always)]
+    #[inline]
     fn default() -> Self {
         Self::LatencyFirst
     }
