@@ -6,5 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+mod cas_executor_config_tests;
 mod cas_new_api_tests;
 mod internal;

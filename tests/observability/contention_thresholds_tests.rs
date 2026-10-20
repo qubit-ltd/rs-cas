@@ -8,13 +8,7 @@
 
 use qubit_cas::ContentionThresholds;
 
-/// Verifies contention threshold constructor clamps ratio values.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
+/// Verifies that the constructor clamps conflict ratios to the supported range.
 #[test]
 fn test_contention_thresholds_new_clamps_ratio() {
     let high = ContentionThresholds::new(3, 1, 1.8);
@@ -26,13 +20,7 @@ fn test_contention_thresholds_new_clamps_ratio() {
     assert_eq!(nan.conflict_ratio(), 0.0);
 }
 
-/// Verifies contention threshold default values.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
+/// Verifies the default contention threshold values.
 #[test]
 fn test_contention_thresholds_default_values() {
     let thresholds = ContentionThresholds::default();

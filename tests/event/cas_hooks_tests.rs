@@ -45,13 +45,6 @@ impl Consumer<CasEvent> for EventRecorder {
     }
 }
 
-/// Verifies hooks accept rs-function consumers and closures.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
 #[test]
 fn test_hooks_accept_function_traits() {
     let state = AtomicRef::from_value(1usize);

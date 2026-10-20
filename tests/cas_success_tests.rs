@@ -48,13 +48,6 @@ fn test_success_clone_preserves_non_clone_snapshot_identity() {
     }
 }
 
-/// Verifies success accessors for updated and finished outcomes.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
 #[test]
 fn test_success_accessors_cover_updated_and_finished_variants() {
     let state = AtomicRef::from_value(1usize);

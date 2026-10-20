@@ -31,13 +31,6 @@ fn test_decision_clone_preserves_variants_without_cloning_snapshot() {
     }
 }
 
-/// Verifies all CAS decision constructors create the expected variants.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
 #[test]
 fn test_decision_constructors_create_expected_variants() {
     let next = Arc::new(7usize);

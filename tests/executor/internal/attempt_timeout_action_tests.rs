@@ -32,9 +32,6 @@ use tokio::time::sleep;
 use crate::support::TestError;
 
 /// Verifies retry-on-timeout continues with a later attempt.
-///
-/// # Returns
-/// This test returns nothing.
 #[cfg(feature = "tokio")]
 #[async_test(start_paused = true)]
 async fn test_retry_on_timeout_continues_execution() {
@@ -68,9 +65,6 @@ async fn test_retry_on_timeout_continues_execution() {
 }
 
 /// Verifies abort-on-timeout terminates the execution after the first timeout.
-///
-/// # Returns
-/// This test returns nothing.
 #[cfg(feature = "tokio")]
 #[async_test(start_paused = true)]
 async fn test_abort_on_timeout_terminates_execution() {

@@ -12,13 +12,6 @@ use qubit_cas::CasExecutor;
 
 use crate::support::TestError;
 
-/// Verifies result-only execution enriches an updated attempt success.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
 #[test]
 fn test_result_only_execution_enriches_updated_success() {
     let state = AtomicRef::from_value(4usize);

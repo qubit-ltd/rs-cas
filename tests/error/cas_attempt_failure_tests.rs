@@ -13,13 +13,6 @@ use qubit_cas::CasAttemptFailureKind;
 
 use crate::support::TestError;
 
-/// Verifies attempt failure accessors classify variants correctly.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
 #[test]
 fn test_attempt_failure_accessors_work() {
     let state = Arc::new(7usize);
