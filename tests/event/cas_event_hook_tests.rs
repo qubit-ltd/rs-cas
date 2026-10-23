@@ -46,5 +46,8 @@ fn test_event_hook_alias_accepts_arc_consumer() {
     hook.accept(&CasEvent::ExecutionStarted {
         started_at: Instant::now(),
     });
-    assert!(observed.load(Ordering::SeqCst));
+    assert!(
+        observed.load(Ordering::SeqCst),
+        "event hook should receive the execution-started event"
+    );
 }

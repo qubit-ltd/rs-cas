@@ -127,12 +127,6 @@ fn test_cas_outcome_error_accessors_and_result() {
 }
 
 /// Verifies `expect` does not require the business error to implement `Debug`.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
 #[test]
 #[should_panic(expected = "non-debug error should still support expect")]
 fn test_cas_outcome_expect_accepts_non_debug_error() {

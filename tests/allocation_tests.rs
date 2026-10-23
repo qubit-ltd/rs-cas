@@ -35,6 +35,7 @@ thread_local! {
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
     static ALLOCS: Cell<usize> = const { Cell::new(0) };
 }
+
 struct CountingAllocator;
 
 /// Records allocations only inside the current thread's explicit window.
@@ -53,26 +54,31 @@ unsafe impl GlobalAlloc for CountingAllocator {
         // SAFETY: The caller supplies the same valid layout passed to System.
         unsafe { System.alloc(layout) }
     }
+
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         // SAFETY: This allocator only returns pointers allocated by System.
         unsafe { System.dealloc(ptr, layout) }
     }
+
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         record();
         // SAFETY: The requested layout is forwarded without alteration.
         unsafe { System.alloc_zeroed(layout) }
     }
+
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
         record();
         // SAFETY: System owns the pointer and receives the caller's original layout.
         unsafe { System.realloc(ptr, layout, size) }
     }
 }
+
 #[global_allocator]
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 /// Disables counting on success or unwinding.
 struct Disable;
+
 impl Drop for Disable {
     fn drop(&mut self) {
         ACTIVE.with(|active| active.set(false));

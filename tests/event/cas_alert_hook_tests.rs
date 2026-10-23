@@ -10,8 +10,10 @@ use qubit_cas::CasAlert;
 use qubit_cas::event::CasAlertHook;
 use qubit_function::ArcConsumer;
 
+/// Accepts an alert hook to validate the public alias type.
 fn accept_alert_hook(_hook: CasAlertHook) {}
 
+/// Verifies the alert hook alias accepts `ArcConsumer` values.
 #[test]
 fn test_alert_hook_alias_accepts_arc_consumer() {
     let hook: CasAlertHook = ArcConsumer::new(|_alert: &CasAlert| {});

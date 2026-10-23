@@ -8,13 +8,7 @@
 
 use qubit_cas::CasAttemptFailureKind;
 
-/// Converts each failure kind to a stable label.
-///
-/// # Parameters
-/// - `kind`: Failure kind to label.
-///
-/// # Returns
-/// Stable string label for assertions.
+/// Returns a stable assertion label for a failure kind.
 fn label_of(kind: CasAttemptFailureKind) -> &'static str {
     match kind {
         CasAttemptFailureKind::Conflict => "conflict",
@@ -24,13 +18,7 @@ fn label_of(kind: CasAttemptFailureKind) -> &'static str {
     }
 }
 
-/// Verifies all failure kinds remain addressable and distinct.
-///
-/// # Parameters
-/// This test has no parameters.
-///
-/// # Returns
-/// This test returns nothing.
+/// Verifies that each failure kind has a distinct stable label.
 #[test]
 fn test_failure_kind_labels_cover_all_variants() {
     assert_eq!(label_of(CasAttemptFailureKind::Conflict), "conflict");

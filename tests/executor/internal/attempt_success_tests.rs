@@ -21,7 +21,7 @@ fn test_result_only_execution_enriches_updated_success() {
         .execute_result(&state, |current: &usize| CasDecision::update(*current + 1, *current))
         .expect("result-only update should succeed");
 
-    assert!(success.is_updated());
+    assert!(success.is_updated(), "result-only execution should update state");
     assert_eq!(**success.previous().expect("update has previous state"), 4);
     assert_eq!(**success.current(), 5);
     assert_eq!(*success.output(), 4);
