@@ -101,7 +101,6 @@ impl CasStrategy {
     /// # Returns
     /// `Some((initial, max, jitter_factor))` for backoff strategies, or `None`
     /// for latency-first (immediate retries).
-    #[must_use]
     #[inline]
     pub(crate) fn backoff(self) -> Option<(Duration, Duration, f64)> {
         match self {

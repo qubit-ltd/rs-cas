@@ -145,7 +145,6 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// `Some` retained infrastructure cause, or `None` for ordinary CAS
     /// termination.
-    #[must_use]
     #[inline]
     pub fn diagnostic(&self) -> Option<&CasDiagnostic> {
         self.details.diagnostic.as_ref()
@@ -210,7 +209,6 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// `Some` borrowed attempt failure and its snapshot, or `None` if none was
     /// retained.
-    #[must_use]
     #[inline]
     pub fn last_failure(&self) -> Option<&CasAttemptFailure<T, E>> {
         self.last_failure.as_ref()
@@ -221,7 +219,6 @@ impl<T, E> CasError<T, E> {
     ///
     /// # Returns
     /// `Some` borrowed failure snapshot, or `None` without a retained snapshot.
-    #[must_use]
     #[inline]
     pub fn current(&self) -> Option<&Arc<T>> {
         self.last_failure().map(CasAttemptFailure::current)
@@ -233,7 +230,6 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// `Some` original Retry/Abort business error, or `None` for other
     /// failures.
-    #[must_use]
     #[inline]
     pub fn error(&self) -> Option<&E> {
         self.last_failure().and_then(CasAttemptFailure::error)
@@ -245,7 +241,6 @@ impl<T, E> CasError<T, E> {
     /// # Returns
     /// `Some` owned attempt failure, or `None` when no retainable failure
     /// exists.
-    #[must_use]
     #[inline]
     pub fn into_last_failure(self) -> Option<CasAttemptFailure<T, E>> {
         self.last_failure

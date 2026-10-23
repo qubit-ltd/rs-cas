@@ -26,7 +26,9 @@
 /// let diagnostic: Option<&CasDiagnostic> = error.diagnostic();
 /// if let Some(detail) = diagnostic {
 ///     match detail.kind() {
-///         CasDiagnosticKind::Timer | CasDiagnosticKind::Clock => eprintln!("timing infrastructure: {}", detail.message()),
+///         CasDiagnosticKind::Timer | CasDiagnosticKind::Clock => {
+///             eprintln!("timing infrastructure: {}", detail.message())
+///         }
 ///         _ => eprintln!("execution infrastructure: {}", detail.message()),
 ///     }
 /// }

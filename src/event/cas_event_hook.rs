@@ -23,10 +23,10 @@ use super::CasEvent;
 /// use qubit_atomic::AtomicRef;
 /// use qubit_cas::CasDecision;
 /// use qubit_cas::CasEvent;
-/// use qubit_cas::event::CasEventHook;
-/// use qubit_function::ArcConsumer;
 /// use qubit_cas::CasExecutor;
 /// use qubit_cas::CasHooks;
+/// use qubit_cas::event::CasEventHook;
+/// use qubit_function::ArcConsumer;
 ///
 /// let finished = Arc::new(AtomicUsize::new(0));
 /// let observed = Arc::clone(&finished);
