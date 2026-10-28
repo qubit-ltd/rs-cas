@@ -101,6 +101,9 @@ p50/p95/p99 延迟。它固定运行五轮：每轮从独立 state 开始，并�
 max_total_elapsed；读取不分配、不初始化 OnceLock。公开签名不暴露 RetryPolicy。
 AtomicRef、Function/Consumer 和默认 CasBoxError 继续保留为公共协作边界。
 
-项目 CI hook 抽取两份 README 和两份用户手册的当前 Rust 示例并运行，同时检查私有 Rustdoc。
-CAS 发布包验证与下游含 path/patch 的本地验证分开记录；
+项目 hook 位于 `.infra/project-ci-check.local.sh`，由现有
+`.infra/bin/project-ci-check.sh` 扩展点调用。它检查 Python 3.11+ 前置条件，运行脚本单元测试和
+测试清单检查，构建并运行两份 README 与两份用户手册中的 Rust 示例，同时检查私有 Rustdoc。
+每份示例 consumer 都从对应文档的 `[dependencies]` TOML 块读取依赖版本与 features；仅将
+`qubit-cas` 指向当前 checkout。CAS 发布包验证与下游含 path/patch 的本地验证分开记录；
 正式发布先上传 CAS，随后才能进行下游无 patch 的 registry 验证。

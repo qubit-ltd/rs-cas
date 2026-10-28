@@ -136,7 +136,12 @@ max_retries, max_operation_elapsed, and max_total_elapsed. Reads allocate nothin
 and do not initialize OnceLock. Public signatures do not expose RetryPolicy.
 AtomicRef, Function/Consumer, and default CasBoxError remain intentional public boundaries.
 
-The project CI hook executes current Rust examples extracted from both README
-files and both guides, and checks private Rustdoc. CAS package verification is distinct from
-downstream path/patch validation: publish CAS first, then validate downstream
-against the registry without local patches.
+The project hook at `.infra/project-ci-check.local.sh` is invoked by the existing
+`.infra/bin/project-ci-check.sh` extension point. It checks the Python 3.11+
+prerequisite, runs the script unit tests and test-manifest check, builds and runs
+the Rust examples from both README files and both guides, and checks private
+Rustdoc. Each example consumer takes its dependency versions and features from
+that document's `[dependencies]` TOML fence; only `qubit-cas` is redirected to
+the current checkout. CAS package verification is distinct from downstream
+path/patch validation: publish CAS first, then validate downstream against the
+registry without local patches.
