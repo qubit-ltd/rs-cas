@@ -178,7 +178,9 @@ async fn main() {
 is no separate observability-mode enum.
 
 Reports retain attempts, conflicts, business retries, timeouts, elapsed time,
-and the terminal outcome. Listeners run inline and must remain inexpensive and
+and the terminal outcome. `timeouts()` counts started async attempts interrupted
+by an attempt or flow deadline; flow timeouts during backoff or before the first
+attempt do not increment it. Listeners run inline and must remain inexpensive and
 non-blocking. With unwinding enabled, listener panics are isolated and retained
 in the final report's `listener_failures()` without changing the business result.
 The finished event contains the report snapshot before that listener runs; it

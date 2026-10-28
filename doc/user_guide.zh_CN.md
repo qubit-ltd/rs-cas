@@ -150,7 +150,7 @@ async fn main() {
 `execute` 返回报告，`execute_with_hooks` 还可通过 `CasHooks::on_event` 接收事件；
 `on_contention_alert` 同时注册阈值和告警回调。没有额外的观测模式枚举。
 
-报告记录尝试、冲突、业务重试、超时、耗时和终态。listener 在执行线程运行，应快速且非阻塞。
+报告记录尝试、冲突、业务重试、超时、耗时和终态。`timeouts()` 仅统计已开始的异步尝试被单次或流程硬期限中断的次数；退避期间或首次尝试开始前发生的流程超时不增加该计数。listener 在执行线程运行，应快速且非阻塞。
 在 unwind 构建中，listener panic 被隔离并记入最终报告的 `listener_failures()`；业务结果不变。
 完成事件携带调用该 listener 之前的报告快照，不能包含它自身稍后发生的 panic。
 用户 operation 的 panic 继续向外传播；panic=abort 构建不提供隔离保证。

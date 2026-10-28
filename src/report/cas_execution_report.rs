@@ -46,7 +46,8 @@ pub struct CasExecutionReport {
     retry_errors: u32,
     /// Number of aborting business failures.
     aborts: u32,
-    /// Number of async attempt timeouts.
+    /// Number of started async attempts interrupted by an attempt or flow
+    /// deadline.
     timeouts: u32,
     /// Instant captured before the first attempt.
     started_at: Instant,
@@ -76,8 +77,9 @@ impl CasExecutionReport {
     /// - `conflicts`: Number of compare-and-swap conflicts encountered.
     /// - `retry_errors`: Number of retryable business failures.
     /// - `aborts`: Number of business aborts.
-    /// - `timeouts`: Number of async attempt timeouts when per-attempt timeout
-    ///   is configured.
+    /// - `timeouts`: Number of started async attempts interrupted by an attempt
+    ///   or flow deadline. Flow timeouts during backoff or before the first
+    ///   attempt do not increment this count.
     /// - `started_at`: Instant captured before the first attempt.
     /// - `finished_at`: Instant captured when the flow completed.
     /// - `max_attempts`: Configured maximum number of attempts.
@@ -165,10 +167,13 @@ impl CasExecutionReport {
         self.aborts
     }
 
-    /// Returns the number of async attempt timeouts.
+    /// Returns the number of started async attempts interrupted by an attempt
+    /// or flow deadline.
     ///
     /// # Returns
-    /// Count of times an async operation exceeded its configured timeout.
+    /// Count of attempts interrupted by an attempt or flow deadline. Flow
+    /// timeouts during backoff or before the first attempt do not increment
+    /// this count.
     #[must_use]
     #[inline]
     pub fn timeouts(&self) -> u32 {

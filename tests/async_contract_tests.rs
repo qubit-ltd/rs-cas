@@ -217,31 +217,39 @@ async fn test_attempt_timeout_action_and_retained_snapshot() {
 async fn test_flow_timeout_during_attempt_and_backoff_preserves_precedence() {
     for path in 0..3 {
         for in_backoff in [false, true] {
-            let state = AtomicRef::from_value(7usize);
-            let executor = CasExecutor::builder()
-                .max_attempts(3)
-                .flow_timeout(Some(Duration::from_millis(10)))
-                .attempt_timeout(Some(Duration::from_secs(1)))
-                .fixed_delay(Duration::from_secs(1))
-                .build()
-                .expect("valid timeouts");
-            let (result, _) = run_path(path, &executor, &state, |_| async move {
-                if in_backoff {
-                    CasDecision::retry("before backoff")
-                } else {
-                    pending().await
+            for with_attempt_timeout in [false, true] {
+                let state = AtomicRef::from_value(7usize);
+                let mut builder = CasExecutor::builder()
+                    .max_attempts(3)
+                    .flow_timeout(Some(Duration::from_millis(10)))
+                    .fixed_delay(Duration::from_secs(1));
+                if with_attempt_timeout {
+                    builder = builder.attempt_timeout(Some(Duration::from_secs(1)));
                 }
-            })
-            .await;
-            let error = result.expect_err("flow deadline");
-            assert_eq!(error.kind(), CasErrorKind::FlowTimeout);
-            assert_eq!(error.termination(), CasTermination::TimedOut(CasTimeoutScope::Flow));
-            assert_eq!(error.attempts(), 1);
-            assert_eq!(**error.current().expect("retained snapshot"), 7);
-            assert_eq!(
-                error.error().copied(),
-                if in_backoff { Some("before backoff") } else { None }
-            );
+                let executor = builder.build().expect("valid timeouts");
+                let (result, report) = run_path(path, &executor, &state, |_| async move {
+                    if in_backoff {
+                        CasDecision::retry("before backoff")
+                    } else {
+                        pending().await
+                    }
+                })
+                .await;
+                let error = result.expect_err("flow deadline");
+                assert_eq!(error.kind(), CasErrorKind::FlowTimeout);
+                assert_eq!(error.termination(), CasTermination::TimedOut(CasTimeoutScope::Flow));
+                assert_eq!(error.attempts(), 1);
+                assert_eq!(**error.current().expect("retained snapshot"), 7);
+                assert_eq!(
+                    error.error().copied(),
+                    if in_backoff { Some("before backoff") } else { None }
+                );
+                assert_eq!(*state.load(), 7);
+                if let Some(report) = report {
+                    assert_eq!(report.attempts_total(), 1);
+                    assert_eq!(report.timeouts(), u32::from(!in_backoff));
+                }
+            }
         }
     }
 }
@@ -254,7 +262,7 @@ async fn test_zero_flow_timeout_does_not_start_operation() {
             .flow_timeout(Some(Duration::ZERO))
             .build()
             .expect("zero deadline");
-        let (result, _) = run_path(path, &executor, &state, |_| async {
+        let (result, report) = run_path(path, &executor, &state, |_| async {
             panic!("operation must not start")
         })
         .await;
@@ -262,6 +270,10 @@ async fn test_zero_flow_timeout_does_not_start_operation() {
         assert_eq!(error.kind(), CasErrorKind::FlowTimeout);
         assert_eq!(error.attempts(), 0);
         assert!(error.current().is_none());
+        if let Some(report) = report {
+            assert_eq!(report.attempts_total(), 0);
+            assert_eq!(report.timeouts(), 0);
+        }
     }
 }
 
