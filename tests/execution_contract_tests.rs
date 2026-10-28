@@ -151,24 +151,55 @@ fn test_sync_soft_budgets_preserve_admitted_success_and_stop_retry() {
         for operation_budget in [false, true] {
             for decision in 0..3 {
                 let state = AtomicRef::from_value(0usize);
+                let calls = AtomicUsize::new(0);
+                let budget = Duration::from_millis(if operation_budget { 1 } else { 50 });
+                let work = Duration::from_millis(if operation_budget { 5 } else { 60 });
                 let builder = CasExecutor::<usize, &'static str>::builder().max_attempts(3);
                 let executor = if operation_budget {
-                    builder.max_operation_elapsed(Some(Duration::from_millis(1)))
+                    builder.max_operation_elapsed(Some(budget))
                 } else {
-                    builder.max_total_elapsed(Some(Duration::from_millis(1)))
+                    builder.max_total_elapsed(Some(budget))
                 }
                 .build()
                 .expect("valid soft budget");
-                let (result, _) = run_path(path, &executor, &state, |_| {
-                    sleep(Duration::from_millis(5));
+                let (result, report) = run_path(path, &executor, &state, |_| {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    sleep(work);
                     match decision {
                         0 => CasDecision::update(1, 1),
                         1 => CasDecision::finish(1),
                         _ => CasDecision::retry("late"),
                     }
                 });
+                let observed_calls = calls.load(Ordering::SeqCst);
+                if observed_calls == 0 {
+                    // Total time can expire before the first admission.
+                    assert!(!operation_budget, "an unused operation budget cannot expire");
+                    let error = result.expect_err("total budget rejected the first admission");
+                    assert_eq!(error.kind(), CasErrorKind::TotalBudgetExceeded);
+                    assert_eq!(
+                        error.termination(),
+                        CasTermination::LimitExceeded(CasLimitKind::TotalElapsed)
+                    );
+                    assert_eq!(error.attempts(), 0);
+                    assert!(error.current().is_none());
+                    assert!(error.error().is_none());
+                    assert_eq!(*state.load(), 0);
+                    if let Some(report) = report {
+                        assert_eq!(report.attempts_total(), 0);
+                    }
+                    continue;
+                }
+                assert_eq!(observed_calls, 1, "the spent budget prevents another operation");
+                if let Some(report) = report {
+                    assert_eq!(report.attempts_total(), 1);
+                }
                 if decision < 2 {
-                    assert_eq!(result.expect("admitted commit is not revoked").attempts(), 1);
+                    let success = result.expect("admitted commit is not revoked");
+                    assert_eq!(success.attempts(), 1);
+                    assert_eq!(success.is_updated(), decision == 0);
+                    assert_eq!(*success.output(), 1);
+                    assert_eq!(**success.current(), usize::from(decision == 0));
                     assert_eq!(*state.load(), usize::from(decision == 0));
                 } else {
                     let error = result.expect_err("budget prevents second attempt");
@@ -181,8 +212,46 @@ fn test_sync_soft_budgets_preserve_admitted_success_and_stop_retry() {
                             CasErrorKind::TotalBudgetExceeded
                         }
                     );
+                    assert_eq!(
+                        error.termination(),
+                        CasTermination::LimitExceeded(if operation_budget {
+                            CasLimitKind::OperationElapsed
+                        } else {
+                            CasLimitKind::TotalElapsed
+                        })
+                    );
+                    assert_eq!(error.error(), Some(&"late"));
+                    assert_eq!(**error.current().expect("the retry retains its snapshot"), 0);
+                    assert_eq!(*state.load(), 0);
                 }
             }
+        }
+    }
+}
+
+#[test]
+fn test_sync_zero_total_budget_does_not_start_operation() {
+    for path in 0..3 {
+        let state = AtomicRef::from_value(0usize);
+        let executor = CasExecutor::<usize, &'static str>::builder()
+            .max_total_elapsed(Some(Duration::ZERO))
+            .build()
+            .expect("zero total budget prohibits admission");
+        let (result, report) = run_path(path, &executor, &state, |_| {
+            panic!("zero total budget must not invoke the operation")
+        });
+        let error = result.expect_err("zero total budget stops before the first attempt");
+        assert_eq!(error.kind(), CasErrorKind::TotalBudgetExceeded);
+        assert_eq!(
+            error.termination(),
+            CasTermination::LimitExceeded(CasLimitKind::TotalElapsed)
+        );
+        assert_eq!(error.attempts(), 0);
+        assert!(error.current().is_none());
+        assert!(error.error().is_none());
+        assert_eq!(*state.load(), 0);
+        if let Some(report) = report {
+            assert_eq!(report.attempts_total(), 0);
         }
     }
 }
