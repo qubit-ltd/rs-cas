@@ -12,7 +12,7 @@ OutOfStock。只有成功提交的 output 交给调用者。发送通知或扣�
 ```toml
 [dependencies]
 qubit-cas = { version = "0.12", features = ["tokio"] }
-qubit-atomic = "0.13"
+qubit-atomic = "0.17"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
 
@@ -109,7 +109,10 @@ fn main() {
 
 ## 6. 同步与异步执行
 
-同步延迟会阻塞调用线程。异步方法需要 `tokio` feature，并会在等待期间让出执行权。
+同步延迟会阻塞调用线程。异步方法需要 `tokio` feature 才能编译，且其 future 必须在已进入的
+Tokio runtime 中 poll；缺少 runtime 时会在 operation 启动前 panic。该 feature 不会创建 runtime；
+`#[tokio::main]` 会自动进入 runtime。手动构建 runtime 时，若使用非零退避或硬超时，需通过
+`.enable_time()` 或 `.enable_all()` 启用 time driver；其他配置不要求 time driver。
 result-only 异步 operation 与同步版本具有相同的决策语义：
 
 ```rust

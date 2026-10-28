@@ -15,7 +15,7 @@ roll back its effects.
 ```toml
 [dependencies]
 qubit-cas = { version = "0.12", features = ["tokio"] }
-qubit-atomic = "0.13"
+qubit-atomic = "0.17"
 tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "time"] }
 ```
 
@@ -133,8 +133,13 @@ never yield cannot be preempted reliably.
 ## 6. Synchronous and asynchronous execution
 
 Synchronous delays block the calling thread. Async methods require the `tokio`
-feature and yield while waiting. A result-only async operation has the same
-decision semantics as its synchronous counterpart:
+feature to compile, and their futures must be polled inside an entered Tokio
+runtime; polling without one panics before the operation starts. The feature
+does not create a runtime. `#[tokio::main]` enters one automatically. When
+building a runtime manually, enable the time driver with `.enable_time()` or
+`.enable_all()` if using nonzero backoff or a hard timeout; those settings do
+not otherwise require it. A result-only async operation has the same decision
+semantics as its synchronous counterpart:
 
 ```rust
 use std::time::Duration;
