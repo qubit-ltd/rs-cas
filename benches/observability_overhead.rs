@@ -8,6 +8,7 @@
 //! Measures the overhead of result-only execution and optional CAS
 //! observability for uncontended and deliberately conflicted updates.
 
+use std::cell::Cell;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
@@ -111,15 +112,16 @@ fn run_result_executor_sample(
     force_conflict: bool,
 ) -> Result<BenchResult, String> {
     let state = AtomicRef::from_value(0usize);
-    let forced = AtomicUsize::new(0);
     let start = Instant::now();
     let mut attempts = 0u64;
     let mut conflicts = 0u64;
 
     for _ in 0..ITERATIONS {
+        let first_attempt = Cell::new(true);
         let success = executor
             .execute_result(&state, |current: &usize| {
-                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
+                let was_first = first_attempt.replace(false);
+                if force_conflict && was_first {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
@@ -131,6 +133,11 @@ fn run_result_executor_sample(
     }
 
     let elapsed = start.elapsed();
+    let expected_attempts = if force_conflict { 2 * ITERATIONS } else { ITERATIONS };
+    let expected_conflicts = if force_conflict { ITERATIONS } else { 0 };
+    assert_eq!(attempts, expected_attempts as u64);
+    assert_eq!(conflicts, expected_conflicts as u64);
+    assert_eq!(*state.load(), expected_attempts);
     let ops_per_sec = ITERATIONS as f64 / elapsed.as_secs_f64();
     Ok(BenchResult {
         ops_per_sec,
@@ -197,7 +204,6 @@ fn run_executor_sample(
     force_conflict: bool,
 ) -> Result<BenchResult, String> {
     let state = AtomicRef::from_value(0usize);
-    let forced = AtomicUsize::new(0);
     // Instant is a monotonic clock, so elapsed measurements are not affected by
     // wall-clock jumps.
     let start = Instant::now();
@@ -205,10 +211,12 @@ fn run_executor_sample(
     let mut conflicts = 0u64;
 
     for _ in 0..ITERATIONS {
+        let first_attempt = Cell::new(true);
         let outcome = executor.execute_with_hooks(
             &state,
             |current: &usize| {
-                if force_conflict && forced.fetch_add(1, Ordering::Relaxed).is_multiple_of(2) {
+                let was_first = first_attempt.replace(false);
+                if force_conflict && was_first {
                     state.store(Arc::new(*current + 1));
                 }
                 CasDecision::update(*current + 1, *current + 1)
@@ -225,6 +233,11 @@ fn run_executor_sample(
     }
 
     let elapsed = start.elapsed();
+    let expected_attempts = if force_conflict { 2 * ITERATIONS } else { ITERATIONS };
+    let expected_conflicts = if force_conflict { ITERATIONS } else { 0 };
+    assert_eq!(attempts, expected_attempts as u64);
+    assert_eq!(conflicts, expected_conflicts as u64);
+    assert_eq!(*state.load(), expected_attempts);
     let ops_per_sec = ITERATIONS as f64 / elapsed.as_secs_f64();
     Ok(BenchResult {
         ops_per_sec,
@@ -259,21 +272,19 @@ fn measure_raw(force_conflict: bool) -> BenchResult {
 /// update.
 fn run_raw_sample(force_conflict: bool) -> BenchResult {
     let state = AtomicRef::from_value(0usize);
-    let forced = AtomicUsize::new(0);
     let start = Instant::now();
     let mut attempts = 0u64;
     let mut conflicts = 0u64;
 
     for _ in 0..ITERATIONS {
-        let mut first_attempt = true;
+        let first_attempt = Cell::new(true);
         loop {
             attempts += 1;
             let current = state.load();
-            if force_conflict && first_attempt {
-                forced.fetch_add(1, Ordering::Relaxed);
+            let was_first = first_attempt.replace(false);
+            if force_conflict && was_first {
                 state.store(Arc::new(*current + 1));
             }
-            first_attempt = false;
             let next = Arc::new(*current + 1);
             match state.compare_set(&current, Arc::clone(&next)) {
                 Ok(()) => {
@@ -286,6 +297,11 @@ fn run_raw_sample(force_conflict: bool) -> BenchResult {
     }
 
     let elapsed = start.elapsed();
+    let expected_attempts = if force_conflict { 2 * ITERATIONS } else { ITERATIONS };
+    let expected_conflicts = if force_conflict { ITERATIONS } else { 0 };
+    assert_eq!(attempts, expected_attempts as u64);
+    assert_eq!(conflicts, expected_conflicts as u64);
+    assert_eq!(*state.load(), expected_attempts);
     let ops_per_sec = ITERATIONS as f64 / elapsed.as_secs_f64();
     BenchResult {
         ops_per_sec,
