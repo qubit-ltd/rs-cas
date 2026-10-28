@@ -46,16 +46,16 @@ default = []
 tokio = ["dep:tokio", "qubit-retry/tokio"]
 
 [dependencies]
-tokio = { version = "^1.53", features = ["time", "rt"], optional = true }
+tokio = { version = "^1.54", features = ["time", "rt"], optional = true }
 
-qubit-atomic = "0.17"
-qubit-error = "0.2"
-qubit-function = "0.18"
-qubit-retry = "0.26"
+qubit-atomic = "^0.17"
+qubit-error = "^0.2"
+qubit-function = "^0.18"
+qubit-retry = "^0.26"
 
 [dev-dependencies]
-qubit-clock = { version = "0.13", features = ["test-util"] }
-tokio = { version = "1.53", features = ["full", "test-util"] }
+qubit-clock = { version = "^0.13", features = ["test-util"] }
+tokio = { version = "^1.54", features = ["full", "test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true
