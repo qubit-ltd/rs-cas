@@ -255,3 +255,35 @@ fn test_sync_zero_total_budget_does_not_start_operation() {
         }
     }
 }
+
+#[test]
+fn test_sync_paths_ignore_async_hard_timeouts() {
+    let zero = Some(Duration::ZERO);
+    for (attempt_timeout, flow_timeout) in [(zero, None), (None, zero), (zero, zero)] {
+        for path in 0..3 {
+            let state = AtomicRef::from_value(7usize);
+            let calls = AtomicUsize::new(0);
+            let executor = CasExecutor::builder()
+                .attempt_timeout(attempt_timeout)
+                .flow_timeout(flow_timeout)
+                .no_delay()
+                .build()
+                .expect("valid hard timeouts");
+            let (result, report) = run_path(path, &executor, &state, |current| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                CasDecision::update(*current + 1, *current + 1)
+            });
+            let success = result.expect("sync execution ignores async hard timeouts");
+            assert!(success.is_updated());
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            assert_eq!(success.attempts(), 1);
+            assert_eq!(**success.current(), 8);
+            assert_eq!(*success.output(), 8);
+            assert_eq!(*state.load(), 8);
+            if let Some(report) = report {
+                assert_eq!(report.attempts_total(), 1);
+                assert_eq!(report.timeouts(), 0);
+            }
+        }
+    }
+}
