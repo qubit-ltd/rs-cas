@@ -17,7 +17,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::task::Context;
 use std::task::Poll;
+use std::task::Waker;
 use std::time::Duration;
 
 use qubit_atomic::AtomicRef;
@@ -37,6 +39,29 @@ use tokio::test as async_test;
 use tokio::time::sleep;
 
 type ExecutionResult = Result<CasSuccess<usize, usize>, CasError<usize, &'static str>>;
+
+#[test]
+fn test_async_paths_require_entered_tokio_runtime() {
+    for path in 0..3 {
+        let state = AtomicRef::from_value(7usize);
+        let executor = CasExecutor::builder().build().expect("valid policy");
+        let calls = AtomicUsize::new(0);
+        let mut future = std::pin::pin!(run_path(path, &executor, &state, |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            async { CasDecision::finish(17) }
+        }));
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
+
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _ = future.as_mut().poll(&mut context);
+        }));
+
+        assert!(panic.is_err(), "facade {path} must require an entered Tokio runtime");
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "facade {path} started operation");
+        assert_eq!(*state.load(), 7, "facade {path} changed state");
+    }
+}
 
 /// Runs a script through one of the three async facades.
 async fn run_path<O, F>(

@@ -44,8 +44,14 @@ impl<T, E> CasExecutor<T, E> {
     /// Dropping the future drops the in-flight operation without rolling back
     /// committed state or external effects. Timeouts require yielding futures.
     ///
+    /// The returned future must be polled from within an entered Tokio runtime.
+    /// Polling it without one panics before the operation starts. A time driver
+    /// is needed only when nonzero backoff or a hard timeout is configured.
+    ///
     /// # Panics
     /// An operation panic propagates to the caller.
+    /// Polling this future without an entered Tokio runtime also panics before
+    /// the operation starts.
     #[cfg(feature = "tokio")]
     #[inline]
     pub async fn execute_async<R, O, Fut>(&self, state: &AtomicRef<T>, operation: O) -> CasOutcome<T, R, E>
@@ -87,8 +93,14 @@ impl<T, E> CasExecutor<T, E> {
     /// does not roll back committed state or external effects. Hard deadlines
     /// cannot preempt blocking code or futures that never yield.
     ///
+    /// The returned future must be polled from within an entered Tokio runtime.
+    /// Polling it without one panics before the operation starts. A time driver
+    /// is needed only when nonzero backoff or a hard timeout is configured.
+    ///
     /// # Panics
     /// An operation panic propagates to the caller.
+    /// Polling this future without an entered Tokio runtime also panics before
+    /// the operation starts.
     #[cfg(feature = "tokio")]
     pub async fn execute_async_result<R, O, Fut>(
         &self,
@@ -150,8 +162,14 @@ impl<T, E> CasExecutor<T, E> {
     /// Dropping the future drops the in-flight operation without rolling back
     /// committed state or external effects. Timeouts require yielding futures.
     ///
+    /// The returned future must be polled from within an entered Tokio runtime.
+    /// Polling it without one panics before the operation starts. A time driver
+    /// is needed only when nonzero backoff or a hard timeout is configured.
+    ///
     /// # Panics
     /// An operation panic propagates to the caller.
+    /// Polling this future without an entered Tokio runtime also panics before
+    /// the operation starts.
     ///
     /// Listener panics are isolated and recorded in the execution report;
     /// they do not alter the CAS terminal result.
