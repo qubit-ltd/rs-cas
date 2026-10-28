@@ -65,7 +65,6 @@ use crate::report::CasExecutionReport;
 /// });
 /// ```
 #[must_use = "a CAS outcome contains the terminal success or error"]
-#[derive(Debug)]
 pub struct CasOutcome<T, R, E> {
     /// Terminal success or error.
     result: Result<CasSuccess<T, R>, CasError<T, E>>,
@@ -80,6 +79,26 @@ impl<T, R: Clone, E: Clone> Clone for CasOutcome<T, R, E> {
             result: self.result.clone(),
             report: self.report.clone(),
         }
+    }
+}
+
+impl<T: fmt::Debug, R: fmt::Debug, E> fmt::Debug for CasOutcome<T, R, E> {
+    /// Formats the terminal result and report without requiring a debug
+    /// business error.
+    ///
+    /// # Parameters
+    /// - `f`: Destination formatter.
+    ///
+    /// # Returns
+    /// Formatting completion status.
+    ///
+    /// # Errors
+    /// Returns a formatting error if the destination rejects a write.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CasOutcome")
+            .field("result", &self.result)
+            .field("report", &self.report)
+            .finish()
     }
 }
 

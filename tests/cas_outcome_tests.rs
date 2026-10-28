@@ -14,6 +14,7 @@ use qubit_cas::CasDecision;
 use qubit_cas::CasErrorKind;
 use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutor;
+use qubit_cas::CasOutcome;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TestError(&'static str);
@@ -141,4 +142,31 @@ fn test_cas_outcome_expect_accepts_non_debug_error() {
     });
 
     let _ = outcome.expect("non-debug error should still support expect");
+}
+
+#[test]
+fn test_cas_outcome_debug_accepts_non_debug_error() {
+    fn assert_debug<T: fmt::Debug>() {}
+    assert_debug::<CasOutcome<usize, usize, NonDebugError>>();
+
+    let state = AtomicRef::from_value(7usize);
+    let executor = CasExecutor::<usize, NonDebugError>::builder()
+        .build()
+        .expect("valid executor");
+    for abort in [false, true] {
+        let outcome = executor.execute(&state, |_: &usize| {
+            if abort {
+                CasDecision::abort(NonDebugError)
+            } else {
+                CasDecision::finish(8usize)
+            }
+        });
+        let expected = format!(
+            "CasOutcome {{ result: {:?}, report: {:?} }}",
+            outcome.result(),
+            outcome.report(),
+        );
+        assert_eq!(format!("{outcome:?}"), expected);
+        assert!(format!("{outcome:#?}").starts_with("CasOutcome {\n"));
+    }
 }
