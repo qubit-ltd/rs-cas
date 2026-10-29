@@ -8,6 +8,7 @@
 //! Measures the overhead of result-only execution and optional CAS
 //! observability for uncontended and deliberately conflicted updates.
 
+use std::array;
 use std::cell::Cell;
 use std::hint::black_box;
 use std::sync::Arc;
@@ -40,38 +41,63 @@ fn run_group(group: &'static str, force_conflict: bool) {
     println!();
     println!("## {group}");
 
-    let raw = measure_raw(force_conflict);
-    let result_only = measure_result_executor(benchmark_executor(), force_conflict);
-    let report_only = measure_executor(benchmark_executor(), CasHooks::new(), force_conflict);
-    let event_empty = measure_executor(
-        benchmark_executor(),
+    let executors: [_; 5] = array::from_fn(|_| benchmark_executor());
+    let hooks = [
+        CasHooks::new(),
         CasHooks::new().on_event(|_: &CasEvent| {}),
-        force_conflict,
-    );
-    let event_light = measure_executor(benchmark_executor(), light_event_hook(), force_conflict);
-    let event_and_alert_light = measure_executor(benchmark_executor(), light_alert_hooks(), force_conflict);
-
-    print_row("raw_cas_floor", &raw, None, None);
-    print_row("result_only", &result_only, Some(raw.ops_per_sec), None);
-    print_row("report_only", &report_only, Some(raw.ops_per_sec), None);
-    print_row(
+        light_event_hook(),
+        light_alert_hooks(),
+    ];
+    let mut samples: [Vec<BenchResult>; 6] = array::from_fn(|_| Vec::with_capacity(MEASURED_RUNS));
+    for measuring in [false, true] {
+        let rounds = if measuring { MEASURED_RUNS } else { WARMUP_RUNS };
+        for round in 0..rounds {
+            for offset in 0..6 {
+                let variant = (round + offset) % 6;
+                let sample = match variant {
+                    0 => run_raw_sample(force_conflict),
+                    1 => run_result_executor_sample(executors[0].clone(), force_conflict)
+                        .expect("benchmark sample should succeed"),
+                    _ => run_executor_sample(
+                        executors[variant - 1].clone(),
+                        hooks[variant - 2].clone(),
+                        force_conflict,
+                    )
+                    .expect("benchmark sample should succeed"),
+                };
+                if measuring {
+                    samples[variant].push(sample);
+                }
+            }
+        }
+    }
+    for values in &mut samples {
+        assert_eq!(values.len(), MEASURED_RUNS);
+        assert!(
+            values
+                .iter()
+                .all(|value| value.ops_per_sec.is_finite() && value.ops_per_sec > 0.0)
+        );
+        values.sort_by(|left, right| left.ops_per_sec.total_cmp(&right.ops_per_sec));
+    }
+    let raw_ops = samples[0][MEASURED_RUNS / 2].ops_per_sec;
+    let report_ops = samples[2][MEASURED_RUNS / 2].ops_per_sec;
+    let names = [
+        "raw_cas_floor",
+        "result_only",
+        "report_only",
         "event_noop_listener",
-        &event_empty,
-        Some(raw.ops_per_sec),
-        Some(report_only.ops_per_sec),
-    );
-    print_row(
         "event_stream_light",
-        &event_light,
-        Some(raw.ops_per_sec),
-        Some(report_only.ops_per_sec),
-    );
-    print_row(
         "event_and_alert_light",
-        &event_and_alert_light,
-        Some(raw.ops_per_sec),
-        Some(report_only.ops_per_sec),
-    );
+    ];
+    for (index, name) in names.into_iter().enumerate() {
+        print_row(
+            name,
+            &samples[index],
+            (index > 0).then_some(raw_ops),
+            (index >= 3).then_some(report_ops),
+        );
+    }
 }
 
 /// Builds the bounded no-delay executor shared by measured workloads.
@@ -81,28 +107,6 @@ fn benchmark_executor() -> CasExecutor<usize, &'static str> {
         .no_delay()
         .build()
         .expect("benchmark retry policy should be valid")
-}
-
-/// Warms the result-only path and returns the median sample throughput.
-fn measure_result_executor(executor: CasExecutor<usize, &'static str>, force_conflict: bool) -> BenchResult {
-    for _ in 0..WARMUP_RUNS {
-        run_result_executor_sample(executor.clone(), force_conflict).expect("benchmark warmup should succeed");
-    }
-
-    let mut samples = Vec::with_capacity(MEASURED_RUNS);
-    let mut last = None;
-    for _ in 0..MEASURED_RUNS {
-        let result =
-            run_result_executor_sample(executor.clone(), force_conflict).expect("benchmark sample should succeed");
-        samples.push(result.ops_per_sec);
-        last = Some(result);
-    }
-
-    let ops_per_sec = median(&mut samples);
-    let mut result = last.expect("at least one benchmark sample should run");
-    result.ops_per_sec = ops_per_sec;
-    result.ns_per_op = 1_000_000_000.0 / ops_per_sec;
-    result
 }
 
 /// Measures result-only calls, including retry bookkeeping and result
@@ -175,28 +179,6 @@ struct BenchResult {
     conflicts: u64,
 }
 
-/// Warms the observed path and reports median throughput across samples.
-fn measure_executor(executor: CasExecutor<usize, &'static str>, hooks: CasHooks, force_conflict: bool) -> BenchResult {
-    for _ in 0..WARMUP_RUNS {
-        run_executor_sample(executor.clone(), hooks.clone(), force_conflict).expect("benchmark warmup should succeed");
-    }
-
-    let mut samples = Vec::with_capacity(MEASURED_RUNS);
-    let mut last = None;
-    for _ in 0..MEASURED_RUNS {
-        let result = run_executor_sample(executor.clone(), hooks.clone(), force_conflict)
-            .expect("benchmark sample should succeed");
-        samples.push(result.ops_per_sec);
-        last = Some(result);
-    }
-
-    let ops_per_sec = median(&mut samples);
-    let mut result = last.expect("at least one benchmark sample should run");
-    result.ops_per_sec = ops_per_sec;
-    result.ns_per_op = 1_000_000_000.0 / ops_per_sec;
-    result
-}
-
 /// Measures observed calls, including report and hook costs.
 fn run_executor_sample(
     executor: CasExecutor<usize, &'static str>,
@@ -247,27 +229,6 @@ fn run_executor_sample(
     })
 }
 
-/// Warms the raw CAS floor and reports median throughput across samples.
-fn measure_raw(force_conflict: bool) -> BenchResult {
-    for _ in 0..WARMUP_RUNS {
-        let _ = run_raw_sample(force_conflict);
-    }
-
-    let mut samples = Vec::with_capacity(MEASURED_RUNS);
-    let mut last = None;
-    for _ in 0..MEASURED_RUNS {
-        let result = run_raw_sample(force_conflict);
-        samples.push(result.ops_per_sec);
-        last = Some(result);
-    }
-
-    let ops_per_sec = median(&mut samples);
-    let mut result = last.expect("at least one benchmark sample should run");
-    result.ops_per_sec = ops_per_sec;
-    result.ns_per_op = 1_000_000_000.0 / ops_per_sec;
-    result
-}
-
 /// Measures raw CAS; the controlled writer forces at most one conflict per
 /// update.
 fn run_raw_sample(force_conflict: bool) -> BenchResult {
@@ -311,24 +272,25 @@ fn run_raw_sample(force_conflict: bool) -> BenchResult {
     }
 }
 
-/// Sorts finite, nonempty samples and returns the middle observation.
-fn median(samples: &mut [f64]) -> f64 {
-    samples.sort_by(|left, right| left.partial_cmp(right).expect("benchmark samples should not be NaN"));
-    samples[samples.len() / 2]
-}
-
-/// Prints one measured path and its optional baseline comparisons.
-fn print_row(name: &'static str, result: &BenchResult, raw_ops: Option<f64>, report_ops: Option<f64>) {
+/// Prints a sorted, nonempty sample set's median, range, and optional baseline
+/// comparisons.
+fn print_row(name: &'static str, samples: &[BenchResult], raw_ops: Option<f64>, report_ops: Option<f64>) {
+    let result = &samples[samples.len() / 2];
+    let minimum = samples.first().expect("nonempty samples").ops_per_sec;
+    let maximum = samples.last().expect("nonempty samples").ops_per_sec;
+    assert!(minimum <= result.ops_per_sec && result.ops_per_sec <= maximum);
     let raw_loss = raw_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     let report_loss = report_ops.map(|baseline| loss_percent(result.ops_per_sec, baseline));
     println!(
-        "{name:24} ops/s={:>10.0} ns/op={:>8.1} avg_attempts={:.3} conflicts={:<8} loss_vs_raw={} loss_vs_report_only={}",
+        "{name:24} ops/s={:>10.0} ns/op={:>8.1} avg_attempts={:.3} conflicts={:<8} loss_vs_raw={} loss_vs_report_only={} ops/s_min={:.0} ops/s_max={:.0}",
         result.ops_per_sec,
         result.ns_per_op,
         result.avg_attempts,
         result.conflicts,
         format_loss(raw_loss),
         format_loss(report_loss),
+        minimum,
+        maximum,
     );
 }
 

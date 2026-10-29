@@ -95,6 +95,8 @@ p50/p95/p99 延迟。它固定运行五轮：每轮从独立 state 开始，并�
 测量指标均汇总为 min/median/max。不会通过无限重试隐藏耗尽的调用。绝对耗时取决于机器，
 不作为共享 CI 的时间门槛。
 
+观测开销基准在九轮正式采样中交错测量六种变体，每轮轮换起始顺序，报告吞吐量中位数及最小/最大范围；耗时仍取决于机器状态。
+
 参阅[用户指南](user_guide.zh_CN.md)。
 
 当前配置通过四个 CAS getter 读取：max_attempts、max_retries、max_operation_elapsed、

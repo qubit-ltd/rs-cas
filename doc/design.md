@@ -129,6 +129,8 @@ presets in a fixed order. Each measured metric is summarized as min/median/max.
 It does not hide exhausted calls behind unbounded retries. Absolute latency is
 machine-specific and not enforced as a shared-CI timing threshold.
 
+The observability-overhead benchmark interleaves six variants over nine measured rounds, rotating their starting order each round. It reports median throughput and its min/max range; timings remain machine-dependent.
+
 See the [user guide](user_guide.md).
 
 Installed configuration is read through four CAS getters: max_attempts,
