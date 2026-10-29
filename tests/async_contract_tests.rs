@@ -448,3 +448,55 @@ async fn test_timeout_reports_attempt_snapshot_after_external_write() {
         assert_eq!(*state.load(), 9);
     }
 }
+
+#[async_test]
+async fn test_async_identity_contract() {
+    for path in 0..3 {
+        for restore_original in [false, true] {
+            let state = AtomicRef::from_value(3usize);
+            let original = state.load();
+            let replacement = Arc::new(3usize);
+            let calls = AtomicUsize::new(0);
+            let executor = CasExecutor::builder()
+                .max_attempts(1)
+                .no_delay()
+                .build()
+                .expect("valid policy");
+            let state_ref = &state;
+            let original_ref = &original;
+            let replacement_ref = &replacement;
+            let calls_ref = &calls;
+            let (result, report) = run_path(path, &executor, &state, |current| async move {
+                calls_ref.fetch_add(1, Ordering::SeqCst);
+                if restore_original {
+                    state_ref.store(Arc::new(9));
+                    state_ref.store(Arc::clone(original_ref));
+                } else {
+                    state_ref.store(Arc::clone(replacement_ref));
+                }
+                CasDecision::update(*current + 1, 17)
+            })
+            .await;
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            if restore_original {
+                let success = result.expect("restored allocation admits CAS");
+                assert!(Arc::ptr_eq(success.previous().expect("update"), &original));
+                assert!(Arc::ptr_eq(success.current(), &state.load()));
+                assert_eq!(**success.current(), 4);
+                assert_eq!(*success.output(), 17);
+            } else {
+                let error = result.expect_err("equal values have different identities");
+                assert_eq!(error.kind(), CasErrorKind::ConflictExhausted);
+                assert_eq!(error.attempts(), 1);
+                assert!(Arc::ptr_eq(error.current().expect("conflict snapshot"), &replacement));
+                assert!(Arc::ptr_eq(&state.load(), &replacement));
+                assert_eq!(*state.load(), 3);
+            }
+            if let Some(report) = report {
+                assert_eq!(report.attempts_total(), 1);
+                assert_eq!(report.conflicts(), u32::from(!restore_original));
+                assert_eq!(report.retry_errors(), 0);
+            }
+        }
+    }
+}

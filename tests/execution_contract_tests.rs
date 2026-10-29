@@ -287,3 +287,50 @@ fn test_sync_paths_ignore_async_hard_timeouts() {
         }
     }
 }
+
+#[test]
+fn test_sync_identity_contract() {
+    for path in 0..3 {
+        for restore_original in [false, true] {
+            let state = AtomicRef::from_value(3usize);
+            let original = state.load();
+            let replacement = Arc::new(3usize);
+            let calls = AtomicUsize::new(0);
+            let executor = CasExecutor::builder()
+                .max_attempts(1)
+                .no_delay()
+                .build()
+                .expect("valid policy");
+            let (result, report) = run_path(path, &executor, &state, |current| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                if restore_original {
+                    state.store(Arc::new(9));
+                    state.store(Arc::clone(&original));
+                } else {
+                    state.store(Arc::clone(&replacement));
+                }
+                CasDecision::update(*current + 1, 17)
+            });
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            if restore_original {
+                let success = result.expect("restored allocation admits CAS");
+                assert!(Arc::ptr_eq(success.previous().expect("update"), &original));
+                assert!(Arc::ptr_eq(success.current(), &state.load()));
+                assert_eq!(**success.current(), 4);
+                assert_eq!(*success.output(), 17);
+            } else {
+                let error = result.expect_err("equal values have different identities");
+                assert_eq!(error.kind(), CasErrorKind::ConflictExhausted);
+                assert_eq!(error.attempts(), 1);
+                assert!(Arc::ptr_eq(error.current().expect("conflict snapshot"), &replacement));
+                assert!(Arc::ptr_eq(&state.load(), &replacement));
+                assert_eq!(*state.load(), 3);
+            }
+            if let Some(report) = report {
+                assert_eq!(report.attempts_total(), 1);
+                assert_eq!(report.conflicts(), u32::from(!restore_original));
+                assert_eq!(report.retry_errors(), 0);
+            }
+        }
+    }
+}
