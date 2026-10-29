@@ -43,6 +43,7 @@ fn test_report_builder_records_conflicts_and_retry_errors_via_executor() {
     assert_eq!(report.attempts_total(), 3);
     assert_eq!(report.conflicts(), 1);
     assert_eq!(report.retry_errors(), 1);
+    assert_eq!(report.retryable_failure_ratio(), 1.0 / 3.0);
     assert_eq!(report.aborts(), 0);
     assert_eq!(report.timeouts(), 0);
 }
