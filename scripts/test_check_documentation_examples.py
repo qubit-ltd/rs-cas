@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 import tempfile
 import tomllib
 import unittest
@@ -19,7 +20,7 @@ class DocumentationExamplesTests(unittest.TestCase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    def test_manifest_preserves_dependencies_and_replaces_cas_registry_version(self):
+    def test_manifest_preserves_cas_version_and_dependencies(self):
         project = Path("/local/qubit-cas")
         dependencies = {
             "qubit-cas": {"version": "0.12", "features": ["tokio"]},
@@ -29,11 +30,43 @@ class DocumentationExamplesTests(unittest.TestCase):
         self.assertEqual(parsed["dependencies"]["qubit-atomic"], "0.13")
         self.assertEqual(parsed["dependencies"]["qubit-cas"]["features"], ["tokio"])
         self.assertEqual(parsed["dependencies"]["qubit-cas"]["path"], str(project))
-        self.assertNotIn("version", parsed["dependencies"]["qubit-cas"])
+        self.assertEqual(parsed["dependencies"]["qubit-cas"]["version"], "0.12")
 
     def test_cas_simple_string_is_converted(self):
         parsed = tomllib.loads(checker.consumer_manifest(Path("/local/cas"), {"qubit-cas": "0.12"}))
         self.assertEqual(parsed["dependencies"]["qubit-cas"]["path"], "/local/cas")
+        self.assertEqual(parsed["dependencies"]["qubit-cas"]["version"], "0.12")
+
+    def test_cargo_rejects_incompatible_documented_cas_version(self):
+        with tempfile.TemporaryDirectory(prefix="cas-version-contract-") as directory:
+            work = Path(directory)
+            project = work / "cas"
+            (project / "src").mkdir(parents=True)
+            (project / "src" / "lib.rs").write_text("", encoding="utf-8")
+            (project / "Cargo.toml").write_text(
+                '[package]\nname="qubit-cas"\nversion="0.12.2"\nedition="2024"\n'
+                '[workspace]\n', encoding="utf-8"
+            )
+            for index, version in enumerate(("0.12", "999.0")):
+                consumer = work / f"consumer_{index}"
+                (consumer / "src").mkdir(parents=True)
+                (consumer / "src" / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
+                manifest = consumer / "Cargo.toml"
+                manifest.write_text(
+                    checker.consumer_manifest(project, {"qubit-cas": version}),
+                    encoding="utf-8"
+                )
+                result = subprocess.run(
+                    ["cargo", f"+{checker.TOOLCHAIN}", "generate-lockfile", "--offline",
+                     "--manifest-path", str(manifest)],
+                    capture_output=True, text=True, check=False
+                )
+                if version == "0.12":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("qubit-cas", result.stderr)
+                    self.assertIn("999.0", result.stderr)
 
     def test_default_features_false_is_preserved(self):
         dependencies = {"qubit-cas": {"version": "0.12", "default-features": False}}

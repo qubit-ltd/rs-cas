@@ -96,7 +96,6 @@ def consumer_manifest(project: Path, dependencies: dict) -> str:
     if not isinstance(cas, dict):
         raise ValueError("qubit-cas must be a version string or dependency table")
     cas = dict(cas)
-    cas.pop("version", None)
     cas["path"] = str(project)
     dependencies["qubit-cas"] = cas
     lines = [
