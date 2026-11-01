@@ -153,7 +153,11 @@ impl<T, E> CasBuilder<T, E> {
     /// control. It cannot preempt blocking work or roll back external side
     /// effects. The retry policy `max_total_elapsed` setting remains a soft
     /// continuation budget that only controls admission of later attempts.
-    /// Synchronous execution ignores it.
+    /// Synchronous execution ignores it. Within an admitted attempt, a ready
+    /// operation wins when both it and its timeout timer are ready in the same
+    /// poll, even if the operation yielded earlier; this is not a strict
+    /// publication deadline. See the async execution contract documented on
+    /// `CasExecutor::execute_async_result`.
     ///
     /// # Parameters
     /// - `flow_timeout`: `Some` enables the deadline; `None` disables it.
@@ -251,6 +255,11 @@ impl<T, E> CasBuilder<T, E> {
     /// - `attempt_timeout`: `Some` enables a cooperative async deadline; `None`
     ///   disables it. Synchronous calls ignore it; blocking operation code
     ///   cannot be preempted, and cancellation does not undo side effects.
+    ///   Within an admitted attempt, a ready operation wins when both it and
+    ///   the timeout timer are ready in the same poll, even if it yielded
+    ///   earlier; the deadline is not a strict publication cutoff. See the
+    ///   async execution contract documented on
+    ///   `CasExecutor::execute_async_result`.
     ///
     /// # Returns
     /// The updated builder.

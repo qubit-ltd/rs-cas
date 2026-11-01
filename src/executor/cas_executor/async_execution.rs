@@ -43,6 +43,10 @@ impl<T, E> CasExecutor<T, E> {
     /// # Cancellation
     /// Dropping the future drops the in-flight operation without rolling back
     /// committed state or external effects. Timeouts require yielding futures.
+    /// Within an admitted attempt, a ready operation wins when both it and its
+    /// timeout timer are ready in the same poll, even if the operation yielded
+    /// earlier. A deadline is therefore not a strict cutoff for state
+    /// publication. See [`Self::execute_async_result`] for the full contract.
     ///
     /// The returned future must be polled from within an entered Tokio runtime.
     /// Polling it without one panics before the operation starts. A time driver
@@ -92,6 +96,11 @@ impl<T, E> CasExecutor<T, E> {
     /// Operations must therefore remain safe to retry or cancel. Cancellation
     /// does not roll back committed state or external effects. Hard deadlines
     /// cannot preempt blocking code or futures that never yield.
+    /// Within an admitted attempt, a ready operation wins when both it and its
+    /// timeout timer are ready in the same poll, even if the operation yielded
+    /// earlier. A deadline is therefore not a strict cutoff for state
+    /// publication. If the timeout is selected first, the in-flight operation
+    /// future is dropped and its uncommitted decision is not published.
     ///
     /// The returned future must be polled from within an entered Tokio runtime.
     /// Polling it without one panics before the operation starts. A time driver
@@ -161,6 +170,10 @@ impl<T, E> CasExecutor<T, E> {
     /// # Cancellation
     /// Dropping the future drops the in-flight operation without rolling back
     /// committed state or external effects. Timeouts require yielding futures.
+    /// Within an admitted attempt, a ready operation wins when both it and its
+    /// timeout timer are ready in the same poll, even if the operation yielded
+    /// earlier. A deadline is therefore not a strict cutoff for state
+    /// publication. See [`Self::execute_async_result`] for the full contract.
     ///
     /// The returned future must be polled from within an entered Tokio runtime.
     /// Polling it without one panics before the operation starts. A time driver

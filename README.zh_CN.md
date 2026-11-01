@@ -29,6 +29,7 @@ qubit-atomic = "0.17"
 poll。可用 `#[tokio::main]`，手动构建 runtime 时若使用非零退避或硬超时，则通过
 `.enable_time()` 或 `.enable_all()` 启用 time driver。次数、预算、退避和超时均通过
 `CasExecutor::builder()` 配置，不需要导入底层 retry 类型。
+硬超时是合作式的，不保证严格的状态发布截止时刻；同次 poll 的就绪优先级见[用户指南](doc/user_guide.zh_CN.md)。
 
 ## 快速开始
 

@@ -31,6 +31,8 @@ polled inside an entered Tokio runtime. Use `#[tokio::main]`, or enable the time
 driver with `.enable_time()` / `.enable_all()` in a manually built runtime when
 using nonzero backoff or hard timeouts. Configure attempts, budgets, backoff, and
 timeouts directly on `CasExecutor::builder()`; no retry implementation types are needed.
+Hard timeouts are cooperative and do not guarantee a strict state publication
+cutoff; same-poll readiness precedence is described in the [user guide](doc/user_guide.md).
 
 ## Quick start
 

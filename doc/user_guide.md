@@ -130,6 +130,14 @@ default; `retry_on_timeout()` permits retry. Synchronous entry points ignore
 both hard timeouts. Deadlines are cooperative: blocking calls or futures that
 never yield cannot be preempted reliably.
 
+Within an admitted attempt, a ready operation wins when both the operation and
+its timeout timer are ready in the same poll, even if the operation previously
+yielded. A deadline is therefore not a strict cutoff for state publication. If
+the timeout is selected first, the in-flight operation future is dropped and
+its uncommitted decision is not published; committed state and external side
+effects are not rolled back. This same-poll precedence applies to the operation
+result, not to every failure result returned by the operation.
+
 ## 6. Synchronous and asynchronous execution
 
 Synchronous delays block the calling thread. Async methods require the `tokio`

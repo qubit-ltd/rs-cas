@@ -107,6 +107,11 @@ fn main() {
 `attempt_timeout` 限制单次异步尝试；默认超时终止，`retry_on_timeout()` 则继续重试。
 同步入口忽略这两种硬 timeout。它们依赖 future 让出执行权，不能抢占阻塞调用或持续占用 CPU 的代码。
 
+在已准入的 attempt 中，如果 operation 和超时计时器在同次 poll 中都已就绪，operation 结果优先；
+即使 operation 此前已让出执行权也如此。因此，硬超时不保证截止时刻之后绝不提交状态。若超时
+先被选中，进行中的 operation future 会被丢弃，尚未提交的决策不会发布；已提交状态和外部副作用
+不会回滚。同次 poll 的优先级适用于 operation 结果，不推广到 operation 返回的所有失败结果。
+
 ## 6. 同步与异步执行
 
 同步延迟会阻塞调用线程。异步方法需要 `tokio` feature 才能编译，且其 future 必须在已进入的

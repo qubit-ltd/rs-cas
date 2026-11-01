@@ -82,6 +82,14 @@ and no extra snapshot reference is retained for diagnostics. Finalization receiv
 an owned optional Arc rather than the slot. Dropping the future drops its
 in-flight operation without rolling back committed or external effects.
 
+Within an admitted attempt, a ready operation wins when both the operation and
+its timeout timer are ready in the same poll, even if the operation previously
+yielded. The deadline is therefore not a strict state-publication cutoff. If
+the timeout is selected first, the in-flight operation future is dropped and
+its uncommitted decision is not published. This precedence applies to the
+operation result selected for an admitted attempt; it does not change retry
+controller precedence after a failed attempt.
+
 Attempt timeouts retain the attempt's original snapshot. Backoff timeouts retain
 the last failure. A flow stopped before its first attempt may have no snapshot.
 Finalization never loads a new value to attach to an older failure.

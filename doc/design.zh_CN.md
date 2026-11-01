@@ -60,6 +60,11 @@ Flow timeout 是独立的合作式异步 deadline，覆盖尝试及退避，但�
 未配置 timeout 时既不加这把锁，也不为诊断额外保留快照引用。Finalization 接收
 Option<Arc<T>>，不再接收槽本身。丢弃 future 会丢弃进行中的 operation，不回滚已提交状态或外部效果。
 
+在已准入的 attempt 中，如果 operation 和超时计时器在同次 poll 中都已就绪，operation 结果优先；
+即使 operation 此前已让出执行权也如此。因此，deadline 不是严格的状态发布截止时刻。若超时先被选中，
+进行中的 operation future 会被丢弃，尚未提交的决策不会发布。该优先级适用于已准入 attempt 选出的
+operation 结果，不改变 attempt 失败后 retry controller 的优先级。
+
 尝试超时保留该次开始时的快照；退避超时保留已有失败；第一次尝试前停止可以没有快照。
 终止时不会重新读取状态，避免把新快照和旧错误拼在一起。
 
