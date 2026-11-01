@@ -17,6 +17,7 @@ mod support;
 
 // Public contracts share one harness; allocation counting remains thread-local.
 mod allocation_tests;
+mod async_concurrency_tests;
 mod async_contract_tests;
 mod cas_concurrency_tests;
 mod cas_decision_tests;
