@@ -27,6 +27,7 @@ use qubit_cas::CasDecision;
 use qubit_cas::CasError;
 use qubit_cas::CasErrorKind;
 use qubit_cas::CasEvent;
+use qubit_cas::CasExecutionOutcome;
 use qubit_cas::CasExecutionReport;
 use qubit_cas::CasExecutor;
 use qubit_cas::CasHooks;
@@ -36,6 +37,7 @@ use qubit_cas::CasTermination;
 use qubit_cas::CasTimeoutScope;
 use tokio::runtime::Builder as RuntimeBuilder;
 use tokio::test as async_test;
+use tokio::time::advance;
 use tokio::time::sleep;
 
 type ExecutionResult = Result<CasSuccess<usize, usize>, CasError<usize, &'static str>>;
@@ -248,6 +250,51 @@ async fn test_flow_timeout_during_attempt_and_backoff_preserves_precedence() {
                 if let Some(report) = report {
                     assert_eq!(report.attempts_total(), 1);
                     assert_eq!(report.timeouts(), u32::from(!in_backoff));
+                }
+            }
+        }
+    }
+}
+
+#[async_test(start_paused = true)]
+async fn test_ready_update_wins_when_timeout_is_also_ready() {
+    for path in 0..3 {
+        for flow in [false, true] {
+            for operation_ms in [10, 20] {
+                let state = AtomicRef::from_value(0usize);
+                let builder = CasExecutor::<usize, &'static str>::builder().max_attempts(1).no_delay();
+                let executor = if flow {
+                    builder.flow_timeout(Some(Duration::from_millis(10)))
+                } else {
+                    builder.attempt_timeout(Some(Duration::from_millis(10)))
+                }
+                .build()
+                .expect("valid timeout");
+                let mut execution = Box::pin(run_path(path, &executor, &state, |current| async move {
+                    sleep(Duration::from_millis(operation_ms)).await;
+                    CasDecision::update(*current + 1, *current)
+                }));
+                poll_fn(|cx| {
+                    assert!(execution.as_mut().poll(cx).is_pending());
+                    Poll::Ready(())
+                })
+                .await;
+                assert_eq!(*state.load(), 0);
+                advance(Duration::from_millis(30)).await;
+                let (result, report) = execution.await;
+                let success = result.expect("ready operation wins the same-poll selection");
+                assert!(success.is_updated());
+                assert_eq!(success.attempts(), 1);
+                assert_eq!(**success.previous().expect("update has previous"), 0);
+                assert_eq!(**success.current(), 1);
+                assert_eq!(*success.output(), 0);
+                assert!(Arc::ptr_eq(success.current(), &state.load()));
+                if let Some(report) = report {
+                    assert_eq!(report.attempts_total(), 1);
+                    assert_eq!(report.timeouts(), 0);
+                    assert_eq!(report.conflicts(), 0);
+                    assert_eq!(report.outcome(), CasExecutionOutcome::SuccessUpdated);
+                    assert!(report.listener_failures().is_empty());
                 }
             }
         }
