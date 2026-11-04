@@ -123,9 +123,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-atomic"
-version = "0.17.5"
+version = "0.17.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2be5134864214bfd29520a31886c73888f0acb6a5aec760e15e2879c4fe5e4cf"
+checksum = "0191db411154909cb3da413242f18302042afe2d4594f9a8c07d01f74e5d0e12"
 dependencies = [
  "arc-swap",
  "portable-atomic",
@@ -133,9 +133,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-budget"
-version = "0.7.3"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac4f70174f2710e72f5b14ad20157c6b31255be0057dee76cf3b55af07708b34"
+checksum = "73e47093e3478946ba918c37151909c72c75a0167b85a9ec5536ceaa07c24039"
 dependencies = [
  "qubit-clock",
  "thiserror",
@@ -155,9 +155,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-clock"
-version = "0.13.3"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "127b9c860cc779d2f85212928fa0be9101061f22dead534239c8d5b078348fc6"
+checksum = "db8c595aaaff328771103f3efa10a142ef78720a06567e7c6d3ed53f2cfbb4ca"
 dependencies = [
  "pin-project-lite",
  "qubit-collections",
@@ -167,30 +167,30 @@ dependencies = [
 
 [[package]]
 name = "qubit-collections"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6008a274d2b2eb33c6039d34925f5e35235a9e1f9441e351d379fcd766d2e4e4"
+checksum = "b35d268dde323d67cc884be0e986bdf1786766f3eb7fb7323d6636cbd632a901"
 dependencies = [
  "hashbrown",
 ]
 
 [[package]]
 name = "qubit-error"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed10a05a65f3e81328fab4e6841e99ca2a3d36bb329f4b5b1f00202474533aae"
+checksum = "a707b422c7296d9f35ed46230eb2d5c35fa84692f28b9e6114c0931af424e99a"
 
 [[package]]
 name = "qubit-function"
-version = "0.18.2"
+version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85ecbcd7a633f174d5d093830957c9d40eb8f6c7b90740f26f4049a5430eca33"
+checksum = "8af480e91640a3cf6658dbed2a24c7c97aaeae5fd3a43894beffa64b94310d22"
 
 [[package]]
 name = "qubit-retry"
-version = "0.26.0"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84286aee1cde9a49e1d050eb1792c76919a522081b83c76167a1299ea8a46d23"
+checksum = "a144a21545e1cf95ccff7a2e96e05413b96c12ec8913cc248b1824f9d00a2bf2"
 dependencies = [
  "fastrand",
  "qubit-budget",
