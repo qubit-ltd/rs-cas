@@ -93,9 +93,12 @@ fn test_contention_registration_replaces_callback_and_thresholds() {
             },
             hooks,
         );
-    assert!(outcome.is_err());
+    assert!(outcome.is_err(), "forced conflicts should exhaust the retry limit");
     assert_eq!(observed.load(Ordering::SeqCst), 1);
-    assert!(outcome.report().listener_failures().is_empty());
+    assert!(
+        outcome.report().listener_failures().is_empty(),
+        "contention callbacks should complete without listener failures"
+    );
 }
 
 #[test]
@@ -123,10 +126,13 @@ fn test_contention_alerts_require_registration_and_all_thresholds() {
                 },
                 hooks,
             );
-        assert!(outcome.is_err());
+        assert!(outcome.is_err(), "forced conflicts should exhaust the retry limit");
         assert_eq!(outcome.report().conflicts(), 3);
         assert_eq!(observed.load(Ordering::SeqCst), 0);
-        assert!(outcome.report().listener_failures().is_empty());
+        assert!(
+            outcome.report().listener_failures().is_empty(),
+            "registration state {registered} should not cause listener failures"
+        );
     }
 }
 
@@ -165,7 +171,7 @@ fn test_alert_snapshot_and_schedule_context_describe_the_same_execution() {
         hooks,
     );
     let report = outcome.report();
-    assert!(outcome.is_ok());
+    assert!(outcome.is_ok(), "the update should succeed after one conflict");
     assert_eq!(report.attempts_total(), 2);
     assert_eq!(report.conflicts(), 1);
     assert_eq!(report.aborts(), 0);
@@ -174,7 +180,10 @@ fn test_alert_snapshot_and_schedule_context_describe_the_same_execution() {
         report.elapsed(),
         report.finished_at().duration_since(report.started_at())
     );
-    assert!(report.listener_failures().is_empty());
+    assert!(
+        report.listener_failures().is_empty(),
+        "alert and schedule callbacks should complete without listener failures"
+    );
     let alerts = alerts.lock().expect("alerts");
     assert_eq!(alerts.len(), 1);
     assert_eq!(alerts[0].thresholds(), thresholds);
@@ -185,5 +194,8 @@ fn test_alert_snapshot_and_schedule_context_describe_the_same_execution() {
     let (context, delay) = scheduled[0];
     assert_eq!(context.next_delay(), Some(delay));
     assert_eq!(delay, Duration::ZERO);
-    assert!(context.total_elapsed() >= context.last_attempt_elapsed());
+    assert!(
+        context.total_elapsed() >= context.last_attempt_elapsed(),
+        "total execution time should include the last attempt"
+    );
 }

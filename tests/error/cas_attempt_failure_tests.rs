@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Public accessor and display contracts for each CAS attempt failure variant.
 
 use std::sync::Arc;
 
@@ -59,5 +60,5 @@ fn test_attempt_failure_accessors_work() {
     assert_eq!(timeout.kind(), CasAttemptFailureKind::Timeout);
     assert_eq!(timeout.error(), None);
     assert_eq!(**timeout.current(), 7);
-    assert!(timeout.to_string().contains("timed out"));
+    assert_eq!(timeout.to_string(), "CAS attempt timed out");
 }

@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+//! Shared helper types for the integration test harness.
+
 mod non_clone_value;
 mod test_error;
 

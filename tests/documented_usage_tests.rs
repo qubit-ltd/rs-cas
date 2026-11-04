@@ -24,13 +24,23 @@ fn test_inventory_example_retains_business_errors() {
             }
         })
         .expect("stock available");
-    assert_eq!(*first.output(), 0);
+    assert_eq!(*first.output(), 0, "the purchase should consume the last item");
     let error = cas
         .execute_result(&stock, |_: &usize| {
             CasDecision::<usize, (), &'static str>::abort("out of stock")
         })
         .expect_err("stock exhausted");
-    assert_eq!(error.error(), Some(&"out of stock"));
-    assert!(error.diagnostic().is_none());
-    assert!(error.completion_diagnostics().is_empty());
+    assert_eq!(
+        error.error(),
+        Some(&"out of stock"),
+        "aborting should retain the original business error"
+    );
+    assert!(
+        error.diagnostic().is_none(),
+        "a business abort should not produce an execution diagnostic"
+    );
+    assert!(
+        error.completion_diagnostics().is_empty(),
+        "a business abort should not produce completion diagnostics"
+    );
 }

@@ -18,6 +18,11 @@ use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
 use qubit_cas::CasExecutor;
 
+/// Records which snapshot produced a non-cloneable output and counts its
+/// release.
+///
+/// The shared counter distinguishes disposal of a conflicted attempt from the
+/// caller's eventual release of the committed output.
 struct DropTrackedOutput {
     attempt_snapshot: usize,
     drops: Arc<AtomicUsize>,

@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+//! Public success-result contracts for snapshot sharing and variant accessors.
+
 use std::sync::Arc;
 
 use qubit_atomic::AtomicRef;
@@ -33,18 +35,25 @@ fn test_success_clone_preserves_non_clone_snapshot_identity() {
         .expect("finish succeeds");
     for success in [updated, finished] {
         let cloned = success.clone();
-        assert_eq!(cloned.is_updated(), success.is_updated());
-        assert!(Arc::ptr_eq(cloned.current(), success.current()));
+        assert_eq!(
+            cloned.is_updated(),
+            success.is_updated(),
+            "clone preserves the success variant"
+        );
+        assert!(
+            Arc::ptr_eq(cloned.current(), success.current()),
+            "clone shares the current snapshot"
+        );
         if let Some(previous) = success.previous() {
-            assert!(Arc::ptr_eq(
-                cloned.previous().expect("updated retains previous"),
-                previous
-            ));
+            assert!(
+                Arc::ptr_eq(cloned.previous().expect("updated retains previous"), previous),
+                "clone shares the previous snapshot"
+            );
         } else {
-            assert!(cloned.previous().is_none());
+            assert!(cloned.previous().is_none(), "finished clone has no previous snapshot");
         }
-        assert_eq!(cloned.output(), success.output());
-        assert_eq!(cloned.context(), success.context());
+        assert_eq!(cloned.output(), success.output(), "clone preserves business output");
+        assert_eq!(cloned.context(), success.context(), "clone preserves retry context");
     }
 }
 
@@ -59,14 +68,28 @@ fn test_success_accessors_cover_updated_and_finished_variants() {
     let updated = executor
         .execute(&state, |current: &usize| CasDecision::update(*current + 1, "updated"))
         .expect("update should succeed");
-    assert!(updated.previous().is_some());
-    assert_eq!(updated.clone().into_output(), "updated");
+    assert!(
+        updated.previous().is_some(),
+        "updated success retains a previous snapshot"
+    );
+    assert_eq!(
+        updated.clone().into_output(),
+        "updated",
+        "updated success yields its business output"
+    );
 
     let finished = executor
         .execute(&state, |_current: &usize| {
             CasDecision::<usize, &'static str, &'static str>::finish("finished")
         })
         .expect("finish should succeed");
-    assert!(finished.previous().is_none());
-    assert_eq!(finished.into_output(), "finished");
+    assert!(
+        finished.previous().is_none(),
+        "finished success has no previous snapshot"
+    );
+    assert_eq!(
+        finished.into_output(),
+        "finished",
+        "finished success yields its business output"
+    );
 }

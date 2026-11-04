@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use std::error::Error;
+use std::io::Error as IoError;
+use std::mem::discriminant;
 use std::sync::Arc;
 
 use qubit_atomic::AtomicRef;
@@ -33,13 +35,19 @@ fn test_default_boxed_error_preserves_business_source() {
     let executor: CasExecutor<usize> = CasBuilder::<usize>::new().build().expect("valid builder");
     let error = executor
         .execute_result(&state, |_: &usize| {
-            CasDecision::<usize, (), _>::abort(CasBoxError::new(Box::new(std::io::Error::other("business failure"))))
+            CasDecision::<usize, (), _>::abort(CasBoxError::new(Box::new(IoError::other("business failure"))))
         })
         .expect_err("abort must fail");
     let wrapper = error.source().expect("terminal error retains wrapper");
-    assert!(wrapper.is::<CasBoxError>());
+    assert!(
+        wrapper.is::<CasBoxError>(),
+        "terminal source must retain the boxed wrapper"
+    );
     let source = wrapper.source().expect("wrapper retains business source");
-    assert!(source.is::<std::io::Error>());
+    assert!(
+        source.is::<IoError>(),
+        "business source must retain its concrete error type"
+    );
     assert_eq!(source.to_string(), "business failure");
 
     let default_executor = CasExecutor::<usize>::builder().build().expect("valid default builder");
@@ -48,15 +56,18 @@ fn test_default_boxed_error_preserves_business_source() {
 
 #[test]
 fn test_boxed_error_conversion_retains_original_error() {
-    let original: BoxError = Box::new(std::io::Error::other("original error"));
+    let original: BoxError = Box::new(IoError::other("original error"));
     let wrapped = CasBoxError::from(original);
-    assert!(wrapped.as_inner().is::<std::io::Error>());
+    assert!(
+        wrapped.as_inner().is::<IoError>(),
+        "conversion must retain the concrete error type"
+    );
     assert_eq!(wrapped.to_string(), "original error");
     assert_eq!(format!("{wrapped:?}"), format!("{:?}", wrapped.as_inner()));
     let original = wrapped.into_inner();
     assert_eq!(
         original
-            .downcast::<std::io::Error>()
+            .downcast::<IoError>()
             .expect("concrete error retained")
             .to_string(),
         "original error"
@@ -77,10 +88,13 @@ fn test_error_clone_does_not_require_snapshot_clone() {
     assert_eq!(cloned.kind(), error.kind());
     assert_eq!(cloned.context(), error.context());
     assert_eq!(cloned.error(), error.error());
-    assert!(Arc::ptr_eq(
-        cloned.current().expect("retained snapshot"),
-        error.current().expect("retained snapshot")
-    ));
+    assert!(
+        Arc::ptr_eq(
+            cloned.current().expect("retained snapshot"),
+            error.current().expect("retained snapshot")
+        ),
+        "cloning must share the retained snapshot allocation"
+    );
 }
 
 #[test]
@@ -104,8 +118,11 @@ fn test_attempt_failure_clone_preserves_variants_and_snapshot_identity() {
     ];
     for failure in failures {
         let cloned = failure.clone();
-        assert_eq!(std::mem::discriminant(&cloned), std::mem::discriminant(&failure));
-        assert!(Arc::ptr_eq(cloned.current(), &current));
+        assert_eq!(discriminant(&cloned), discriminant(&failure));
+        assert!(
+            Arc::ptr_eq(cloned.current(), &current),
+            "cloning must share the original snapshot allocation"
+        );
         assert_eq!(cloned.error(), failure.error());
     }
 }

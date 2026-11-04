@@ -13,6 +13,7 @@ use std::future::pending;
 use std::future::poll_fn;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
+use std::pin::pin;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -48,7 +49,7 @@ fn test_async_paths_require_entered_tokio_runtime() {
         let state = AtomicRef::from_value(7usize);
         let executor = CasExecutor::builder().build().expect("valid policy");
         let calls = AtomicUsize::new(0);
-        let mut future = std::pin::pin!(run_path(path, &executor, &state, |_| {
+        let mut future = pin!(run_path(path, &executor, &state, |_| {
             calls.fetch_add(1, Ordering::SeqCst);
             async { CasDecision::finish(17) }
         }));

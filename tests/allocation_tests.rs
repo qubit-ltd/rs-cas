@@ -36,6 +36,8 @@ thread_local! {
     static ALLOCS: Cell<usize> = const { Cell::new(0) };
 }
 
+/// Forwards to the system allocator while counting explicit thread-local
+/// windows.
 struct CountingAllocator;
 
 /// Records allocations only inside the current thread's explicit window.
@@ -113,8 +115,12 @@ fn test_sync_allocation_measurements() {
         getter_allocations, 0,
         "configuration reads must not initialize execution state"
     );
-    assert_eq!((attempts, retries), (5, 4));
-    assert_eq!((operation_budget, total_budget), (None, None));
+    assert_eq!((attempts, retries), (5, 4), "default retry limits must be preserved");
+    assert_eq!(
+        (operation_budget, total_budget),
+        (None, None),
+        "elapsed-time budgets must be disabled by default"
+    );
     let state = AtomicRef::from_value(0usize);
     let (first, cold) = allocations(|| executor.execute_result(&state, |_: &usize| CasDecision::finish(())));
     first.expect("first finish");
@@ -152,7 +158,11 @@ fn test_sync_allocation_measurements() {
     let _ = result.expect("rich preallocated update");
     let (result, rich_update) = allocations(|| executor.execute(&state, |_: &usize| CasDecision::update(4, ())));
     let _ = result.expect("rich owned update");
-    assert_eq!(rich_update, rich_update_arc + 1);
+    assert_eq!(
+        rich_update,
+        rich_update_arc + 1,
+        "rich owned updates allocate exactly their additional Arc"
+    );
     println!("sync,rich_update_arc={rich_update_arc},rich_update={rich_update}");
 
     let attempts = Cell::new(0);
@@ -166,7 +176,11 @@ fn test_sync_allocation_measurements() {
             CasDecision::update(*current + 1, ())
         })
     });
-    assert_eq!(result.expect("conflict retry").attempts(), 2);
+    assert_eq!(
+        result.expect("conflict retry").attempts(),
+        2,
+        "one injected conflict must require exactly one retry"
+    );
     println!("sync,one_conflict={conflict}");
 }
 

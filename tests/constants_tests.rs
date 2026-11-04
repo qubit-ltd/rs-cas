@@ -24,6 +24,7 @@ use qubit_cas::constants::RELIABILITY_FIRST_MAX_ATTEMPTS;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_DELAY;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_ELAPSED;
 use qubit_cas::constants::RELIABILITY_FIRST_MAX_TOTAL_ELAPSED;
+
 #[test]
 fn test_cas_constants_match_strategy_budgets() {
     assert_eq!(DEFAULT_CAS_MAX_ATTEMPTS, 5);
@@ -49,7 +50,16 @@ fn test_cas_constants_match_strategy_budgets() {
 
 #[test]
 fn test_total_elapsed_budgets_exceed_operation_budgets() {
-    assert!(LATENCY_FIRST_MAX_TOTAL_ELAPSED > LATENCY_FIRST_MAX_ELAPSED);
-    assert!(CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED > CONTENTION_BACKOFF_MAX_ELAPSED);
-    assert!(RELIABILITY_FIRST_MAX_TOTAL_ELAPSED > RELIABILITY_FIRST_MAX_ELAPSED);
+    assert!(
+        LATENCY_FIRST_MAX_TOTAL_ELAPSED > LATENCY_FIRST_MAX_ELAPSED,
+        "latency-first total elapsed budget must exceed its operation budget"
+    );
+    assert!(
+        CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED > CONTENTION_BACKOFF_MAX_ELAPSED,
+        "contention-backoff total elapsed budget must exceed its operation budget"
+    );
+    assert!(
+        RELIABILITY_FIRST_MAX_TOTAL_ELAPSED > RELIABILITY_FIRST_MAX_ELAPSED,
+        "reliability-first total elapsed budget must exceed its operation budget"
+    );
 }

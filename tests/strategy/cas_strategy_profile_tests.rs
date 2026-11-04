@@ -6,6 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+//! Verifies that built-in strategy profiles expose their documented preset
+//! values.
+
 use qubit_cas::CasStrategy;
 use qubit_cas::constants::CONTENTION_BACKOFF_MAX_ATTEMPTS;
 use qubit_cas::constants::CONTENTION_BACKOFF_MAX_ELAPSED;
@@ -23,7 +26,7 @@ fn test_cas_strategy_profile_accessors() {
     assert_eq!(latency.max_attempts(), LATENCY_FIRST_MAX_ATTEMPTS);
     assert_eq!(latency.max_operation_elapsed(), LATENCY_FIRST_MAX_ELAPSED);
     assert_eq!(latency.max_total_elapsed(), Some(LATENCY_FIRST_MAX_TOTAL_ELAPSED));
-    assert!(!latency.uses_backoff());
+    assert!(!latency.uses_backoff(), "latency-first profiles must disable backoff");
 
     let contention = CasStrategy::ContentionBackoff.profile();
     assert_eq!(contention.max_attempts(), CONTENTION_BACKOFF_MAX_ATTEMPTS);
@@ -32,7 +35,10 @@ fn test_cas_strategy_profile_accessors() {
         contention.max_total_elapsed(),
         Some(CONTENTION_BACKOFF_MAX_TOTAL_ELAPSED)
     );
-    assert!(contention.uses_backoff());
+    assert!(
+        contention.uses_backoff(),
+        "contention-backoff profiles must enable backoff"
+    );
 
     let reliability = CasStrategy::ReliabilityFirst.profile();
     assert_eq!(reliability.max_attempts(), RELIABILITY_FIRST_MAX_ATTEMPTS);
@@ -41,5 +47,8 @@ fn test_cas_strategy_profile_accessors() {
         reliability.max_total_elapsed(),
         Some(RELIABILITY_FIRST_MAX_TOTAL_ELAPSED)
     );
-    assert!(reliability.uses_backoff());
+    assert!(
+        reliability.uses_backoff(),
+        "reliability-first profiles must enable backoff"
+    );
 }

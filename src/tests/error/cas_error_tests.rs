@@ -47,7 +47,10 @@ fn test_clock_failure_retains_message() {
     assert_eq!(error.kind(), CasErrorKind::RetryInfrastructure);
     let diagnostic = error.diagnostic().expect("clock diagnostic retained");
     assert_eq!(diagnostic.kind(), CasDiagnosticKind::Clock);
-    assert!(diagnostic.message().contains("clock moved backwards"));
+    assert!(
+        diagnostic.message().contains("clock moved backwards"),
+        "clock failure message must survive projection"
+    );
 }
 
 /// Projects a terminal reason with an independent retained business failure.
@@ -109,8 +112,14 @@ fn test_terminal_reason_precedes_last_business_error() {
         assert_eq!(error.termination(), termination);
         assert_eq!(error.error(), Some(&"business"));
         assert_eq!(**error.current().expect("retained snapshot"), 4);
-        assert!(error.diagnostic().is_none());
-        assert!(error.completion_diagnostics().is_empty());
+        assert!(
+            error.diagnostic().is_none(),
+            "ordinary termination must not create an infrastructure diagnostic"
+        );
+        assert!(
+            error.completion_diagnostics().is_empty(),
+            "projection must not invent completion failures"
+        );
     }
 }
 
@@ -125,9 +134,15 @@ fn test_cancellation_phases_and_timer_messages_survive_projection() {
         let error = project(RetryErrorReason::Cancelled { phase });
         let diagnostic = error.diagnostic().expect("cancellation diagnostic");
         assert_eq!(diagnostic.kind(), CasDiagnosticKind::Cancellation);
-        assert!(diagnostic.message().contains(&expected));
+        assert!(
+            diagnostic.message().contains(&expected),
+            "projected diagnostic must retain {expected}"
+        );
         assert_eq!(diagnostic.to_string(), diagnostic.message());
-        assert!(error.to_string().contains(diagnostic.message()));
+        assert!(
+            error.to_string().contains(diagnostic.message()),
+            "error display must include the retained diagnostic"
+        );
         assert_eq!(error.termination(), CasTermination::RetryInfrastructure);
     }
     let error = project(RetryErrorReason::Infrastructure {
@@ -137,8 +152,14 @@ fn test_cancellation_phases_and_timer_messages_survive_projection() {
     });
     let diagnostic = error.diagnostic().expect("timer diagnostic");
     assert_eq!(diagnostic.kind(), CasDiagnosticKind::Timer);
-    assert!(diagnostic.message().contains("timer unavailable"));
-    assert!(format!("{error:?}").contains("timer unavailable"));
+    assert!(
+        diagnostic.message().contains("timer unavailable"),
+        "timer failure message must survive projection"
+    );
+    assert!(
+        format!("{error:?}").contains("timer unavailable"),
+        "debug output must retain the timer failure"
+    );
 }
 
 #[test]
@@ -157,7 +178,10 @@ fn test_callback_attribution_and_completion_order_are_retained() {
             let error = project(RetryErrorReason::CallbackFailed { callback: failure });
             let diagnostic = error.diagnostic().expect("callback diagnostic");
             assert_eq!(diagnostic.kind(), CasDiagnosticKind::Callback);
-            assert!(diagnostic.message().contains(&expected));
+            assert!(
+                diagnostic.message().contains(&expected),
+                "projected diagnostic must retain {expected}"
+            );
         }
     }
     let failures = vec![
@@ -189,9 +213,15 @@ fn test_callback_attribution_and_completion_order_are_retained() {
         .collect::<Vec<_>>();
     assert_eq!(actual, expected);
     assert_eq!(error.clone().completion_diagnostics(), error.completion_diagnostics());
-    assert!(error.to_string().contains("first callback"));
-    assert!(error.to_string().contains("non-string panic payload"));
-    assert!(error.current().is_none());
+    assert!(
+        error.to_string().contains("first callback"),
+        "error display must retain the first completion failure"
+    );
+    assert!(
+        error.to_string().contains("non-string panic payload"),
+        "error display must retain the non-string panic category"
+    );
+    assert!(error.current().is_none(), "an absent snapshot must remain absent");
 }
 
 #[test]

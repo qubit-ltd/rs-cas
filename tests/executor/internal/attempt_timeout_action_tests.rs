@@ -61,7 +61,11 @@ async fn test_retry_on_timeout_continues_execution() {
         .await
         .expect("retry-on-timeout should allow the second attempt");
 
-    assert_eq!(success.attempts(), 2);
+    assert_eq!(
+        success.attempts(),
+        2,
+        "retry-on-timeout should succeed on the second attempt"
+    );
 }
 
 /// Verifies abort-on-timeout terminates the execution after the first timeout.
@@ -85,6 +89,14 @@ async fn test_abort_on_timeout_terminates_execution() {
         .await
         .expect_err("abort-on-timeout should return an error");
 
-    assert_eq!(error.kind(), CasErrorKind::AttemptTimeout);
-    assert_eq!(error.attempts(), 1);
+    assert_eq!(
+        error.kind(),
+        CasErrorKind::AttemptTimeout,
+        "abort-on-timeout should report an attempt timeout"
+    );
+    assert_eq!(
+        error.attempts(),
+        1,
+        "abort-on-timeout should stop after the first attempt"
+    );
 }

@@ -24,16 +24,16 @@ fn test_outcome_reports_success_updated() {
         .expect("executor should build");
 
     let outcome = executor.execute(&state, |current: &usize| CasDecision::update(*current + 1, ()));
-    assert!(outcome.is_ok());
-    assert!(!outcome.is_err());
-    assert!(outcome.result().is_ok());
+    assert!(outcome.is_ok(), "successful update should report success");
+    assert!(!outcome.is_err(), "successful update should not report an error");
+    assert!(outcome.result().is_ok(), "borrowed update result should be successful");
     let report = outcome.report().clone();
     let (result, report_from_parts) = outcome.clone().into_parts();
     let success = outcome.expect("execution should succeed");
 
     assert_eq!(report.outcome(), CasExecutionOutcome::SuccessUpdated);
     assert_eq!(report_from_parts.outcome(), CasExecutionOutcome::SuccessUpdated);
-    assert!(result.is_ok());
+    assert!(result.is_ok(), "decomposed update result should be successful");
     assert_eq!(success.into_output(), ());
 }
 
@@ -50,14 +50,17 @@ fn test_outcome_reports_retry_exhausted() {
     let outcome = executor.execute(&state, |_current: &usize| {
         CasDecision::<usize, (), TestError>::retry(TestError("busy"))
     });
-    assert!(!outcome.is_ok());
-    assert!(outcome.is_err());
-    assert!(outcome.result().is_err());
+    assert!(!outcome.is_ok(), "retry exhaustion should not report success");
+    assert!(outcome.is_err(), "retry exhaustion should report an error");
+    assert!(
+        outcome.result().is_err(),
+        "borrowed exhausted result should be an error"
+    );
     let report = outcome.report().clone();
     let result = outcome.clone().into_result();
     let error = outcome.expect_err("retry exhaustion should fail");
 
-    assert!(result.is_err());
+    assert!(result.is_err(), "consumed exhausted result should be an error");
     assert_eq!(error.kind(), CasErrorKind::RetryExhausted);
     assert_eq!(report.outcome(), CasExecutionOutcome::ErrorRetryExhausted);
 }

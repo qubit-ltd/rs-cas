@@ -11,6 +11,7 @@ use std::fmt;
 
 /// Error type used by CAS tests.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
 pub(crate) struct TestError(pub(crate) &'static str);
 
 impl fmt::Display for TestError {

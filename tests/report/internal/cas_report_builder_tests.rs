@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+//! Verifies report accumulation through the public executor API.
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -39,11 +41,27 @@ fn test_report_builder_records_conflicts_and_retry_errors_via_executor() {
     });
     let report = outcome.report();
 
-    assert_eq!(report.outcome(), CasExecutionOutcome::SuccessFinished);
-    assert_eq!(report.attempts_total(), 3);
-    assert_eq!(report.conflicts(), 1);
-    assert_eq!(report.retry_errors(), 1);
-    assert_eq!(report.retryable_failure_ratio(), 1.0 / 3.0);
-    assert_eq!(report.aborts(), 0);
-    assert_eq!(report.timeouts(), 0);
+    assert_eq!(
+        report.outcome(),
+        CasExecutionOutcome::SuccessFinished,
+        "the third attempt should finish successfully",
+    );
+    assert_eq!(report.attempts_total(), 3, "the report should count all three attempts",);
+    assert_eq!(
+        report.conflicts(),
+        1,
+        "the first attempt should record one publication conflict",
+    );
+    assert_eq!(
+        report.retry_errors(),
+        1,
+        "the second attempt should record one retryable error",
+    );
+    assert_eq!(
+        report.retryable_failure_ratio(),
+        1.0 / 3.0,
+        "one of the three attempts should be a retryable business failure",
+    );
+    assert_eq!(report.aborts(), 0, "the execution should not record an abort",);
+    assert_eq!(report.timeouts(), 0, "the execution should not record a timeout",);
 }

@@ -5,9 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Public CAS outcome accessors, formatting, and generic-bound contracts.
 
 use std::error::Error;
 use std::fmt;
+use std::sync::Arc;
 
 use qubit_atomic::AtomicRef;
 use qubit_cas::CasDecision;
@@ -70,7 +72,7 @@ fn test_outcome_clone_accepts_non_clone_snapshot_for_success_and_error() {
         assert_eq!(cloned.report().attempts_total(), outcome.report().attempts_total());
         match (cloned.into_result(), outcome.into_result()) {
             (Ok(cloned), Ok(original)) => {
-                assert!(std::sync::Arc::ptr_eq(cloned.current(), original.current()));
+                assert!(Arc::ptr_eq(cloned.current(), original.current()));
                 assert_eq!(cloned.output(), original.output());
             }
             (Err(cloned), Err(original)) => assert_eq!(cloned.error(), original.error()),
@@ -146,6 +148,7 @@ fn test_cas_outcome_expect_accepts_non_debug_error() {
 
 #[test]
 fn test_cas_outcome_debug_accepts_non_debug_error() {
+    // Checks the Debug bound without constructing or formatting a value.
     fn assert_debug<T: fmt::Debug>() {}
     assert_debug::<CasOutcome<usize, usize, NonDebugError>>();
 

@@ -6,10 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+//! Public contracts for CAS decision construction and snapshot-sharing clones.
+
 use std::sync::Arc;
 
 use qubit_cas::CasDecision;
 
+/// Proves that cloning a decision shares its snapshot without requiring
+/// `Clone`.
 #[derive(Debug, PartialEq, Eq)]
 struct NonCloneSnapshot;
 
@@ -24,9 +28,15 @@ fn test_decision_clone_preserves_variants_without_cloning_snapshot() {
     ];
     for decision in decisions {
         let cloned = decision.clone();
-        assert_eq!(cloned, decision);
+        assert_eq!(
+            cloned, decision,
+            "cloning must preserve the decision variant and payload"
+        );
         if let CasDecision::Update { next: cloned_next, .. } = cloned {
-            assert!(Arc::ptr_eq(&cloned_next, &next));
+            assert!(
+                Arc::ptr_eq(&cloned_next, &next),
+                "cloning an update must share its snapshot allocation"
+            );
         }
     }
 }
@@ -40,18 +50,33 @@ fn test_decision_constructors_create_expected_variants() {
             next: actual_next,
             output,
         } => {
-            assert!(Arc::ptr_eq(&actual_next, &next));
-            assert_eq!(output, "ok");
+            assert!(
+                Arc::ptr_eq(&actual_next, &next),
+                "update_arc must retain the supplied snapshot allocation"
+            );
+            assert_eq!(output, "ok", "update_arc must retain its business output");
         }
         other => panic!("expected update decision, got {other:?}"),
     }
 
     let finish = CasDecision::<usize, &'static str, &'static str>::finish("done");
-    assert_eq!(finish, CasDecision::Finish { output: "done" });
+    assert_eq!(
+        finish,
+        CasDecision::Finish { output: "done" },
+        "finish must construct a successful decision without an update"
+    );
 
     let retry = CasDecision::<usize, &'static str, &'static str>::retry("retry");
-    assert_eq!(retry, CasDecision::Retry("retry"));
+    assert_eq!(
+        retry,
+        CasDecision::Retry("retry"),
+        "retry must retain the retryable business failure"
+    );
 
     let abort = CasDecision::<usize, &'static str, &'static str>::abort("abort");
-    assert_eq!(abort, CasDecision::Abort("abort"));
+    assert_eq!(
+        abort,
+        CasDecision::Abort("abort"),
+        "abort must retain the terminal business failure"
+    );
 }

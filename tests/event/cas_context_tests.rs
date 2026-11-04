@@ -40,7 +40,7 @@ fn test_success_context_accessors_work() {
         })
         .expect("finish should succeed");
 
-    assert!(!success.is_updated());
+    assert!(!success.is_updated(), "finishing should leave the state unchanged");
     assert_eq!(*success.current().as_ref(), 5);
     assert_eq!(success.output().value, "ready");
     assert_eq!(success.context().attempts(), 1);
@@ -60,7 +60,10 @@ fn test_success_context_accessors_work() {
     );
     assert_eq!(success.context().max_operation_elapsed(), None);
     assert_eq!(success.context().max_total_elapsed(), None);
-    assert!(success.context().total_elapsed() >= success.context().last_attempt_elapsed());
+    assert!(
+        success.context().total_elapsed() >= success.context().last_attempt_elapsed(),
+        "total elapsed time should include the last attempt"
+    );
     assert_eq!(success.context().current_attempt_timeout(), None);
     assert_eq!(success.context().next_delay(), None);
 }
@@ -93,7 +96,10 @@ fn test_bounded_context_accessors_work() {
     assert_eq!(context.max_retries(), 3);
     assert_eq!(context.max_operation_elapsed(), Some(Duration::from_secs(2)));
     assert_eq!(context.max_total_elapsed(), Some(Duration::from_secs(3)));
-    assert!(context.total_elapsed() >= context.last_attempt_elapsed());
+    assert!(
+        context.total_elapsed() >= context.last_attempt_elapsed(),
+        "bounded execution total elapsed time should include the last attempt"
+    );
     assert_eq!(context.current_attempt_timeout(), None);
     assert_eq!(context.next_delay(), None);
 }

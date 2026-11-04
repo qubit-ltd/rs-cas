@@ -5,6 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Public executor contracts for builder validation, retry limits, and flow
+//! timeouts.
+
 #[cfg(feature = "tokio")]
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,7 +32,10 @@ fn test_builder_returns_cas_build_error() {
         .build()
         .expect_err("zero attempts must be rejected");
     assert_eq!(error.field(), "retry_policy");
-    assert!(error.message().contains("attempt"));
+    assert!(
+        error.message().contains("attempt"),
+        "validation must explain the attempt limit"
+    );
 }
 
 #[cfg(feature = "tokio")]
@@ -66,9 +72,18 @@ fn test_random_delay_validation_reports_the_invalid_field() {
         .random_delay(Duration::from_secs(1), Duration::ZERO)
         .build()
         .expect_err("reversed delay bounds");
-    assert!(!invalid.message().is_empty());
-    assert!(invalid.to_string().contains(invalid.field()));
-    assert!(invalid.to_string().contains(invalid.message()));
+    assert!(
+        !invalid.message().is_empty(),
+        "invalid delay bounds must have an explanation"
+    );
+    assert!(
+        invalid.to_string().contains(invalid.field()),
+        "display must identify the invalid field"
+    );
+    assert!(
+        invalid.to_string().contains(invalid.message()),
+        "display must include the validation explanation"
+    );
     let executor = CasExecutor::<usize, ()>::builder()
         .random_delay(Duration::ZERO, Duration::ZERO)
         .build()
@@ -88,14 +103,17 @@ fn test_builder_rejects_invalid_backoff_boundaries() {
     let invalid_random = CasExecutor::<usize, ()>::builder()
         .random_delay(Duration::from_secs(1), Duration::ZERO)
         .build();
-    assert!(invalid_random.is_err());
+    assert!(invalid_random.is_err(), "reversed random delay bounds must be rejected");
 
     for multiplier in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.999] {
         let error = CasExecutor::<usize, ()>::builder()
             .exponential_backoff_with_multiplier(Duration::ZERO, Duration::from_secs(1), multiplier)
             .build()
             .expect_err("invalid multiplier must be rejected");
-        assert!(error.message().contains("multiplier"));
+        assert!(
+            error.message().contains("multiplier"),
+            "validation must identify the invalid multiplier {multiplier}"
+        );
     }
 
     for factor in [
@@ -110,7 +128,10 @@ fn test_builder_rejects_invalid_backoff_boundaries() {
             .jitter_factor(factor)
             .build()
             .expect_err("invalid jitter factor must be rejected");
-        assert!(error.message().contains("jitter"));
+        assert!(
+            error.message().contains("jitter"),
+            "validation must identify the invalid jitter factor {factor}"
+        );
     }
 }
 

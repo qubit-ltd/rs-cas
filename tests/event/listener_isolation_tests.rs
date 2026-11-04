@@ -25,6 +25,8 @@ use qubit_cas::CasListenerKind;
 use qubit_cas::ContentionThresholds;
 
 /// Classifies events for targeted panic injection.
+#[must_use]
+#[inline]
 fn event_kind(event: &CasEvent) -> CasListenerKind {
     match event {
         CasEvent::ExecutionStarted { .. } => CasListenerKind::ExecutionStarted,
@@ -90,7 +92,10 @@ fn test_each_listener_panic_is_retained_without_changing_success() {
             },
             hooks,
         );
-        assert!(outcome.result().is_ok());
+        assert!(
+            outcome.result().is_ok(),
+            "listener failure must preserve business success"
+        );
         assert_eq!(*state.load(), 8);
         assert_eq!(outcome.report().conflicts(), 1);
         assert_eq!(outcome.report().listener_failures().len(), 1);
@@ -125,7 +130,10 @@ fn test_all_listener_panics_preserve_order_and_finished_snapshot() {
             },
             hooks,
         );
-    assert!(outcome.result().is_ok());
+    assert!(
+        outcome.result().is_ok(),
+        "listener failure must preserve business success"
+    );
     assert_eq!(outcome.report().retry_errors(), 1);
     let kinds = outcome
         .report()
@@ -154,7 +162,7 @@ fn test_operation_panic_propagates_and_listener_can_reenter() {
             panic!("operation panic")
         })
     }));
-    assert!(panic.is_err());
+    assert!(panic.is_err(), "business operation panic must propagate");
     assert_eq!(*state.load(), 0);
     let nested_executor = executor.clone();
     let nested_state = Arc::clone(&state);
@@ -169,7 +177,8 @@ fn test_operation_panic_propagates_and_listener_can_reenter() {
         executor
             .execute_with_hooks(&state, |_: &usize| CasDecision::finish(()), hooks)
             .result()
-            .is_ok()
+            .is_ok(),
+        "listener reentry must preserve successful outer execution"
     );
 }
 
@@ -199,7 +208,10 @@ fn test_listener_owned_and_non_string_panics_remain_diagnostic_only() {
                 "non-string panic payload"
             };
             assert_eq!(failure.message(), expected);
-            assert!(failure.to_string().contains(expected));
+            assert!(
+                failure.to_string().contains(expected),
+                "formatted listener failure must retain the panic diagnostic"
+            );
         }
         assert_eq!(outcome.report().listener_failures().len(), 3);
         let failure = outcome
@@ -226,7 +238,10 @@ fn test_execution_finished_payload_drop_panic_is_isolated() {
     }))
     .expect("execution-finished listener payload cleanup must be isolated");
 
-    assert!(outcome.result().is_ok());
+    assert!(
+        outcome.result().is_ok(),
+        "listener failure must preserve business success"
+    );
     assert_eq!(*state.load(), 4);
     assert_eq!(outcome.report().listener_failures().len(), 1);
     assert_eq!(
@@ -260,7 +275,10 @@ fn test_contention_alert_payload_drop_panic_is_isolated() {
     }))
     .expect("contention-alert listener payload cleanup must be isolated");
 
-    assert!(outcome.result().is_ok());
+    assert!(
+        outcome.result().is_ok(),
+        "listener failure must preserve business success"
+    );
     assert_eq!(*state.load(), 8);
     assert_eq!(outcome.report().conflicts(), 1);
     assert_eq!(outcome.report().listener_failures().len(), 1);

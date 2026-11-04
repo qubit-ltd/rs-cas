@@ -34,7 +34,7 @@ fn test_clone_executor_without_clone_state_or_error() {
     let ok = cloned
         .execute_result(&state, |s: &State| CasDecision::finish(s.value))
         .expect("finish succeeds");
-    assert_eq!(*ok.output(), 3);
+    assert_eq!(*ok.output(), 3, "cloned executor must finish with the state value");
 }
 
 /// Compile-time assertion for reusable executor configurations.
@@ -52,7 +52,11 @@ fn test_executor_remains_send_sync_and_shared_between_threads() {
                 let ok = executor
                     .execute_result(&state, |s: &State| CasDecision::finish(s.value))
                     .expect("finish");
-                assert_eq!(*ok.output(), 8);
+                assert_eq!(
+                    *ok.output(),
+                    8,
+                    "shared executor must finish with each thread's state value"
+                );
             });
         }
     });
@@ -77,7 +81,11 @@ fn test_strategy_and_individual_settings_follow_call_order() {
         let error = executor
             .execute_result(&state, |_: &usize| CasDecision::<usize, (), ()>::retry(()))
             .expect_err("retry exhausts");
-        assert_eq!(error.attempts(), if strategy_last { 64 } else { 1 });
+        assert_eq!(
+            error.attempts(),
+            if strategy_last { 64 } else { 1 },
+            "last strategy or max_attempts call must determine the attempt limit"
+        );
     }
     let executor = CasExecutor::<usize, ()>::builder()
         .attempt_timeout(Some(Duration::from_secs(1)))
@@ -85,8 +93,16 @@ fn test_strategy_and_individual_settings_follow_call_order() {
         .strategy(CasStrategy::ContentionBackoff)
         .build()
         .expect("valid timeout policy");
-    assert_eq!(executor.attempt_timeout(), Some(Duration::from_secs(1)));
-    assert_eq!(executor.flow_timeout(), Some(Duration::from_secs(2)));
+    assert_eq!(
+        executor.attempt_timeout(),
+        Some(Duration::from_secs(1)),
+        "strategy selection must preserve the explicit attempt timeout"
+    );
+    assert_eq!(
+        executor.flow_timeout(),
+        Some(Duration::from_secs(2)),
+        "strategy selection must preserve the explicit flow timeout"
+    );
 }
 
 #[test]
@@ -98,33 +114,93 @@ fn test_executor_getters_preserve_installed_limits() {
         .no_delay()
         .build()
         .expect("valid policy");
-    assert_eq!(executor.max_attempts(), 7);
-    assert_eq!(executor.max_retries(), 6);
-    assert_eq!(executor.max_operation_elapsed(), Some(Duration::from_millis(3)));
-    assert_eq!(executor.max_total_elapsed(), Some(Duration::from_millis(9)));
+    assert_eq!(
+        executor.max_attempts(),
+        7,
+        "executor must retain the configured attempt limit"
+    );
+    assert_eq!(
+        executor.max_retries(),
+        6,
+        "retry limit must exclude the initial attempt"
+    );
+    assert_eq!(
+        executor.max_operation_elapsed(),
+        Some(Duration::from_millis(3)),
+        "executor must retain the configured operation deadline"
+    );
+    assert_eq!(
+        executor.max_total_elapsed(),
+        Some(Duration::from_millis(9)),
+        "executor must retain the configured total deadline"
+    );
     let cloned = executor.clone();
-    assert_eq!(cloned.max_attempts(), executor.max_attempts());
-    assert_eq!(cloned.max_retries(), executor.max_retries());
-    assert_eq!(cloned.max_operation_elapsed(), executor.max_operation_elapsed());
-    assert_eq!(cloned.max_total_elapsed(), executor.max_total_elapsed());
+    assert_eq!(
+        cloned.max_attempts(),
+        executor.max_attempts(),
+        "cloning must preserve the attempt limit"
+    );
+    assert_eq!(
+        cloned.max_retries(),
+        executor.max_retries(),
+        "cloning must preserve the retry limit"
+    );
+    assert_eq!(
+        cloned.max_operation_elapsed(),
+        executor.max_operation_elapsed(),
+        "cloning must preserve the operation deadline"
+    );
+    assert_eq!(
+        cloned.max_total_elapsed(),
+        executor.max_total_elapsed(),
+        "cloning must preserve the total deadline"
+    );
 }
 
 #[test]
 fn test_executor_getters_distinguish_defaults_presets_and_overrides() {
     let default = CasExecutor::<usize, ()>::builder().build().expect("defaults");
-    assert_eq!((default.max_attempts(), default.max_retries()), (5, 4));
-    assert_eq!(default.max_operation_elapsed(), None);
-    assert_eq!(default.max_total_elapsed(), None);
+    assert_eq!(
+        (default.max_attempts(), default.max_retries()),
+        (5, 4),
+        "default retry budget must allow five attempts"
+    );
+    assert_eq!(
+        default.max_operation_elapsed(),
+        None,
+        "default configuration must leave operation time unbounded"
+    );
+    assert_eq!(
+        default.max_total_elapsed(),
+        None,
+        "default configuration must leave total time unbounded"
+    );
     let preset = CasExecutor::<usize, ()>::latency_first();
-    assert_eq!((preset.max_attempts(), preset.max_retries()), (100, 99));
-    assert_eq!(preset.max_operation_elapsed(), Some(Duration::from_millis(5)));
-    assert_eq!(preset.max_total_elapsed(), Some(Duration::from_millis(20)));
+    assert_eq!(
+        (preset.max_attempts(), preset.max_retries()),
+        (100, 99),
+        "latency-first preset must allow one hundred attempts"
+    );
+    assert_eq!(
+        preset.max_operation_elapsed(),
+        Some(Duration::from_millis(5)),
+        "latency-first preset must bound operation time to five milliseconds"
+    );
+    assert_eq!(
+        preset.max_total_elapsed(),
+        Some(Duration::from_millis(20)),
+        "latency-first preset must bound total time to twenty milliseconds"
+    );
     let overridden = CasExecutor::<usize, ()>::builder()
         .strategy(CasStrategy::LatencyFirst)
         .max_attempts(1)
         .build()
         .expect("override");
-    assert_eq!((overridden.max_attempts(), overridden.max_retries()), (1, 0));
+    assert_eq!(
+        (overridden.max_attempts(), overridden.max_retries()),
+        (1, 0),
+        "explicit attempt override must replace the preset retry budget"
+    );
 }
 
 #[test]
@@ -151,8 +227,16 @@ fn test_no_delay_replaces_fixed_delay_and_zero_fixed_is_equivalent() {
                     }
                 })
                 .expect("second attempt succeeds");
-            assert_eq!(ok.attempts(), 2);
-            assert_eq!(*ok.output(), 17);
+            assert_eq!(
+                ok.attempts(),
+                2,
+                "no-delay and zero fixed delay must retry exactly once (mode {mode})"
+            );
+            assert_eq!(
+                *ok.output(),
+                17,
+                "all no-delay configurations must preserve the finished output (mode {mode})"
+            );
         }
         sender.send(()).expect("test receiver alive");
     });
@@ -185,12 +269,35 @@ fn test_all_preset_constructors_install_the_advertised_profile() {
         for executor in [direct, built, CasExecutor::<usize, ()>::with_strategy(strategy)] {
             let outcome = executor.execute(&state, |_: &usize| CasDecision::finish(()));
             let report = outcome.report();
-            assert_eq!(report.max_attempts(), profile.max_attempts());
-            assert_eq!(report.max_operation_elapsed(), Some(profile.max_operation_elapsed()));
-            assert_eq!(report.max_total_elapsed(), profile.max_total_elapsed());
-            assert_eq!(report.outcome(), CasExecutionOutcome::SuccessFinished);
-            assert!(format!("{executor:?}").contains("CasExecutor"));
+            assert_eq!(
+                report.max_attempts(),
+                profile.max_attempts(),
+                "constructor must install the advertised attempt limit for {strategy:?}"
+            );
+            assert_eq!(
+                report.max_operation_elapsed(),
+                Some(profile.max_operation_elapsed()),
+                "constructor must install the advertised operation deadline for {strategy:?}"
+            );
+            assert_eq!(
+                report.max_total_elapsed(),
+                profile.max_total_elapsed(),
+                "constructor must install the advertised total deadline for {strategy:?}"
+            );
+            assert_eq!(
+                report.outcome(),
+                CasExecutionOutcome::SuccessFinished,
+                "preset executor must report a finished success for {strategy:?}"
+            );
+            assert!(
+                format!("{executor:?}").contains("CasExecutor"),
+                "executor Debug output must identify its type for {strategy:?}"
+            );
         }
-        assert_eq!(profile.uses_backoff(), strategy != CasStrategy::LatencyFirst);
+        assert_eq!(
+            profile.uses_backoff(),
+            strategy != CasStrategy::LatencyFirst,
+            "only latency-first must disable backoff"
+        );
     }
 }

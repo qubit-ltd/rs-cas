@@ -26,4 +26,3 @@ mod cas_success_tests;
 mod constants_tests;
 mod documented_usage_tests;
 mod execution_contract_tests;
-mod listener_isolation_tests;

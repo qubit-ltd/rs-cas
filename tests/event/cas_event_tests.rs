@@ -57,9 +57,13 @@ fn test_retry_scheduled_requires_remaining_attempts() {
         } else {
             vec!["started", "failed", "scheduled", "finished"]
         };
-        assert_eq!(*events.lock().unwrap(), expected);
-        assert_eq!(result.report().attempts_total(), limit);
-        assert_eq!(result.is_ok(), limit == 2);
+        assert_eq!(*events.lock().unwrap(), expected, "event order for limit {limit}");
+        assert_eq!(
+            result.report().attempts_total(),
+            limit,
+            "executed attempts for limit {limit}"
+        );
+        assert_eq!(result.is_ok(), limit == 2, "completion status for limit {limit}");
     }
 }
 
@@ -85,10 +89,18 @@ fn test_budget_rejection_does_not_emit_retry_scheduled() {
             hooks,
         );
     let error = outcome.result().as_ref().expect_err("budget rejects backoff");
-    assert_eq!(error.kind(), CasErrorKind::TotalBudgetExceeded);
-    assert_eq!(error.attempts(), 1);
-    assert_eq!(error.error(), Some(&"busy"));
-    assert_eq!(scheduled.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        error.kind(),
+        CasErrorKind::TotalBudgetExceeded,
+        "backoff must exceed the total budget"
+    );
+    assert_eq!(error.attempts(), 1, "backoff termination must prevent a second attempt");
+    assert_eq!(error.error(), Some(&"busy"), "the last retry reason must be retained");
+    assert_eq!(
+        scheduled.load(Ordering::SeqCst),
+        0,
+        "rejected backoff must not emit a scheduling event"
+    );
 }
 
 #[cfg(feature = "tokio")]
@@ -115,9 +127,21 @@ async fn test_scheduled_retry_can_still_end_before_another_attempt() {
         )
         .await;
     let error = outcome.result().as_ref().expect_err("flow deadline during backoff");
-    assert_eq!(error.kind(), CasErrorKind::FlowTimeout);
-    assert_eq!(error.attempts(), 1);
-    assert_eq!(error.error(), Some(&"busy"));
-    assert_eq!(**error.current().expect("retained failure snapshot"), 7);
-    assert_eq!(scheduled.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        error.kind(),
+        CasErrorKind::FlowTimeout,
+        "flow deadline must expire during backoff"
+    );
+    assert_eq!(error.attempts(), 1, "backoff termination must prevent a second attempt");
+    assert_eq!(error.error(), Some(&"busy"), "the last retry reason must be retained");
+    assert_eq!(
+        **error.current().expect("retained failure snapshot"),
+        7,
+        "deadline termination must retain the original state"
+    );
+    assert_eq!(
+        scheduled.load(Ordering::SeqCst),
+        1,
+        "admitted backoff must emit one scheduling event"
+    );
 }
