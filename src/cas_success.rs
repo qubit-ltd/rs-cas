@@ -79,6 +79,11 @@ pub enum CasSuccess<T, R> {
 
 impl<T, R: Clone> Clone for CasSuccess<T, R> {
     /// Clones the business output and shares the successful snapshots.
+    ///
+    /// # Returns
+    /// A result with the same variant and copied context, sharing the original
+    /// state allocations and containing a clone of the business output.
+    #[inline]
     fn clone(&self) -> Self {
         match self {
             Self::Updated {
@@ -162,6 +167,7 @@ impl<T, R> CasSuccess<T, R> {
     /// # Returns
     /// `Some(&Arc<T>)` for [`CasSuccess::Updated`], or `None` when no write
     /// occurred.
+    #[must_use]
     #[inline]
     pub fn previous(&self) -> Option<&Arc<T>> {
         match self {
@@ -219,6 +225,9 @@ impl<T, R> CasSuccess<T, R> {
     }
 
     /// Consumes the success result and returns the business output.
+    ///
+    /// Releases this result's snapshot references. Other owners retain their
+    /// snapshots; a state is dropped only when its last owner releases it.
     ///
     /// # Returns
     /// The owned business output.

@@ -14,6 +14,11 @@ use qubit_retry::RetryContext;
 
 /// Context captured for CAS lifecycle events.
 ///
+/// This owned snapshot copies retry metadata without retaining a reference to
+/// the executor or shared state. Its counters and timings describe the capture
+/// point and do not advance when the snapshot is retained. Execution results
+/// and lifecycle events provide these values through their context accessors.
+///
 /// # Examples
 ///
 /// ```
@@ -142,7 +147,8 @@ impl CasContext {
     /// Returns elapsed time since the CAS flow started.
     ///
     /// # Returns
-    /// Total elapsed time observed at this event.
+    /// Monotonic retry-flow time observed at this event, including operation
+    /// execution, retry sleeps, and retry-control listener time.
     #[must_use]
     #[inline]
     pub fn total_elapsed(&self) -> Duration {
@@ -152,7 +158,8 @@ impl CasContext {
     /// Returns elapsed time spent in the latest completed attempt.
     ///
     /// # Returns
-    /// Latest completed attempt elapsed time, or zero before one completes.
+    /// Time from admission to accounting completion for the latest completed
+    /// attempt, measured with the configured clock; zero before one completes.
     #[must_use]
     #[inline]
     pub fn last_attempt_elapsed(&self) -> Duration {
@@ -173,8 +180,8 @@ impl CasContext {
     /// Returns the selected delay before the next retry.
     ///
     /// # Returns
-    /// `Some(Duration)` when retry scheduling selected a delay; `None`
-    /// when no next retry delay is selected in this context.
+    /// `Some(Duration)` while a selected delay is retained, including terminal
+    /// snapshots; `None` before selection or after the next attempt resets it.
     #[must_use]
     #[inline]
     pub fn next_delay(&self) -> Option<Duration> {

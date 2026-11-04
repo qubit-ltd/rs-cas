@@ -22,6 +22,7 @@ use crate::error::CasDiagnosticKind;
 /// # Returns
 /// `Some` owned infrastructure classification and text, or `None` for ordinary
 /// abort, exhaustion, and timeout termination.
+#[must_use]
 pub(in crate::error) fn reason_diagnostic(reason: &RetryErrorReason) -> Option<CasDiagnostic> {
     let kind = match reason {
         RetryErrorReason::Aborted | RetryErrorReason::Exhausted { .. } | RetryErrorReason::TimedOut { .. } => {

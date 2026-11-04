@@ -28,6 +28,8 @@ use crate::report::CasReportBuilder;
 impl<T, E> CasExecutor<T, E> {
     /// Executes one synchronous CAS operation.
     ///
+    /// Synchronous execution ignores configured asynchronous timeouts.
+    ///
     /// # Type Parameters
     /// - `R`: Output moved to the caller only after a successful attempt.
     /// - `O`: Borrowing operation that may be called again after a retry.
@@ -41,8 +43,8 @@ impl<T, E> CasExecutor<T, E> {
     /// A terminal result together with the execution report.
     ///
     /// # Panics
-    /// Operation panics propagate. Synchronous execution ignores async
-    /// timeouts.
+    /// Operation panics propagate. Panics if the internal report mutex has
+    /// been poisoned.
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
@@ -59,7 +61,8 @@ impl<T, E> CasExecutor<T, E> {
     /// Executes one synchronous CAS operation without constructing a report.
     ///
     /// This path preserves retry, success, and terminal error semantics while
-    /// skipping report accumulation and lifecycle hook dispatch. Use
+    /// skipping report accumulation and lifecycle hook dispatch. Synchronous
+    /// execution ignores configured asynchronous timeouts. Use
     /// [`Self::execute`] when the caller needs execution metrics.
     ///
     /// # Type Parameters
@@ -80,8 +83,7 @@ impl<T, E> CasExecutor<T, E> {
     /// snapshot.
     ///
     /// # Panics
-    /// Operation panics propagate. Synchronous execution ignores async
-    /// timeouts.
+    /// Operation panics propagate.
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
@@ -106,6 +108,10 @@ impl<T, E> CasExecutor<T, E> {
 
     /// Executes one synchronous CAS operation with lifecycle hooks.
     ///
+    /// Synchronous execution ignores configured asynchronous timeouts.
+    /// Listener panics are isolated in unwind builds and recorded in the
+    /// execution report; they do not alter the CAS terminal result.
+    ///
     /// # Type Parameters
     /// - `R`: Output moved to the caller only after a successful attempt.
     /// - `O`: Borrowing operation that may be called again after a retry.
@@ -120,14 +126,11 @@ impl<T, E> CasExecutor<T, E> {
     /// A terminal result together with the execution report.
     ///
     /// # Panics
-    /// Operation panics propagate. Synchronous execution ignores async
-    /// timeouts.
+    /// Operation panics propagate. Panics if the internal report mutex has
+    /// been poisoned.
     ///
     /// # Blocking
     /// Configured retry delays block the calling thread until execution ends.
-    ///
-    /// Listener panics are isolated and recorded in the execution report;
-    /// they do not alter the CAS terminal result.
     pub fn execute_with_hooks<R, O>(&self, state: &AtomicRef<T>, operation: O, hooks: CasHooks) -> CasOutcome<T, R, E>
     where
         T: 'static,

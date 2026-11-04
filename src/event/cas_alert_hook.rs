@@ -13,6 +13,12 @@ use crate::observability::CasAlert;
 
 /// Shared hook invoked for CAS alerts.
 ///
+/// Clones share the same thread-safe callback and its captured state. Register
+/// the hook with [`crate::CasHooks::on_contention_alert`] to borrow each alert
+/// synchronously after an execution meets all configured contention thresholds.
+/// The callback may run concurrently when shared across executions; it should
+/// avoid blocking the thread completing the execution.
+///
 /// # Examples
 ///
 /// ```
@@ -23,11 +29,11 @@ use crate::observability::CasAlert;
 /// use qubit_atomic::AtomicRef;
 /// use qubit_cas::CasAlert;
 /// use qubit_cas::event::CasAlertHook;
-/// use qubit_function::ArcConsumer;
 /// use qubit_cas::CasDecision;
 /// use qubit_cas::CasExecutor;
 /// use qubit_cas::CasHooks;
 /// use qubit_cas::ContentionThresholds;
+/// use qubit_function::ArcConsumer;
 ///
 /// let state = AtomicRef::from_value(3usize);
 /// let count = Arc::new(AtomicUsize::new(0));

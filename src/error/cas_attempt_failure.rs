@@ -14,6 +14,10 @@ use super::cas_attempt_failure_kind::CasAttemptFailureKind;
 
 /// Failure produced by one CAS attempt.
 ///
+/// Retains a shared state snapshot and, for business failures, owns the error.
+/// Cloning shares the snapshot without requiring `T: Clone` and clones only
+/// the business error, when present.
+///
 /// # Type Parameters
 /// - `T`: State associated with the failed attempt.
 /// - `E`: Business failure carried by Retry or Abort.
@@ -68,6 +72,10 @@ pub enum CasAttemptFailure<T, E> {
 
 impl<T, E: Clone> Clone for CasAttemptFailure<T, E> {
     /// Clones retained business errors while sharing the failure snapshot.
+    ///
+    /// # Returns
+    /// A failure with the same variant and a shared reference to the same state
+    /// allocation. Business errors are cloned using `E::clone`.
     fn clone(&self) -> Self {
         match self {
             Self::Conflict { current } => Self::Conflict {
@@ -142,7 +150,8 @@ impl<T, E> CasAttemptFailure<T, E> {
     /// Returns the state snapshot associated with this failure.
     ///
     /// # Returns
-    /// Shared reference to the current state.
+    /// A borrowed shared pointer to the retained state snapshot. This accessor
+    /// neither clones the pointer nor allocates; the borrow is tied to `self`.
     #[must_use]
     #[inline]
     pub fn current(&self) -> &Arc<T> {

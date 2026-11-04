@@ -15,6 +15,11 @@ use crate::report::CasExecutionOutcome;
 use crate::report::CasExecutionReport;
 
 /// Mutable accumulator used internally while one CAS flow is running.
+///
+/// This records observations rather than configuring execution. Reports are
+/// non-consuming snapshots so completion callbacks can add listener failures
+/// afterward. Mutation requires exclusive access; callers coordinate shared
+/// access outside this type.
 #[derive(Debug, Clone)]
 pub(crate) struct CasReportBuilder {
     /// Monotonic instant captured before start listeners run.
@@ -66,6 +71,8 @@ impl CasReportBuilder {
     ///
     /// # Returns
     /// An owned snapshot of all retained listener failures, empty if none.
+    /// Cloning allocates storage and copies each retained panic message; the
+    /// accumulator keeps the original diagnostics.
     #[must_use]
     #[inline]
     pub(crate) fn listener_failures(&self) -> Vec<CasListenerFailure> {
@@ -114,14 +121,20 @@ impl CasReportBuilder {
         self.listener_failures.push(failure);
     }
 
-    /// Finishes the accumulator into an immutable report.
+    /// Captures an immutable report without consuming the accumulator.
+    ///
+    /// Captures the finish instant on each call and clones retained listener
+    /// diagnostics, including their owned panic messages. Later observations
+    /// do not change the returned snapshot.
     ///
     /// # Parameters
     /// - `attempts_total`: The total number of attempts performed (provided by
     ///   the retry layer).
     /// - `max_attempts`: Configured maximum attempts.
-    /// - `max_operation_elapsed`: Configured cumulative attempt time budget.
-    /// - `max_total_elapsed`: Configured total retry-flow time budget.
+    /// - `max_operation_elapsed`: Configured cumulative attempt time budget;
+    ///   `None` means no cumulative attempt time limit.
+    /// - `max_total_elapsed`: Configured total retry-flow time budget; `None`
+    ///   means no total retry-flow time limit.
     /// - `outcome`: The terminal outcome determined for this execution.
     ///
     /// # Returns

@@ -152,6 +152,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A configured executor. The built-in strategy is always valid.
+    ///
+    /// # Panics
+    /// Panics if the built-in strategy violates retry configuration invariants.
     #[inline]
     #[must_use]
     pub fn latency_first() -> Self {
@@ -164,6 +167,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A configured executor. The built-in strategy is always valid.
+    ///
+    /// # Panics
+    /// Panics if the built-in strategy violates retry configuration invariants.
     #[inline]
     #[must_use]
     pub fn contention_backoff() -> Self {
@@ -176,6 +182,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A configured executor. The built-in strategy is always valid.
+    ///
+    /// # Panics
+    /// Panics if the built-in strategy violates retry configuration invariants.
     #[inline]
     #[must_use]
     pub fn reliability_first() -> Self {
@@ -191,6 +200,9 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Returns
     /// A configured executor. Built-in strategies are always valid.
+    ///
+    /// # Panics
+    /// Panics if the built-in strategy violates retry configuration invariants.
     #[inline]
     #[must_use]
     pub fn with_strategy(strategy: CasStrategy) -> Self {

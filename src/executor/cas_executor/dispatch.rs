@@ -49,8 +49,8 @@ pub(super) fn should_emit_events(hook: &Option<CasEventHook>) -> bool {
 ///
 /// # Returns
 /// `Some` isolated listener panic in unwind builds; `None` when dispatch
-/// succeeds. The callback runs without a report
-/// mutex guard.
+/// succeeds. The callback runs without a report mutex guard. Aborting panics
+/// cannot be isolated.
 #[inline]
 pub(super) fn dispatch_event(hook: &CasEventHook, event: CasEvent) -> Option<CasListenerFailure> {
     catch_unwind(AssertUnwindSafe(|| hook.accept(&event)))
@@ -67,7 +67,7 @@ pub(super) fn dispatch_event(hook: &CasEventHook, event: CasEvent) -> Option<Cas
 /// # Returns
 /// `Some` isolated listener panic in unwind builds; `None` when dispatch
 /// succeeds or an optional hook is absent. The callback runs without a report
-/// mutex guard.
+/// mutex guard. Aborting panics cannot be isolated.
 #[inline]
 pub(super) fn dispatch_alert(hook: &Option<CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
     if let Some(hook) = hook {
@@ -86,6 +86,7 @@ pub(super) fn dispatch_alert(hook: &Option<CasAlertHook>, alert: CasAlert) -> Op
 /// # Returns
 /// The exact stage used to attribute a listener failure.
 #[must_use]
+#[inline]
 fn listener_kind(event: &CasEvent) -> CasListenerKind {
     match event {
         CasEvent::ExecutionStarted { .. } => CasListenerKind::ExecutionStarted,
@@ -219,12 +220,10 @@ impl<T, E> CasExecutor<T, E> {
     /// - `hook`: Listener that receives the event.
     /// - `event`: Lifecycle event to dispatch.
     ///
-    /// # Panics
-    /// Listener panics are isolated and do not change the CAS result.
-    ///
     /// # Returns
     /// `Some` isolated listener panic in unwind builds; `None` when dispatch
-    /// succeeds. The callback runs without a report mutex guard.
+    /// succeeds. The callback runs without a report mutex guard. Aborting
+    /// panics cannot be isolated.
     #[inline]
     pub(super) fn dispatch_event(hook: &CasEventHook, event: CasEvent) -> Option<CasListenerFailure>
     where
@@ -253,14 +252,10 @@ impl<T, E> CasExecutor<T, E> {
     /// - `hook`: Optional listener that receives the alert.
     /// - `alert`: Contention alert to dispatch.
     ///
-    /// # Panics
-    /// Listener panics are isolated in unwind builds and returned as
-    /// diagnostics.
-    ///
     /// # Returns
     /// `Some` isolated listener panic in unwind builds; `None` when dispatch
     /// succeeds or an optional hook is absent. The callback runs without a
-    /// report mutex guard.
+    /// report mutex guard. Aborting panics cannot be isolated.
     #[inline]
     pub(super) fn dispatch_alert(hook: &Option<CasAlertHook>, alert: CasAlert) -> Option<CasListenerFailure> {
         super::dispatch::dispatch_alert(hook, alert)

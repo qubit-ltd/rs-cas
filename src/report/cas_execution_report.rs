@@ -49,7 +49,7 @@ pub struct CasExecutionReport {
     /// Number of started async attempts interrupted by an attempt or flow
     /// deadline.
     timeouts: u32,
-    /// Instant captured before the first attempt.
+    /// Instant captured before start listeners run, even if no attempt starts.
     started_at: Instant,
     /// Instant captured when the flow completed.
     finished_at: Instant,
@@ -80,7 +80,8 @@ impl CasExecutionReport {
     /// - `timeouts`: Number of started async attempts interrupted by an attempt
     ///   or flow deadline. Flow timeouts during backoff or before the first
     ///   attempt do not increment this count.
-    /// - `started_at`: Instant captured before the first attempt.
+    /// - `started_at`: Instant captured before start listeners run, even if no
+    ///   attempt starts.
     /// - `finished_at`: Instant captured when the flow completed.
     /// - `max_attempts`: Configured maximum number of attempts.
     /// - `max_operation_elapsed`: Configured maximum cumulative attempt time,
@@ -180,10 +181,11 @@ impl CasExecutionReport {
         self.timeouts
     }
 
-    /// Returns the instant captured before the first attempt.
+    /// Returns the instant captured before start listeners run.
     ///
     /// # Returns
-    /// [`Instant`] at the start of the CAS execution.
+    /// [`Instant`] at the start of the CAS execution, including flows that end
+    /// before any attempt starts.
     #[must_use]
     #[inline]
     pub fn started_at(&self) -> Instant {

@@ -13,6 +13,14 @@ use super::CasEvent;
 
 /// Shared hook invoked for CAS lifecycle events.
 ///
+/// Cloning this hook shares the same thread-safe callback and its captured
+/// state. Each invocation borrows its [`CasEvent`]; retaining event data
+/// requires copying or cloning the data needed by the callback. Register the
+/// hook with [`super::CasHooks::on_event`], which invokes listeners inline with
+/// execution, so callbacks should remain short. Callbacks may be invoked
+/// concurrently when shared across executions and must synchronize any mutable
+/// captured state.
+///
 /// # Examples
 ///
 /// ```

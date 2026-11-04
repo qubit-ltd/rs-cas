@@ -9,7 +9,13 @@
 
 use std::time::Duration;
 
-/// Human-readable profile for one CAS strategy.
+/// Describes the attempt limits, time budgets, and backoff policy of a built-in
+/// CAS strategy preset.
+///
+/// Obtain a profile through [`crate::CasStrategy::profile`]. Its values
+/// describe the preset, rather than the current configuration of an executor:
+/// overriding executor settings does not change the profile. Reading the
+/// profile copies immutable values without allocating or performing retry work.
 ///
 /// # Examples
 ///

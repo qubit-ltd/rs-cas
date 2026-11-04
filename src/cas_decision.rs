@@ -19,6 +19,13 @@ use std::sync::Arc;
 /// - [`Retry`](Self::Retry): report a retryable business failure.
 /// - [`Abort`](Self::Abort): report a terminal business failure.
 ///
+/// The decision owns its output or error. An update retains its replacement
+/// snapshot in an [`Arc`]; cloning the decision shares that allocation without
+/// requiring `T: Clone`, while cloning the output or error. A failed
+/// compare-and-swap drops the update's output instead of returning it as a
+/// success. A finish returns its output without revalidating the snapshot, so
+/// another writer may already have changed the shared state.
+///
 /// ```compile_fail
 /// #![deny(unused_must_use)]
 ///
@@ -79,6 +86,11 @@ pub enum CasDecision<T, R, E> {
 
 impl<T, R: Clone, E: Clone> Clone for CasDecision<T, R, E> {
     /// Clones the output or error and shares the replacement snapshot.
+    ///
+    /// # Returns
+    /// A decision with the same variant and cloned output or error. For an
+    /// update, the replacement points to the same allocation; `T` is not
+    /// cloned.
     fn clone(&self) -> Self {
         match self {
             Self::Update { next, output } => Self::Update {

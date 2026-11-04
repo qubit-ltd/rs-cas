@@ -69,6 +69,8 @@ impl CasListenerFailure {
 
     /// Returns the listener location.
     ///
+    /// Copies the lifecycle stage without allocating.
+    ///
     /// # Returns
     /// The stage of the failed listener invocation.
     #[must_use]
@@ -78,6 +80,9 @@ impl CasListenerFailure {
     }
 
     /// Returns the panic message.
+    ///
+    /// Borrows the retained text without allocating; the reference remains
+    /// valid while `self` is borrowed.
     ///
     /// # Returns
     /// Borrowed panic text, with a fallback for non-string payloads.
@@ -95,6 +100,7 @@ impl CasListenerFailure {
     ///
     /// # Returns
     /// Owned panic text, with a fallback for non-string payloads.
+    #[must_use]
     fn message_from_payload(payload: &(dyn Any + Send)) -> String {
         payload
             .downcast_ref::<&'static str>()
@@ -105,6 +111,10 @@ impl CasListenerFailure {
     }
 
     /// Drops an unwind payload without allowing a second panic to escape.
+    ///
+    /// If its destructor panics, the second payload is intentionally forgotten
+    /// to prevent another panicking destructor from escaping listener
+    /// isolation.
     ///
     /// # Parameters
     /// - `payload`: Original listener panic payload to dispose of.

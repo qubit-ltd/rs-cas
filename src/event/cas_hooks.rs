@@ -18,6 +18,10 @@ use crate::observability::ContentionThresholds;
 
 /// Per-execution hooks for observing CAS lifecycle events.
 ///
+/// Registrations own thread-safe callbacks for the lifetime of the hook set.
+/// Cloning this set shares the callbacks and copies the optional thresholds;
+/// it does not duplicate captured callback state.
+///
 /// # Examples
 ///
 /// ```
@@ -138,6 +142,8 @@ impl CasHooks {
 
     /// Returns the registered lifecycle event hook.
     ///
+    /// The returned handle shares ownership of the callback with this set.
+    ///
     /// # Returns
     /// `Some` cloned shared listener, or `None` when events are disabled.
     #[must_use]
@@ -147,6 +153,8 @@ impl CasHooks {
     }
 
     /// Returns the registered alert hook.
+    ///
+    /// The returned handle shares ownership of the callback with this set.
     ///
     /// # Returns
     /// `Some` cloned shared listener, or `None` when alerts are disabled.

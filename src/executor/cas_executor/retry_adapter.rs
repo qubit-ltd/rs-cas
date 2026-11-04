@@ -41,6 +41,7 @@ use crate::report::CasReportBuilder;
 /// Retry for conflicts and retryable business errors, Abort for explicit
 /// aborts, or the retry facade's default handling for infrastructure and other
 /// failures.
+#[inline]
 pub(super) fn retry_decision<T, E>(
     failure: &AttemptFailure<CasAttemptFailure<T, E>>,
     attempt_timeout_action: AttemptTimeoutAction,
@@ -61,9 +62,15 @@ pub(super) fn retry_decision<T, E>(
 impl<T, E> CasExecutor<T, E> {
     /// Builds one retry policy for a single CAS execution.
     ///
+    /// The returned policy owns shared observer callbacks. They update the
+    /// report under its mutex, release the guard before dispatching events,
+    /// and record listener failures after dispatch. Construction does not run
+    /// callbacks or acquire the report mutex.
+    ///
     /// # Parameters
     /// - `hooks`: Hook registrations for the current execution.
-    /// - `report_builder`: Shared accumulator used after callback dispatch.
+    /// - `report_builder`: Shared accumulator moved into the policy's
+    ///   observers.
     ///
     /// # Returns
     /// A retry policy configured for one CAS execution.
@@ -149,6 +156,7 @@ impl<T, E> CasExecutor<T, E> {
     ///
     /// # Panics
     /// Panics if the previously validated configuration is no longer valid.
+    #[must_use = "use the cached configuration to execute the retry flow"]
     pub(super) fn result_retry(&self) -> &RetryConfig<CasAttemptFailure<T, E>>
     where
         T: 'static,

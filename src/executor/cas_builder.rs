@@ -91,6 +91,75 @@ impl<T, E> CasBuilder<T, E> {
         }
     }
 
+    /// Builds one executor after validating the settings.
+    ///
+    /// # Returns
+    /// A validated [`CasExecutor`].
+    ///
+    /// # Errors
+    /// Returns a [`CasBuildError`] for zero attempts, reversed delay bounds,
+    /// a non-finite or less-than-one exponential multiplier, or jitter outside
+    /// the finite range `[0, 1]`. Backoff errors are deferred until this call;
+    /// a later backoff setter or strategy can replace an earlier error.
+    pub fn build(self) -> Result<CasExecutor<T, E>, CasBuildError> {
+        let backoff = self.backoff.map_err(map_retry_policy_error)?;
+        let policy = RetryPolicy::builder()
+            .max_attempts(self.max_attempts)
+            .operation_time_budget_opt(self.max_operation_elapsed)
+            .total_time_budget_opt(self.max_total_elapsed)
+            .backoff(backoff)
+            .build()
+            .map_err(map_retry_policy_error)?;
+        Ok(CasExecutor::new(
+            policy,
+            self.attempt_timeout,
+            self.flow_timeout,
+            self.attempt_timeout_action,
+        ))
+    }
+
+    /// Builds one executor with the contention-backoff strategy.
+    ///
+    /// # Returns
+    /// A configured [`CasExecutor`] suitable for contended writers.
+    ///
+    /// # Errors
+    /// Preset construction uses the same validated result as [`Self::build`].
+    /// The installed built-in settings are always valid and replace any
+    /// deferred retry-policy error, so current presets return `Ok`.
+    #[inline]
+    pub fn build_contention_backoff(self) -> Result<CasExecutor<T, E>, CasBuildError> {
+        self.strategy(CasStrategy::ContentionBackoff).build()
+    }
+
+    /// Builds one executor with the latency-first strategy.
+    ///
+    /// # Returns
+    /// A configured [`CasExecutor`] optimized for low latency.
+    ///
+    /// # Errors
+    /// Preset construction uses the same validated result as [`Self::build`].
+    /// The installed built-in settings are always valid and replace any
+    /// deferred retry-policy error, so current presets return `Ok`.
+    #[inline]
+    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
+        self.strategy(CasStrategy::LatencyFirst).build()
+    }
+
+    /// Builds one executor with the reliability-first strategy.
+    ///
+    /// # Returns
+    /// A configured [`CasExecutor`] optimized for long retry windows.
+    ///
+    /// # Errors
+    /// Preset construction uses the same validated result as [`Self::build`].
+    /// The installed built-in settings are always valid and replace any
+    /// deferred retry-policy error, so current presets return `Ok`.
+    #[inline]
+    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
+        self.strategy(CasStrategy::ReliabilityFirst).build()
+    }
+
     /// Sets the maximum total attempts.
     ///
     /// # Parameters
@@ -311,75 +380,6 @@ impl<T, E> CasBuilder<T, E> {
         } else {
             builder.no_delay()
         }
-    }
-
-    /// Builds one executor after validating the settings.
-    ///
-    /// # Returns
-    /// A validated [`CasExecutor`].
-    ///
-    /// # Errors
-    /// Returns a [`CasBuildError`] for zero attempts, reversed delay bounds,
-    /// a non-finite or less-than-one exponential multiplier, or jitter outside
-    /// the finite range `[0, 1]`. Backoff errors are deferred until this call;
-    /// a later backoff setter or strategy can replace an earlier error.
-    pub fn build(self) -> Result<CasExecutor<T, E>, CasBuildError> {
-        let backoff = self.backoff.map_err(map_retry_policy_error)?;
-        let policy = RetryPolicy::builder()
-            .max_attempts(self.max_attempts)
-            .operation_time_budget_opt(self.max_operation_elapsed)
-            .total_time_budget_opt(self.max_total_elapsed)
-            .backoff(backoff)
-            .build()
-            .map_err(map_retry_policy_error)?;
-        Ok(CasExecutor::new(
-            policy,
-            self.attempt_timeout,
-            self.flow_timeout,
-            self.attempt_timeout_action,
-        ))
-    }
-
-    /// Builds one executor with the contention-backoff strategy.
-    ///
-    /// # Returns
-    /// A configured [`CasExecutor`] suitable for contended writers.
-    ///
-    /// # Errors
-    /// Preset construction uses the same validated result as [`Self::build`].
-    /// The installed built-in settings are always valid and replace any
-    /// deferred retry-policy error, so current presets return `Ok`.
-    #[inline]
-    pub fn build_contention_backoff(self) -> Result<CasExecutor<T, E>, CasBuildError> {
-        self.strategy(CasStrategy::ContentionBackoff).build()
-    }
-
-    /// Builds one executor with the latency-first strategy.
-    ///
-    /// # Returns
-    /// A configured [`CasExecutor`] optimized for low latency.
-    ///
-    /// # Errors
-    /// Preset construction uses the same validated result as [`Self::build`].
-    /// The installed built-in settings are always valid and replace any
-    /// deferred retry-policy error, so current presets return `Ok`.
-    #[inline]
-    pub fn build_latency_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
-        self.strategy(CasStrategy::LatencyFirst).build()
-    }
-
-    /// Builds one executor with the reliability-first strategy.
-    ///
-    /// # Returns
-    /// A configured [`CasExecutor`] optimized for long retry windows.
-    ///
-    /// # Errors
-    /// Preset construction uses the same validated result as [`Self::build`].
-    /// The installed built-in settings are always valid and replace any
-    /// deferred retry-policy error, so current presets return `Ok`.
-    #[inline]
-    pub fn build_reliability_first(self) -> Result<CasExecutor<T, E>, CasBuildError> {
-        self.strategy(CasStrategy::ReliabilityFirst).build()
     }
 }
 

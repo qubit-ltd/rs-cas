@@ -61,6 +61,7 @@ pub(super) fn enrich_success<T, R>(success: AttemptSuccess<T, R>, context: Retry
 /// # Returns
 /// The corresponding report outcome, without reclassifying the last attempt.
 #[must_use]
+#[inline]
 pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
     match kind {
         CasErrorKind::Abort => CasExecutionOutcome::ErrorAbort,
@@ -77,6 +78,12 @@ pub(super) fn error_outcome(kind: CasErrorKind) -> CasExecutionOutcome {
 impl<T, E> CasExecutor<T, E> {
     /// Finalizes one retry execution into the public CAS result type.
     ///
+    /// Moves the terminal payload and retained snapshots into the outcome
+    /// without cloning application data. Finalizes the shared report under
+    /// its mutex, then synchronously dispatches configured completion and
+    /// alert listeners after releasing the lock, retaining isolated
+    /// listener failures in the report.
+    ///
     /// # Type Parameters
     /// - `R`: Business output retained only from the successful attempt.
     ///
@@ -88,10 +95,13 @@ impl<T, E> CasExecutor<T, E> {
     /// - `report_builder`: Accumulated counters and isolated listener failures.
     ///
     /// # Returns
-    /// Public CAS success or error.
+    /// An outcome containing the terminal CAS success or error and the
+    /// finalized execution report.
     ///
     /// # Panics
-    /// Panics if an internal report mutex has been poisoned.
+    /// Panics if an internal report mutex has been poisoned. In debug builds,
+    /// also panics if retry completion diagnostics are unexpectedly nonempty;
+    /// the CAS adapter does not register retry completion callbacks.
     pub(super) fn finish_execution<R>(
         &self,
         attempt: Result<RetrySuccess<AttemptSuccess<T, R>>, RetryError<CasAttemptFailure<T, E>>>,

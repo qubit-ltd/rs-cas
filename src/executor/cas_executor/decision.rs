@@ -34,6 +34,7 @@ use crate::executor::internal::AttemptSuccess;
 /// Returns a conflict with the CAS-observed actual value, or the operation's
 /// Retry/Abort failure with its original snapshot. Failed update output is
 /// dropped.
+#[inline]
 pub(super) fn apply_decision<T, R, E>(
     state: &AtomicRef<T>,
     current: Arc<T>,

@@ -24,6 +24,7 @@
 /// assert_eq!(error.kind(), CasErrorKind::Abort);
 /// assert_eq!(error.error(), Some(&"sold out"));
 /// ```
+#[must_use = "a CAS error kind describes why execution failed"]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CasErrorKind {
     /// The operation explicitly aborted.

@@ -74,6 +74,9 @@ pub struct CasOutcome<T, R, E> {
 
 impl<T, R: Clone, E: Clone> Clone for CasOutcome<T, R, E> {
     /// Clones the terminal result and report while sharing state snapshots.
+    ///
+    /// # Returns
+    /// A new outcome with cloned business output or error and report data.
     fn clone(&self) -> Self {
         Self {
             result: self.result.clone(),
@@ -160,7 +163,6 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Returns
     /// The owned [`Result<CasSuccess<T, R>, CasError<T, E>>`].
-    #[must_use = "inspect the consumed terminal CAS result"]
     #[inline]
     pub fn into_result(self) -> Result<CasSuccess<T, R>, CasError<T, E>> {
         self.result
@@ -208,7 +210,6 @@ impl<T, R, E> CasOutcome<T, R, E> {
     ///
     /// # Panics
     /// Panics with the given message if the outcome is successful.
-    #[must_use = "inspect the expected terminal CAS error"]
     #[inline]
     pub fn expect_err(self, message: &str) -> CasError<T, E>
     where
