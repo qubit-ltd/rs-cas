@@ -171,6 +171,8 @@ fn light_event_hook() -> CasHooks {
     })
 }
 
+/// Summarizes one timed workload sample, including retry attempts and conflicts
+/// caused by deliberately injected competing updates.
 #[derive(Debug, Clone, Copy)]
 struct BenchResult {
     ops_per_sec: f64,

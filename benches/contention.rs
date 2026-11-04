@@ -10,8 +10,12 @@
 //! counters, result destruction, and joins. Setup and final assertions are
 //! outside the measured interval; values are not absolute CI thresholds.
 
+use std::array::from_fn;
+use std::env::consts::ARCH;
+use std::env::consts::OS;
 use std::hint::black_box;
 use std::sync::Barrier;
+use std::thread::available_parallelism;
 use std::thread::scope;
 use std::time::Instant;
 
@@ -34,6 +38,8 @@ const STRATEGIES: [CasStrategy; 3] = [
     CasStrategy::ReliabilityFirst,
 ];
 
+/// Records successful throughput, inclusive latency, and outcomes for one
+/// round.
 #[derive(Debug)]
 struct RoundMetrics {
     throughput: f64,
@@ -45,6 +51,7 @@ struct RoundMetrics {
     conflicts: u64,
 }
 
+/// Identifies the host whose measurements appear in each CSV record.
 #[derive(Debug)]
 struct BenchmarkEnvironment {
     os: &'static str,
@@ -55,15 +62,13 @@ struct BenchmarkEnvironment {
 /// Runs each preset with the same writer counts and fixed call budget.
 fn main() {
     let environment = BenchmarkEnvironment {
-        os: std::env::consts::OS,
-        arch: std::env::consts::ARCH,
-        host_threads: std::thread::available_parallelism()
-            .map(|count| count.get())
-            .unwrap_or(1),
+        os: OS,
+        arch: ARCH,
+        host_threads: available_parallelism().map(|count| count.get()).unwrap_or(1),
     };
     println!("{CSV_HEADER}");
     for writers in [1, 2, 4, 8] {
-        let mut all_rounds: [Vec<RoundMetrics>; STRATEGIES.len()] = std::array::from_fn(|_| Vec::with_capacity(ROUNDS));
+        let mut all_rounds: [Vec<RoundMetrics>; STRATEGIES.len()] = from_fn(|_| Vec::with_capacity(ROUNDS));
         for round in 0..ROUNDS {
             for offset in 0..STRATEGIES.len() {
                 let strategy_index = (STRATEGY_SEED + round + offset) % STRATEGIES.len();
@@ -290,12 +295,16 @@ fn write_csv_row(fields: [String; CSV_COLUMNS]) {
 ///
 /// Panics when `sorted` is empty. For an even number of samples, the upper of
 /// the two middle elements is selected.
+#[must_use]
+#[inline]
 fn median<T: Copy>(sorted: &[T]) -> T {
     sorted[sorted.len() / 2]
 }
 
 /// Returns an upper-index observation from sorted latencies, including
 /// failures.
+#[must_use]
+#[inline]
 fn percentile(sorted: &[u128], percent: usize) -> u128 {
     assert!(!sorted.is_empty());
     let index = ((sorted.len() - 1) * percent).div_ceil(100);
