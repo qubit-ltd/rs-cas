@@ -9,7 +9,12 @@
 #
 ################################################################################
 
-"""Check that every integration test source is reachable from lib_tests.rs."""
+"""Check that every integration test source is reachable from lib_tests.rs.
+
+This lightweight check recognizes standalone ``mod name;`` declarations. It
+does not evaluate ``cfg`` conditions, expand macros, or model inline modules
+and ``#[path]`` attributes, and it does not skip files based on those forms.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +24,129 @@ from pathlib import Path
 
 
 MODULE_DECLARATION = re.compile(r"^\s*mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$")
+
+
+def mask_non_code(source: str) -> str:
+    """Mask comments and literals while preserving source offsets and lines."""
+    masked = list(source)
+    length = len(source)
+
+    def blank(start: int, end: int, preserve_boundary: bool = False) -> None:
+        for position in range(start, end):
+            if source[position] not in "\r\n":
+                masked[position] = " "
+        if preserve_boundary:
+            first = next((i for i in range(start, end) if source[i] not in "\r\n"), None)
+            last = next((i for i in range(end - 1, start - 1, -1) if source[i] not in "\r\n"), None)
+            if first is not None:
+                masked[first] = "X"
+            if last is not None:
+                masked[last] = "X"
+
+    def raw_start(position: int) -> tuple[int, int] | None:
+        for prefix in ("br", "cr", "r"):
+            if not source.startswith(prefix, position):
+                continue
+            cursor = position + len(prefix)
+            while cursor < length and source[cursor] == "#":
+                cursor += 1
+            if cursor < length and source[cursor] == '"':
+                return cursor, cursor - (position + len(prefix))
+        return None
+
+    def char_end(position: int) -> int | None:
+        """Return the end of a simple char literal, avoiding Rust lifetimes."""
+        cursor = position + 1
+        if cursor >= length or source[cursor] in "\r\n'":
+            return None
+        if source[cursor] == "\\":
+            cursor += 1
+            if cursor >= length or source[cursor] in "\r\n":
+                return None
+            if source[cursor] == "u" and cursor + 1 < length and source[cursor + 1] == "{":
+                close = source.find("}", cursor + 2)
+                if close < 0:
+                    return None
+                cursor = close + 1
+            else:
+                cursor += 1
+        else:
+            cursor += 1
+        return cursor + 1 if cursor < length and source[cursor] == "'" else None
+
+    index = 0
+    while index < length:
+        if source.startswith("//", index):
+            end = index + 2
+            while end < length and source[end] not in "\r\n":
+                end += 1
+            blank(index, end)
+            index = end
+            continue
+        if source.startswith("/*", index):
+            start = index
+            depth = 1
+            index += 2
+            while index < length and depth:
+                if source.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif source.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise ValueError("unclosed block comment")
+            blank(start, index)
+            continue
+
+        literal_start = index
+        raw = raw_start(index)
+        if raw is None and index + 1 < length and source[index] in "bc" and source[index + 1] == '"':
+            quote = index + 1
+            raw = None
+            ordinary = True
+        elif raw is not None:
+            quote, hashes = raw
+            terminator = '"' + "#" * hashes
+            end_quote = source.find(terminator, quote + 1)
+            if end_quote < 0:
+                raise ValueError("unclosed raw string literal")
+            index = end_quote + len(terminator)
+            blank(literal_start, index, preserve_boundary=True)
+            continue
+        elif source[index] == '"':
+            quote = index
+            ordinary = True
+        else:
+            ordinary = False
+
+        if ordinary:
+            index = quote + 1
+            while index < length:
+                if source[index] == "\\":
+                    index += 2
+                elif source[index] == '"':
+                    index += 1
+                    break
+                else:
+                    index += 1
+            else:
+                raise ValueError("unclosed string literal")
+            blank(literal_start, index, preserve_boundary=True)
+            continue
+
+        char_position = index + 1 if source.startswith("b'", index) else index
+        if source[char_position] == "'":
+            end = char_end(char_position)
+            if end is not None:
+                blank(index, end, preserve_boundary=True)
+                index = end
+                continue
+        index += 1
+
+    return "".join(masked)
 
 
 def module_candidates(parent: Path, name: str, harness: Path) -> tuple[Path, Path]:
@@ -36,7 +164,12 @@ def walk_modules(source: Path, harness: Path, reachable: set[Path], errors: list
         errors.append(f"declared module does not exist: {source}")
         return
     reachable.add(source)
-    for line in source.read_text(encoding="utf-8").splitlines():
+    try:
+        lines = mask_non_code(source.read_text(encoding="utf-8")).splitlines()
+    except ValueError as error:
+        errors.append(f"cannot lex {source}: {error}")
+        return
+    for line in lines:
         match = MODULE_DECLARATION.match(line)
         if match is None:
             continue
