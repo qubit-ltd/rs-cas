@@ -44,9 +44,11 @@
 //! | Execution report ([`CasExecutionReport`]) | [`CasExecutor::execute`] | `execute_async` |
 //! | Per-execution hooks ([`CasHooks`]) | [`CasExecutor::execute_with_hooks`] | `execute_async_with_hooks` |
 //!
-//! Async methods must be polled inside an entered Tokio runtime. Configure a
-//! Tokio time driver when using non-zero backoff or a hard timeout (for
-//! example, enable `time` or use `enable_all()` on a manually built runtime).
+//! Async methods require the `tokio` feature and must be polled inside an
+//! entered Tokio runtime. This feature does not create or enter a runtime.
+//! Tokio's `time` feature provides timer support; when building a runtime
+//! manually, also call `.enable_time()` or `.enable_all()` to enable its time
+//! driver. Non-zero backoff and hard timeouts require that driver.
 //! Timeouts are cooperative: blocking code or a future that does not yield
 //! cannot be preempted reliably. Cancellation drops the in-flight future, but
 //! does not roll back committed state or external side effects already
