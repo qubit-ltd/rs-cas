@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-cas"
-version = "0.12.6"
+version = "0.12.7"
 dependencies = [
  "qubit-atomic",
  "qubit-clock",
@@ -188,9 +188,9 @@ checksum = "f16834da1c2ae73cb26538a3473ded054e3fef1bdd65803eba1655c506b29e22"
 
 [[package]]
 name = "qubit-retry"
-version = "0.26.4"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9de501a80579986a67356e2f7e48815e68d9b692a7f6c8600d5b11fe9ebcc65c"
+checksum = "8dad726beb2ede0be689b1892b777cb012ca2f657c6744f05957b4d4edbb4a84"
 dependencies = [
  "fastrand",
  "qubit-budget",
