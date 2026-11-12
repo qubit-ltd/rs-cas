@@ -21,13 +21,13 @@ from pathlib import Path
 MODULE_DECLARATION = re.compile(r"^\s*mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$")
 
 
-def module_candidates(parent: Path, name: str) -> tuple[Path, Path]:
+def module_candidates(parent: Path, name: str, harness: Path) -> tuple[Path, Path]:
     """Return the two Rust file layouts accepted for a child module."""
-    directory = parent.parent
+    directory = parent.parent if parent == harness or parent.name == "mod.rs" else parent.parent / parent.stem
     return directory / f"{name}.rs", directory / name / "mod.rs"
 
 
-def walk_modules(source: Path, reachable: set[Path], errors: list[str]) -> None:
+def walk_modules(source: Path, harness: Path, reachable: set[Path], errors: list[str]) -> None:
     """Visit one module and record missing child declarations."""
     source = source.resolve()
     if source in reachable:
@@ -41,11 +41,9 @@ def walk_modules(source: Path, reachable: set[Path], errors: list[str]) -> None:
         if match is None:
             continue
         name = match.group(1)
-        if name == "tests":
-            continue
-        first, second = module_candidates(source, name)
+        first, second = module_candidates(source, name, harness)
         child = first if first.is_file() else second
-        walk_modules(child, reachable, errors)
+        walk_modules(child, harness, reachable, errors)
 
 
 def check(test_root: Path, harness: Path) -> int:
@@ -54,12 +52,12 @@ def check(test_root: Path, harness: Path) -> int:
     harness = harness.resolve()
     reachable: set[Path] = set()
     errors: list[str] = []
-    walk_modules(harness, reachable, errors)
+    walk_modules(harness, harness, reachable, errors)
 
     expected = {
         path.resolve()
-        for path in test_root.rglob("*_tests.rs")
-        if "support" not in path.parts
+        for path in test_root.rglob("*.rs")
+        if path.relative_to(test_root).parts[0] != "support"
     }
     expected.discard(harness)
     orphaned = sorted(expected - reachable)
@@ -70,7 +68,7 @@ def check(test_root: Path, harness: Path) -> int:
             print(f"error: test file is not reachable from {harness}: {path}", file=sys.stderr)
         return 1
 
-    print(f"Checked {len(expected)} integration test files from {harness}")
+    print(f"Checked {len(expected)} integration test Rust source files from {harness}")
     return 0
 
 
